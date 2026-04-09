@@ -111,7 +111,7 @@ services:
       - marzban-certs:/var/lib/marzban/certs
       - ./xray_config.json:/var/lib/marzban/xray_config.json:ro
     healthcheck:
-      test: ["CMD", "curl", "-sfk", "https://127.0.0.1:8000/api/admin/token"]
+      test: ["CMD-SHELL", "curl -sk -o /dev/null -w '%{http_code}' https://127.0.0.1:8000/api/admin/token | grep -qE '^[2-4]'"]
       interval: 15s
       timeout: 10s
       start_period: 60s
