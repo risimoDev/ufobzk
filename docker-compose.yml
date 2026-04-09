@@ -106,11 +106,9 @@ services:
       - UVICORN_SSL_CA_TYPE=private
     entrypoint: >-
       bash -c '
+      mkdir -p /var/lib/marzban/certs;
       if [ ! -f /var/lib/marzban/certs/internal.crt ]; then
-        openssl req -x509 -newkey rsa:2048
-        -keyout /var/lib/marzban/certs/internal.key
-        -out /var/lib/marzban/certs/internal.crt
-        -days 3650 -nodes -subj "/CN=marzban" 2>/dev/null;
+      openssl req -x509 -newkey rsa:2048 -keyout /var/lib/marzban/certs/internal.key -out /var/lib/marzban/certs/internal.crt -days 3650 -nodes -subj "/CN=marzban" 2>/dev/null;
       fi;
       alembic upgrade head && python main.py'
     volumes:
