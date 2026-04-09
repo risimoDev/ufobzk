@@ -422,16 +422,19 @@ if should_run 4; then
 
     mkdir -p "$PROJECT_DIR"
 
-    # Определяем откуда копируем (локальная директория или git)
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    SOURCE_DIR="$(dirname "$SCRIPT_DIR")"
+    # Определяем откуда копируем (setup.sh лежит в корне проекта)
+    SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
     if [[ -f "$SOURCE_DIR/docker-compose.yml" ]] && [[ -d "$SOURCE_DIR/app" ]]; then
-        substep "Копирование из локальной директории: $SOURCE_DIR"
-        rsync -a --exclude='.git' --exclude='data/' --exclude='.env' \
-              --exclude='__pycache__' --exclude='*.pyc' --exclude='.warp' \
-              "$SOURCE_DIR/" "$PROJECT_DIR/"
-        ok "Файлы скопированы"
+        if [[ "$(realpath "$SOURCE_DIR")" == "$(realpath "$PROJECT_DIR")" ]]; then
+            ok "Скрипт запущен из целевой директории $PROJECT_DIR"
+        else
+            substep "Копирование из локальной директории: $SOURCE_DIR"
+            rsync -a --exclude='.git' --exclude='data/' --exclude='.env' \
+                  --exclude='__pycache__' --exclude='*.pyc' --exclude='.warp' \
+                  "$SOURCE_DIR/" "$PROJECT_DIR/"
+            ok "Файлы скопированы в $PROJECT_DIR"
+        fi
     elif [[ -f "$PROJECT_DIR/docker-compose.yml" ]]; then
         ok "Проект уже установлен в $PROJECT_DIR"
     else

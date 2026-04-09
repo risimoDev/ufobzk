@@ -21,11 +21,13 @@
 ```
 
 **Что видит цензор / DPI:**
+
 - TLS-соединение к IP-адресу Cloudflare (один из миллионов сайтов)
 - SNI: `vpn.example.com` (ваш домен, выглядит легитимно)
 - Весь payload зашифрован — WebSocket/gRPC внутри TLS
 
 **Что НЕ может сделать цензор:**
+
 - Определить что внутри TLS идёт VPN-трафик
 - Узнать реальный IP вашего сервера
 - Заблокировать конкретно ваш сервер (пришлось бы блокировать весь Cloudflare)
@@ -57,10 +59,10 @@
 
 В Cloudflare Dashboard → **DNS** → **Records**:
 
-| Type | Name | Content | Proxy | TTL |
-|------|------|---------|-------|-----|
-| A | `vpn` | `YOUR_SERVER_IP` | ☁️ Proxied (оранжевое облако) | Auto |
-| A | `@` | `YOUR_SERVER_IP` | ☁️ Proxied | Auto |
+| Type | Name  | Content          | Proxy                         | TTL  |
+| ---- | ----- | ---------------- | ----------------------------- | ---- |
+| A    | `vpn` | `YOUR_SERVER_IP` | ☁️ Proxied (оранжевое облако) | Auto |
+| A    | `@`   | `YOUR_SERVER_IP` | ☁️ Proxied                    | Auto |
 
 > **КРИТИЧНО:** Облако должно быть **оранжевым** (Proxied), НЕ серым (DNS only).
 > Оранжевое облако = трафик идёт через CDN Cloudflare.
@@ -69,7 +71,7 @@
 ### Шаг 4. Настройка SSL/TLS в Cloudflare
 
 1. **SSL/TLS** → **Overview** → выбираем режим **Full (strict)**
-   
+
    ```
    ❌ Off          — нет шифрования
    ❌ Flexible     — нет шифрования до сервера (MITM)
@@ -98,15 +100,18 @@
 ### Шаг 6. Дополнительные настройки Cloudflare
 
 #### Speed → Optimization
+
 - **Auto Minify**: выключить всё (JS, CSS, HTML) — мы проксируем VPN, минификация не нужна
 - **Brotli**: ON (сжатие обычных страниц)
 
 #### Caching → Configuration
+
 - **Browser Cache TTL**: Respect Existing Headers
 
 #### Security → Settings
+
 - **Security Level**: Essentially Off (или Low)
-  
+
   > Если поставить Medium/High, Cloudflare может показывать капчу
   > VPN-клиентам и они не смогут подключиться.
 
@@ -117,10 +122,12 @@
   > потому что они не браузеры.
 
 #### Security → WAF
+
 - Убедитесь, что правила WAF не блокируют WebSocket-подключения
 - Если проблемы — создайте правило **Skip** для путей `/vless-ws*` и `/trojan-ws*`
 
 #### Security → Bot Fight Mode
+
 - **OFF** — иначе Cloudflare будет блокировать VPN-клиенты как ботов
 
 ### Шаг 7. Настройка клиента (v2rayNG / Hiddify / NekoBox)
@@ -177,6 +184,7 @@ Fingerprint:  chrome
 Если провайдер блочит по SNI (видит `vpn.example.com` в ClientHello):
 
 1. Находим IP Cloudflare, который не заблокирован:
+
    ```bash
    # Список чистых IP Cloudflare:
    # https://www.cloudflare.com/ips/
@@ -194,6 +202,7 @@ Fingerprint:  chrome
 #### 8.2. Если блокируют весь Cloudflare (экстремальный случай)
 
 1. Используйте **REALITY протокол** — он не зависит от CDN:
+
    ```
    Протокол:     VLESS
    Адрес:        YOUR_SERVER_IP
@@ -249,17 +258,17 @@ nslookup vpn.example.com
 
 ## Решение проблем
 
-| Симптом | Причина | Решение |
-|---------|---------|---------|
-| 522 Connection timed out | Сервер не отвечает | Проверьте что nginx запущен и слушает 443 |
-| 521 Web server is down | Nginx / приложение упало | `docker compose logs nginx` |
-| 525 SSL handshake failed | Нет серта на сервере | Получите Let's Encrypt: `docker compose run --rm certbot certonly ...` |
-| 526 Invalid SSL certificate | Самоподписанный серт | Смените режим SSL на "Full (strict)" + Let's Encrypt |
-| 403 Forbidden на WS | Cloudflare WAF блочит | Отключите Bot Fight Mode, создайте Skip правило |
-| Клиент не подключается | WebSocket выключен | Cloudflare → Network → WebSockets: ON |
-| Медленная скорость | Бесплатный план CF | Нормально: ~50-100 Мбит через CDN, CDN добавляет 10-30ms |
-| Error 1000 DNS | Домен не привязан | Проверьте A-запись в DNS Cloudflare |
-| Подключение отваливается | Cloudflare таймаут 100с | Для бесплатного плана лимит WebSocket 100с idle |
+| Симптом                     | Причина                  | Решение                                                                |
+| --------------------------- | ------------------------ | ---------------------------------------------------------------------- |
+| 522 Connection timed out    | Сервер не отвечает       | Проверьте что nginx запущен и слушает 443                              |
+| 521 Web server is down      | Nginx / приложение упало | `docker compose logs nginx`                                            |
+| 525 SSL handshake failed    | Нет серта на сервере     | Получите Let's Encrypt: `docker compose run --rm certbot certonly ...` |
+| 526 Invalid SSL certificate | Самоподписанный серт     | Смените режим SSL на "Full (strict)" + Let's Encrypt                   |
+| 403 Forbidden на WS         | Cloudflare WAF блочит    | Отключите Bot Fight Mode, создайте Skip правило                        |
+| Клиент не подключается      | WebSocket выключен       | Cloudflare → Network → WebSockets: ON                                  |
+| Медленная скорость          | Бесплатный план CF       | Нормально: ~50-100 Мбит через CDN, CDN добавляет 10-30ms               |
+| Error 1000 DNS              | Домен не привязан        | Проверьте A-запись в DNS Cloudflare                                    |
+| Подключение отваливается    | Cloudflare таймаут 100с  | Для бесплатного плана лимит WebSocket 100с idle                        |
 
 ### Cloudflare WebSocket timeout (бесплатный план)
 
@@ -267,6 +276,7 @@ nslookup vpn.example.com
 Для VPN это не проблема — клиент автоматически переподключается.
 
 Если нужен длительный keepalive — можно настроить ping в xray:
+
 ```json
 // В xray_config.json → inbound VLESS-WS → wsSettings:
 "wsSettings": {
