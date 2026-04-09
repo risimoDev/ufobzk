@@ -430,9 +430,10 @@ if should_run 4; then
             ok "Скрипт запущен из целевой директории $PROJECT_DIR"
         else
             substep "Копирование из локальной директории: $SOURCE_DIR"
-            rsync -a --exclude='.git' --exclude='data/' --exclude='.env' \
-                  --exclude='__pycache__' --exclude='*.pyc' --exclude='.warp' \
-                  "$SOURCE_DIR/" "$PROJECT_DIR/"
+            tar -C "$SOURCE_DIR" \
+                --exclude='.git' --exclude='data' --exclude='.env' \
+                --exclude='__pycache__' --exclude='*.pyc' --exclude='.warp' \
+                -cf - . | tar -C "$PROJECT_DIR" -xf -
             ok "Файлы скопированы в $PROJECT_DIR"
         fi
     elif [[ -f "$PROJECT_DIR/docker-compose.yml" ]]; then
