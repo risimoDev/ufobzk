@@ -73,7 +73,7 @@ if [[ "$START_STEP" -eq 0 ]] && [[ -f "$STATE_FILE" ]]; then
     if [[ "$SAVED" -gt 0 ]] && [[ "$SAVED" -lt "$TOTAL_STEPS" ]]; then
         if [[ "$AUTO_MODE" == false ]]; then
             echo -e "${YELLOW}Обнаружена незавершённая установка (шаг ${SAVED}/${TOTAL_STEPS}).${NC}"
-            read -rp "Продолжить с шага $((SAVED + 1))? [Y/n] " RESUME
+            read -rp "Продолжить с шага $((SAVED + 1))? [Y/n] " RESUME < /dev/tty
             if [[ "${RESUME,,}" != "n" ]]; then
                 START_STEP=$((SAVED + 1))
                 info "Продолжаем с шага $START_STEP"
@@ -89,7 +89,7 @@ should_run() { [[ "$1" -ge "$START_STEP" ]]; }
 
 confirm() {
     if [[ "$AUTO_MODE" == true ]]; then return 0; fi
-    read -rp "$1 [Y/n] " ANS
+    read -rp "$1 [Y/n] " ANS < /dev/tty
     [[ "${ANS,,}" != "n" ]]
 }
 
@@ -490,9 +490,9 @@ if should_run 4; then
             echo ""
 
             # Домен
-            DEFAULT_DOMAIN=$(grep '^DOMAIN=' "$ENV_FILE" 2>/dev/null | cut -d= -f2)
+            DEFAULT_DOMAIN=$(grep '^DOMAIN=' "$ENV_FILE" 2>/dev/null | cut -d= -f2 || echo "")
             [[ "$DEFAULT_DOMAIN" == "vpn.example.com" ]] && DEFAULT_DOMAIN=""
-            read -rp "  Домен (например vpn.mysite.com): ${DEFAULT_DOMAIN:+[$DEFAULT_DOMAIN] }" DOMAIN
+            read -rp "  Домен (например vpn.mysite.com): ${DEFAULT_DOMAIN:+[$DEFAULT_DOMAIN] }" DOMAIN < /dev/tty
             DOMAIN="${DOMAIN:-$DEFAULT_DOMAIN}"
             [[ -z "$DOMAIN" ]] && die "Домен обязателен"
 
@@ -515,33 +515,33 @@ if should_run 4; then
             fi
 
             # Email
-            DEFAULT_EMAIL=$(grep '^EMAIL=' "$ENV_FILE" 2>/dev/null | cut -d= -f2)
-            read -rp "  Email (для SSL): ${DEFAULT_EMAIL:+[$DEFAULT_EMAIL] }" EMAIL
+            DEFAULT_EMAIL=$(grep '^EMAIL=' "$ENV_FILE" 2>/dev/null | cut -d= -f2 || echo "")
+            read -rp "  Email (для SSL): ${DEFAULT_EMAIL:+[$DEFAULT_EMAIL] }" EMAIL < /dev/tty
             EMAIL="${EMAIL:-$DEFAULT_EMAIL}"
 
             # Telegram Bot
-            DEFAULT_TOKEN=$(grep '^TELEGRAM_BOT_TOKEN=' "$ENV_FILE" 2>/dev/null | cut -d= -f2)
+            DEFAULT_TOKEN=$(grep '^TELEGRAM_BOT_TOKEN=' "$ENV_FILE" 2>/dev/null | cut -d= -f2 || echo "")
             if [[ -n "$DEFAULT_TOKEN" ]] && [[ "$DEFAULT_TOKEN" != "your-bot-token" ]]; then
-                read -rp "  Telegram Bot Token [сохранить текущий]: " TELEGRAM_BOT_TOKEN
+                read -rp "  Telegram Bot Token [сохранить текущий]: " TELEGRAM_BOT_TOKEN < /dev/tty
                 TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-$DEFAULT_TOKEN}"
             else
-                read -rp "  Telegram Bot Token: " TELEGRAM_BOT_TOKEN
+                read -rp "  Telegram Bot Token: " TELEGRAM_BOT_TOKEN < /dev/tty
             fi
 
-            DEFAULT_USERNAME=$(grep '^TELEGRAM_BOT_USERNAME=' "$ENV_FILE" 2>/dev/null | cut -d= -f2)
-            read -rp "  Telegram Bot Username (без @): ${DEFAULT_USERNAME:+[$DEFAULT_USERNAME] }" TELEGRAM_BOT_USERNAME
+            DEFAULT_USERNAME=$(grep '^TELEGRAM_BOT_USERNAME=' "$ENV_FILE" 2>/dev/null | cut -d= -f2 || echo "")
+            read -rp "  Telegram Bot Username (без @): ${DEFAULT_USERNAME:+[$DEFAULT_USERNAME] }" TELEGRAM_BOT_USERNAME < /dev/tty
             TELEGRAM_BOT_USERNAME="${TELEGRAM_BOT_USERNAME:-$DEFAULT_USERNAME}"
 
             # Суперадмин
-            DEFAULT_SA=$(grep '^SUPERADMIN_TELEGRAM_ID=' "$ENV_FILE" 2>/dev/null | cut -d= -f2)
-            read -rp "  Telegram ID суперадмина: ${DEFAULT_SA:+[$DEFAULT_SA] }" SUPERADMIN_TG_ID
+            DEFAULT_SA=$(grep '^SUPERADMIN_TELEGRAM_ID=' "$ENV_FILE" 2>/dev/null | cut -d= -f2 || echo "")
+            read -rp "  Telegram ID суперадмина: ${DEFAULT_SA:+[$DEFAULT_SA] }" SUPERADMIN_TG_ID < /dev/tty
             SUPERADMIN_TG_ID="${SUPERADMIN_TG_ID:-$DEFAULT_SA}"
             [[ -z "$SUPERADMIN_TG_ID" ]] && die "SUPERADMIN_TELEGRAM_ID обязателен"
 
             # Пароль Marzban
-            DEFAULT_PASS=$(grep '^MARZBAN_ADMIN_PASS=' "$ENV_FILE" 2>/dev/null | cut -d= -f2)
+            DEFAULT_PASS=$(grep '^MARZBAN_ADMIN_PASS=' "$ENV_FILE" 2>/dev/null | cut -d= -f2 || echo "")
             if [[ -n "$DEFAULT_PASS" ]] && [[ "$DEFAULT_PASS" != "changeme" ]]; then
-                read -rp "  Marzban пароль [сохранить текущий]: " MARZBAN_ADMIN_PASS
+                read -rp "  Marzban пароль [сохранить текущий]: " MARZBAN_ADMIN_PASS < /dev/tty
                 MARZBAN_ADMIN_PASS="${MARZBAN_ADMIN_PASS:-$DEFAULT_PASS}"
             else
                 MARZBAN_ADMIN_PASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c16)
@@ -549,7 +549,7 @@ if should_run 4; then
             fi
 
             # IP для админки
-            read -rp "  IP для доступа к админке [${SERVER_IP}]: " ADMIN_IP
+            read -rp "  IP для доступа к админке [${SERVER_IP}]: " ADMIN_IP < /dev/tty
             ADMIN_IP="${ADMIN_IP:-$SERVER_IP}"
             echo ""
         fi
