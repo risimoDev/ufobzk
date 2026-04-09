@@ -1,0 +1,45 @@
+# ═══════════════════════════════════════════
+#  Локальная разработка — только ufo-app + marzban
+#  Без nginx, без SSL, без certbot
+# ═══════════════════════════════════════════
+#  Запуск: docker compose -f docker-compose.dev.yml up -d --build
+#  Открыть: http://localhost:8000
+
+services:
+
+  ufo-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vpnbzk-app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - MARZBAN_BASE_URL=http://marzban:8000
+    volumes:
+      - ./data:/project/data
+      - ./app:/project/app
+    depends_on:
+      - marzban
+
+  marzban:
+    image: gozargah/marzban:latest
+    container_name: vpnbzk-marzban
+    restart: unless-stopped
+    ports:
+      - "8880:8000"
+    env_file:
+      - .env
+    environment:
+      - UVICORN_HOST=0.0.0.0
+      - UVICORN_PORT=8000
+      - SUDO_USERNAME=${SUDO_USERNAME:-admin}
+      - SUDO_PASSWORD=${SUDO_PASSWORD:-admin}
+    volumes:
+      - marzban-data:/var/lib/marzban
+
+volumes:
+  marzban-data:

@@ -1,0 +1,133 @@
+# ═══════════════════════════════════════════
+#  VPNBZK — Production Docker Compose
+#  UFO site + Marzban + Nginx + Certbot
+# ═══════════════════════════════════════════
+
+services:
+
+  # ── Nginx — reverse proxy + SSL ──
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: vpnbzk-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf.template:ro
+      - certbot-webroot:/var/www/certbot:ro
+      - certbot-certs:/etc/letsencrypt:ro
+      - nginx-logs:/var/log/nginx
+    environment:
+      - DOMAIN=${DOMAIN}
+      - MARZBAN_WHITELIST_IP=${MARZBAN_WHITELIST_IP:-127.0.0.1}
+    entrypoint: "/bin/sh -c 'envsubst \"\\$$DOMAIN \\$$MARZBAN_WHITELIST_IP\" < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && nginx -g \"daemon off;\"'"
+    depends_on:
+      ufo-app:
+        condition: service_healthy
+      marzban:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    networks:
+      - frontend
+      - backend
+
+  # ── Certbot — SSL auto-renew ──
+  certbot:
+    image: certbot/certbot:latest
+    container_name: vpnbzk-certbot
+    volumes:
+      - certbot-webroot:/var/www/certbot
+      - certbot-certs:/etc/letsencrypt
+    # Первый запуск: получить сертификат
+    # docker compose run --rm certbot certonly --webroot -w /var/www/certbot -d $DOMAIN --email $EMAIL --agree-tos --no-eff-email
+    # Автообновление через entrypoint:
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --quiet; sleep 12h & wait $${!}; done'"
+    networks:
+      - frontend
+
+  # ── UFO App — FastAPI приложение ──
+  ufo-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vpnbzk-app
+    restart: unless-stopped
+    expose:
+      - "8000"
+    env_file:
+      - .env
+    environment:
+      - MARZBAN_BASE_URL=http://marzban:8000
+    volumes:
+      - app-data:/project/data
+    depends_on:
+      marzban:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    networks:
+      - backend
+
+  # ── Marzban — VPN panel ──
+  marzban:
+    image: gozargah/marzban:latest
+    container_name: vpnbzk-marzban
+    restart: unless-stopped
+    ports:
+      # REALITY слушает напрямую (443 внутри → 8443 снаружи, чтобы не конфликтовать с nginx)
+      # На сервере нужно: iptables или отдельный IP для REALITY
+      # Или использовать порт 2053/8443 — зависит от setup
+      - "${REALITY_PORT:-2053}:443"
+    expose:
+      - "8000"
+      - "8443"
+      - "8444"
+      - "8445"
+    env_file:
+      - .env
+    environment:
+      - UVICORN_HOST=0.0.0.0
+      - UVICORN_PORT=8000
+      - SUDO_USERNAME=${SUDO_USERNAME:-admin}
+      - SUDO_PASSWORD=${SUDO_PASSWORD}
+      - XRAY_SUBSCRIPTION_URL_PREFIX=https://${DOMAIN}
+      # Подключаем кастомный Xray-конфиг
+      - XRAY_JSON=/var/lib/marzban/xray_config.json
+    volumes:
+      - marzban-data:/var/lib/marzban
+      - marzban-certs:/var/lib/marzban/certs
+      - ./xray_config.json:/var/lib/marzban/xray_config.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8000/api/admin/token 2>&1 | grep -qE 'Method|detail|422' && exit 0 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 5
+    networks:
+      - backend
+
+# ── Сети ──
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+
+# ── Тома ──
+volumes:
+  app-data:
+  marzban-data:
+  marzban-certs:
+  certbot-webroot:
+  certbot-certs:
+  nginx-logs:
