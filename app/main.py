@@ -205,11 +205,7 @@ def _require_admin(request: Request, db: Session = Depends(get_db)) -> User:
         admin_guard.record_failure(ip)
         logger.warning("Неудачный доступ к админке: IP=%s", ip)
         raise HTTPException(status_code=403, detail="Доступ запрещён")
-    # Проверка IP на уровне приложения
-    if ip not in ADMIN_IPS and ip != "127.0.0.1" and ip != "::1":
-        admin_guard.record_failure(ip)
-        logger.warning("Попытка доступа к админке с IP %s (user=%s)", ip, user.telegram_id)
-        raise HTTPException(status_code=403, detail="Доступ запрещён для вашего IP")
+    # IP-фильтрация на уровне nginx (whitelist.conf)
     return user
 
 
