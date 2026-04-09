@@ -20,8 +20,8 @@ services:
       - nginx-logs:/var/log/nginx
     environment:
       - DOMAIN=${DOMAIN}
-      - MARZBAN_WHITELIST_IP=${MARZBAN_WHITELIST_IP:-127.0.0.1}
-    entrypoint: "/bin/sh -c 'envsubst \"\\$$DOMAIN \\$$MARZBAN_WHITELIST_IP\" < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && nginx -g \"daemon off;\"'"
+      - MARZBAN_WHITELIST_IPS=${MARZBAN_WHITELIST_IPS:-127.0.0.1}
+    entrypoint: "/bin/sh -c 'echo \"$$MARZBAN_WHITELIST_IPS\" | tr \",\" \"\\n\" | while read -r ip; do ip=$$(echo $$ip | tr -d \" \"); [ -n \"$$ip\" ] && echo \"allow $$ip;\"; done > /etc/nginx/whitelist.conf && envsubst \"\\$$DOMAIN\" < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && nginx -g \"daemon off;\"'"
     depends_on:
       ufo-app:
         condition: service_healthy
