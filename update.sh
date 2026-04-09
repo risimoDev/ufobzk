@@ -40,7 +40,7 @@ NEED_RESTART=false
 # Проверяем изменились ли файлы приложения или Docker
 CHANGED=$(cd "$REPO_DIR" && git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
 
-if echo "$CHANGED" | grep -qE '^(Dockerfile|requirements\.txt)'; then
+if echo "$CHANGED" | grep -qE '^(Dockerfile|docker/|requirements\.txt)'; then
     NEED_BUILD=true
 fi
 

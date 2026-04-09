@@ -80,7 +80,9 @@ services:
 
   # ── Marzban — VPN panel ──
   marzban:
-    image: gozargah/marzban:latest
+    build:
+      context: ./docker/marzban
+      dockerfile: Dockerfile
     container_name: vpnbzk-marzban
     restart: unless-stopped
     # REALITY порт добавляется после генерации ключей (шаг 8 setup.sh)
@@ -104,19 +106,12 @@ services:
       - UVICORN_SSL_CERTFILE=/var/lib/marzban/certs/internal.crt
       - UVICORN_SSL_KEYFILE=/var/lib/marzban/certs/internal.key
       - UVICORN_SSL_CA_TYPE=private
-    entrypoint: >-
-      bash -c '
-      mkdir -p /var/lib/marzban/certs;
-      if [ ! -f /var/lib/marzban/certs/internal.crt ]; then
-      openssl req -x509 -newkey rsa:2048 -keyout /var/lib/marzban/certs/internal.key -out /var/lib/marzban/certs/internal.crt -days 3650 -nodes -subj "/CN=marzban" 2>/dev/null;
-      fi;
-      alembic upgrade head && python main.py'
     volumes:
       - marzban-data:/var/lib/marzban
       - marzban-certs:/var/lib/marzban/certs
       - ./xray_config.json:/var/lib/marzban/xray_config.json:ro
     healthcheck:
-      test: ["CMD-SHELL", "curl -sfk https://127.0.0.1:8000/api/admin/token 2>&1 | grep -qE 'Method|detail|422' && exit 0 || exit 1"]
+      test: ["CMD", "curl", "-sfk", "https://127.0.0.1:8000/api/admin/token"]
       interval: 15s
       timeout: 10s
       start_period: 60s
