@@ -61,7 +61,8 @@ fi
 info "Ключи записаны в .env"
 
 # ─── Подставляем privateKey в xray_config.json ───
-# Используем python (есть в контейнере) для безопасной JSON-правки
+# Используем python для безопасной JSON-правки
+# Если REALITY inbound нет — добавляет его
 python3 - "$XRAY_CONFIG" "$PRIVATE_KEY" <<'PYEOF'
 import json, sys
 
@@ -70,11 +71,37 @@ config_path, private_key = sys.argv[1], sys.argv[2]
 with open(config_path, "r") as f:
     config = json.load(f)
 
-# Находим REALITY inbound и ставим privateKey
+# Ищем существующий REALITY inbound
+found = False
 for inbound in config.get("inbounds", []):
     ss = inbound.get("streamSettings", {})
     if "realitySettings" in ss:
         ss["realitySettings"]["privateKey"] = private_key
+        found = True
+
+# Если REALITY inbound не найден — добавляем
+if not found:
+    reality_inbound = {
+        "tag": "VLESS-REALITY",
+        "listen": "0.0.0.0",
+        "port": 443,
+        "protocol": "vless",
+        "settings": {"clients": [], "decryption": "none"},
+        "streamSettings": {
+            "network": "tcp",
+            "security": "reality",
+            "realitySettings": {
+                "show": False,
+                "dest": "www.google.com:443",
+                "xver": 0,
+                "serverNames": ["www.google.com", "google.com"],
+                "privateKey": private_key,
+                "shortIds": ["", "0123456789abcdef"]
+            }
+        },
+        "sniffing": {"enabled": True, "destOverride": ["http", "tls", "quic"]}
+    }
+    config["inbounds"].insert(0, reality_inbound)
 
 with open(config_path, "w") as f:
     json.dump(config, f, indent=2, ensure_ascii=False)
@@ -102,6 +129,16 @@ for inbound in config.get("inbounds", []):
 with open(config_path, "w") as f:
     json.dump(config, f, indent=2, ensure_ascii=False)
 PYEOF
+
+# ─── Добавляем REALITY порт в docker-compose ────
+COMPOSE_FILE="$PROJECT_DIR/docker-compose.yml"
+REALITY_PORT=$(grep '^REALITY_PORT=' "$ENV_FILE" | cut -d= -f2 || echo "2053")
+if grep -q '# ports:' "$COMPOSE_FILE" 2>/dev/null; then
+    # Раскомментируем ports и добавляем маппинг
+    sed -i '/# REALITY порт/,/# ports:/{s|# ports:|ports:|;}' "$COMPOSE_FILE"
+    sed -i "s|#   - \"\${REALITY_PORT:-2053}:443\"|      - \"${REALITY_PORT}:443\"|" "$COMPOSE_FILE"
+    info "Порт REALITY ($REALITY_PORT:443) добавлен в docker-compose.yml"
+fi
 
 # ─── Перезапуск Marzban ─────────────────────────
 info "Перезапуск Marzban для применения новой конфигурации..."

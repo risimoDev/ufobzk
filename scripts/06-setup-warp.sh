@@ -89,15 +89,54 @@ endpoint    = sys.argv[6]
 with open(config_path, "r") as f:
     config = json.load(f)
 
-ep_host, ep_port = endpoint.rsplit(":", 1)
-
+# Ищем существующий WARP outbound (любой регистр тега)
+found = False
 for outbound in config.get("outbounds", []):
-    if outbound.get("tag") == "warp":
-        wg = outbound.get("settings", {}).get("peers", [{}])[0]
+    if outbound.get("tag", "").upper() == "WARP":
         outbound["settings"]["secretKey"] = private_key
         outbound["settings"]["address"] = [f"{addr4}/32", f"{addr6}/128"]
-        wg["publicKey"] = public_key
-        wg["endpoint"] = endpoint
+        peers = outbound.get("settings", {}).get("peers", [{}])
+        if peers:
+            peers[0]["publicKey"] = public_key
+            peers[0]["endpoint"] = endpoint
+        found = True
+
+# Если нет — добавляем WARP outbound и routing правило
+if not found:
+    warp_outbound = {
+        "tag": "WARP",
+        "protocol": "wireguard",
+        "settings": {
+            "secretKey": private_key,
+            "address": [f"{addr4}/32", f"{addr6}/128"],
+            "peers": [{
+                "publicKey": public_key,
+                "allowedIPs": ["0.0.0.0/0", "::/0"],
+                "endpoint": endpoint
+            }],
+            "reserved": [0, 0, 0],
+            "mtu": 1280
+        }
+    }
+    config["outbounds"].append(warp_outbound)
+
+    # Добавляем routing правило для стриминговых/AI доменов (перед DIRECT)
+    warp_rule = {
+        "type": "field",
+        "outboundTag": "WARP",
+        "domain": [
+            "geosite:openai",
+            "geosite:netflix",
+            "geosite:spotify",
+            "geosite:disney"
+        ]
+    }
+    rules = config.get("routing", {}).get("rules", [])
+    # Вставляем перед последним правилом (DIRECT)
+    if rules:
+        rules.insert(-1, warp_rule)
+    else:
+        rules.append(warp_rule)
 
 with open(config_path, "w") as f:
     json.dump(config, f, indent=2, ensure_ascii=False)

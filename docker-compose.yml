@@ -83,11 +83,9 @@ services:
     image: gozargah/marzban:latest
     container_name: vpnbzk-marzban
     restart: unless-stopped
-    ports:
-      # REALITY слушает напрямую (443 внутри → 8443 снаружи, чтобы не конфликтовать с nginx)
-      # На сервере нужно: iptables или отдельный IP для REALITY
-      # Или использовать порт 2053/8443 — зависит от setup
-      - "${REALITY_PORT:-2053}:443"
+    # REALITY порт добавляется после генерации ключей (шаг 8 setup.sh)
+    # ports:
+    #   - "${REALITY_PORT:-2053}:443"
     expose:
       - "8000"
       - "8443"

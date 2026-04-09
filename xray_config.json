@@ -4,38 +4,6 @@
   },
   "inbounds": [
     {
-      "tag": "VLESS-REALITY",
-      "listen": "0.0.0.0",
-      "port": 443,
-      "protocol": "vless",
-      "settings": {
-        "clients": [],
-        "decryption": "none"
-      },
-      "streamSettings": {
-        "network": "tcp",
-        "security": "reality",
-        "realitySettings": {
-          "show": false,
-          "dest": "www.google.com:443",
-          "xver": 0,
-          "serverNames": [
-            "www.google.com",
-            "google.com"
-          ],
-          "privateKey": "",
-          "shortIds": [
-            "",
-            "0123456789abcdef"
-          ]
-        }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls", "quic"]
-      }
-    },
-    {
       "tag": "VLESS-WS-TLS",
       "listen": "0.0.0.0",
       "port": 8443,
@@ -106,26 +74,6 @@
     {
       "tag": "BLACKHOLE",
       "protocol": "blackhole"
-    },
-    {
-      "tag": "WARP",
-      "protocol": "wireguard",
-      "settings": {
-        "secretKey": "",
-        "address": [
-          "172.16.0.2/32",
-          "2606:4700:110:8756:f2a4:85cb:a68c:caa2/128"
-        ],
-        "peers": [
-          {
-            "publicKey": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
-            "allowedIPs": ["0.0.0.0/0", "::/0"],
-            "endpoint": "engage.cloudflareclient.com:2408"
-          }
-        ],
-        "reserved": [0, 0, 0],
-        "mtu": 1280
-      }
     }
   ],
   "routing": {
@@ -143,19 +91,10 @@
       },
       {
         "type": "field",
-        "outboundTag": "WARP",
-        "domain": [
-          "geosite:openai",
-          "geosite:netflix",
-          "geosite:spotify",
-          "geosite:disney"
-        ]
-      },
-      {
-        "type": "field",
         "outboundTag": "DIRECT",
         "network": "tcp,udp"
       }
     ]
   }
+}
 }
