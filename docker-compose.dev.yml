@@ -18,7 +18,7 @@ services:
     env_file:
       - .env
     environment:
-      - MARZBAN_BASE_URL=http://marzban:8000
+      - MARZBAN_BASE_URL=https://marzban:8000
     volumes:
       - ./data:/project/data
       - ./app:/project/app

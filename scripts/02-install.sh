@@ -154,7 +154,7 @@ TELEGRAM_BOT_USERNAME=${BOT_USER}
 WEBAPP_URL=https://${DOMAIN}
 
 # ── Marzban API (внутренняя сеть Docker) ──
-MARZBAN_BASE_URL=http://marzban:8000
+MARZBAN_BASE_URL=https://marzban:8000
 MARZBAN_ADMIN_USER=admin
 MARZBAN_ADMIN_PASS=${MZBN_PASS}
 

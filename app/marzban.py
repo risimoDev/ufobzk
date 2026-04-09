@@ -10,7 +10,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-MARZBAN_BASE_URL = os.getenv("MARZBAN_BASE_URL", "http://marzban:8000")
+MARZBAN_BASE_URL = os.getenv("MARZBAN_BASE_URL", "https://marzban:8000")
 MARZBAN_ADMIN_USER = os.getenv("MARZBAN_ADMIN_USER", "admin")
 MARZBAN_ADMIN_PASS = os.getenv("MARZBAN_ADMIN_PASS", "admin")
 
@@ -68,7 +68,7 @@ class MarzbanAPI:
             return self._token
 
         try:
-            async with httpx.AsyncClient(timeout=10) as client:
+            async with httpx.AsyncClient(timeout=10, verify=False) as client:
                 resp = await client.post(
                     f"{self.base_url}/api/admin/token",
                     data={
@@ -112,7 +112,7 @@ class MarzbanAPI:
         headers = {"Authorization": f"Bearer {token}"}
 
         try:
-            async with httpx.AsyncClient(timeout=15) as client:
+            async with httpx.AsyncClient(timeout=15, verify=False) as client:
                 resp = await client.request(
                     method,
                     f"{self.base_url}{path}",

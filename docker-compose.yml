@@ -63,7 +63,7 @@ services:
     env_file:
       - .env
     environment:
-      - MARZBAN_BASE_URL=http://marzban:8000
+      - MARZBAN_BASE_URL=https://marzban:8000
     volumes:
       - app-data:/project/data
     depends_on:
@@ -99,17 +99,29 @@ services:
       - SUDO_USERNAME=${SUDO_USERNAME:-admin}
       - SUDO_PASSWORD=${SUDO_PASSWORD}
       - XRAY_SUBSCRIPTION_URL_PREFIX=https://${DOMAIN}
-      # Подключаем кастомный Xray-конфиг
       - XRAY_JSON=/var/lib/marzban/xray_config.json
+      # Self-signed cert чтобы Marzban слушал на 0.0.0.0 (SSL termination через nginx)
+      - UVICORN_SSL_CERTFILE=/var/lib/marzban/certs/internal.crt
+      - UVICORN_SSL_KEYFILE=/var/lib/marzban/certs/internal.key
+      - UVICORN_SSL_CA_TYPE=private
+    entrypoint: >-
+      bash -c '
+      if [ ! -f /var/lib/marzban/certs/internal.crt ]; then
+        openssl req -x509 -newkey rsa:2048
+        -keyout /var/lib/marzban/certs/internal.key
+        -out /var/lib/marzban/certs/internal.crt
+        -days 3650 -nodes -subj "/CN=marzban" 2>/dev/null;
+      fi;
+      alembic upgrade head && python main.py'
     volumes:
       - marzban-data:/var/lib/marzban
       - marzban-certs:/var/lib/marzban/certs
       - ./xray_config.json:/var/lib/marzban/xray_config.json:ro
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8000/api/admin/token 2>&1 | grep -qE 'Method|detail|422' && exit 0 || exit 1"]
-      interval: 30s
+      test: ["CMD-SHELL", "curl -sfk https://127.0.0.1:8000/api/admin/token 2>&1 | grep -qE 'Method|detail|422' && exit 0 || exit 1"]
+      interval: 15s
       timeout: 10s
-      start_period: 30s
+      start_period: 60s
       retries: 5
     networks:
       - backend
