@@ -40,7 +40,7 @@ NEED_RESTART=false
 # Проверяем изменились ли файлы приложения или Docker
 CHANGED=$(cd "$REPO_DIR" && git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
 
-if echo "$CHANGED" | grep -qE '^(Dockerfile|docker/|requirements\.txt)'; then
+if echo "$CHANGED" | grep -qE '^(Dockerfile|docker/|requirements\.txt|app/)'; then
     NEED_BUILD=true
 fi
 
@@ -62,7 +62,7 @@ fi
 
 if [[ "$NEED_RESTART" == true ]]; then
     step "Перезапуск стека..."
-    docker compose up -d
+    docker compose up -d --force-recreate
     info "Стек перезапущен"
 else
     # Даже если структурных изменений нет — перезапустим app на всякий

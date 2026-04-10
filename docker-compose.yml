@@ -20,15 +20,15 @@ services:
       - nginx-logs:/var/log/nginx
     environment:
       - DOMAIN=${DOMAIN}
-      - MARZBAN_WHITELIST_IPS=${MARZBAN_WHITELIST_IPS:-127.0.0.1}
-    entrypoint: "/bin/sh -c 'echo \"$$MARZBAN_WHITELIST_IPS\" | tr \",\" \"\\n\" | while read -r ip; do ip=$$(echo $$ip | tr -d \" \"); [ -n \"$$ip\" ] && echo \"allow $$ip;\"; done > /etc/nginx/whitelist.conf && envsubst \"\\$$DOMAIN\" < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && nginx -g \"daemon off;\"'"
+      - MARZBAN_WHITELIST_IPS=${MARZBAN_WHITELIST_IPS:-${ADMIN_IPS:-127.0.0.1}}
+    entrypoint: "/bin/sh -c 'echo \"$$MARZBAN_WHITELIST_IPS\" | tr \",\" \"\\n\" | while read -r ip; do ip=$$(echo $$ip | tr -d \" \"); [ -n \"$$ip\" ] && echo \"allow $$ip;\"; done > /etc/nginx/whitelist.conf && cat /etc/nginx/whitelist.conf && envsubst \"\\$$DOMAIN\" < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && nginx -g \"daemon off;\"'"
     depends_on:
       ufo-app:
         condition: service_healthy
       marzban:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/ || exit 1"]
+      test: ["CMD-SHELL", "wget -qS -O /dev/null http://127.0.0.1:80/ 2>&1 | grep -qE '301|200' || exit 1"]
       interval: 30s
       timeout: 5s
       start_period: 15s
