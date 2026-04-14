@@ -198,31 +198,65 @@ def write_xray_config(db: Session) -> None:
 
 
 def reload_xray() -> bool:
-    """Перезагрузить Xray (SIGHUP или restart)."""
+    """Перезагрузить Xray.
+
+    Порядок попыток:
+    1. Docker socket API (production — xray в отдельном контейнере)
+    2. systemctl restart xray (bare metal)
+    3. killall -HUP xray (bare metal без systemd)
+    """
+    docker_sock = "/var/run/docker.sock"
+    container_name = os.getenv("XRAY_CONTAINER_NAME", "vpnbzk-xray")
+
+    # ── Попытка 1: Docker socket ──
+    if os.path.exists(docker_sock):
+        try:
+            import socket as _socket
+            sock = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+            sock.settimeout(15)
+            sock.connect(docker_sock)
+            request = (
+                f"POST /containers/{container_name}/restart?t=5 HTTP/1.1\r\n"
+                f"Host: localhost\r\n"
+                f"Content-Length: 0\r\n"
+                f"Connection: close\r\n\r\n"
+            ).encode()
+            sock.sendall(request)
+            response = b""
+            while True:
+                chunk = sock.recv(256)
+                if not chunk:
+                    break
+                response += chunk
+            sock.close()
+            if b"204" in response or b"200" in response:
+                logger.info("Xray перезагружен через Docker socket")
+                return True
+            logger.warning("Docker socket ответил неожиданно: %s", response[:100])
+        except Exception as e:
+            logger.warning("Не удалось перезагрузить через Docker socket: %s", e)
+
+    # ── Попытка 2: systemctl (bare metal) ──
     try:
         result = subprocess.run(
             ["systemctl", "restart", "xray"],
             capture_output=True, text=True, timeout=15
         )
         if result.returncode == 0:
-            logger.info("Xray перезагружен")
+            logger.info("Xray перезагружен через systemctl")
             return True
-        logger.error("Ошибка перезагрузки Xray: %s", result.stderr)
-        return False
     except FileNotFoundError:
-        # В Docker — используем сигнал
-        try:
-            subprocess.run(
-                ["killall", "-HUP", "xray"],
-                capture_output=True, timeout=5
-            )
-            logger.info("Xray получил HUP-сигнал")
-            return True
-        except Exception as e:
-            logger.error("Не удалось перезагрузить Xray: %s", e)
-            return False
+        pass
     except Exception as e:
-        logger.error("Ошибка перезагрузки Xray: %s", e)
+        logger.debug("systemctl недоступен: %s", e)
+
+    # ── Попытка 3: killall -HUP (bare metal без systemd) ──
+    try:
+        subprocess.run(["killall", "-HUP", "xray"], capture_output=True, timeout=5)
+        logger.info("Xray получил HUP-сигнал")
+        return True
+    except Exception as e:
+        logger.debug("killall не сработал: %s", e)
         return False
 
 

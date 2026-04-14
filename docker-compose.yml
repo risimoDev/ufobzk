@@ -65,7 +65,8 @@ services:
     volumes:
       - xray-config:/etc/xray
       - xray-logs:/var/log/xray
-    command: ["xray", "run", "-config", "/etc/xray/config.json"]
+    # Ждём конфиг от ufo-app (он создаётся при старте приложения)
+    entrypoint: ["/bin/sh", "-c", "until [ -f /etc/xray/config.json ]; do echo 'Waiting for xray config...'; sleep 2; done; exec xray run -config /etc/xray/config.json"]
     networks:
       - backend
 
@@ -85,15 +86,16 @@ services:
     volumes:
       - app-data:/project/data
       - xray-config:/etc/xray
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       xray:
         condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/')"]
       interval: 30s
-      timeout: 5s
-      start_period: 15s
-      retries: 3
+      timeout: 10s
+      start_period: 60s
+      retries: 5
     networks:
       - backend
 
