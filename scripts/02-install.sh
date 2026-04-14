@@ -43,7 +43,7 @@ fi
 
 echo ""
 echo -e "${CYAN}═══════════════════════════════════════════${NC}"
-echo -e "${CYAN}  Установка проекта НИИ АЯ                 ${NC}"
+echo -e "${CYAN}  Установка VPNBZK — каскадный VPN         ${NC}"
 echo -e "${CYAN}═══════════════════════════════════════════${NC}"
 echo ""
 
@@ -118,9 +118,13 @@ if [ "${WRITE_ENV:-false}" = true ]; then
     read -rp "$(echo -e "${BOLD}Telegram Bot Username (без @):${NC} ")" INPUT_BOT_USER
     BOT_USER="${INPUT_BOT_USER:?Bot Username обязателен}"
 
-    # Marzban пароль
-    read -rp "$(echo -e "${BOLD}Marzban admin пароль:${NC} ")" INPUT_MZBN_PASS
-    MZBN_PASS="${INPUT_MZBN_PASS:?Пароль обязателен}"
+    # NL-сервер (Нидерланды)
+    read -rp "$(echo -e "${BOLD}NL-сервер IP (Нидерланды):${NC} ")" INPUT_NL_IP
+    NL_IP="${INPUT_NL_IP:-}"
+
+    # RU-сервер (Россия)
+    read -rp "$(echo -e "${BOLD}RU-сервер IP (Россия, необязательно):${NC} ")" INPUT_RU_IP
+    RU_IP="${INPUT_RU_IP:-}"
 
     # Мой IP для whitelist
     MY_IP=$(curl -s --max-time 5 https://api.ipify.org 2>/dev/null || echo "")
@@ -153,20 +157,24 @@ TELEGRAM_BOT_TOKEN=${BOT_TOKEN}
 TELEGRAM_BOT_USERNAME=${BOT_USER}
 WEBAPP_URL=https://${DOMAIN}
 
-# ── Marzban API (внутренняя сеть Docker) ──
-MARZBAN_BASE_URL=https://marzban:8000
-MARZBAN_ADMIN_USER=admin
-MARZBAN_ADMIN_PASS=${MZBN_PASS}
-
-# ── Marzban Panel ──
-SUDO_USERNAME=admin
-SUDO_PASSWORD=${MZBN_PASS}
-
-# ── Доступ ──
-MARZBAN_WHITELIST_IPS=${WHITELIST_IP}
+# ── Каскадные серверы ──
+NL_SERVER_IP=${NL_IP}
+RU_SERVER_IP=${RU_IP}
 
 # ── Xray ──
-XRAY_FALLBACK_PORT=8443
+XRAY_CONFIG_PATH=/etc/xray/config.json
+VLESS_WS_PORT=443
+REALITY_PORT=2053
+
+# ── REALITY (заполняется скриптом 05-setup-reality.sh) ──
+REALITY_PUBLIC_KEY=
+REALITY_PRIVATE_KEY=
+REALITY_SHORT_ID=
+REALITY_DEST=www.samsung.com:443
+REALITY_SERVER_NAMES=www.samsung.com,samsung.com
+
+# ── Доступ ──
+ADMIN_IPS=${WHITELIST_IP}
 ENVEOF
 
     chmod 600 .env
@@ -212,8 +220,6 @@ if [ "$CERT_EXISTS" = false ]; then
     else
         # Запуск временного nginx для ACME challenge
         log "Запуск временного nginx (HTTP-only)..."
-
-        docker compose up -d marzban 2>/dev/null || true
 
         docker run -d --rm --name vpnbzk-nginx-init \
             -v "$(pwd)/nginx/nginx-initial.conf:/etc/nginx/nginx.conf.template:ro" \
@@ -336,9 +342,11 @@ if [ "${SKIP_SSL:-false}" = true ]; then
     echo -e "  Режим:     ${YELLOW}DEV (без SSL)${NC}"
 else
     echo -e "  Сайт:      https://${DOMAIN}"
-    echo -e "  Marzban:   https://${DOMAIN}/marzban/"
+    echo -e "  Админка:   https://${DOMAIN}/admin"
     echo -e "  Режим:     ${GREEN}PRODUCTION${NC}"
 fi
+echo ""
+echo -e "  ${YELLOW}Следующий шаг: bash scripts/05-setup-reality.sh${NC}"
 echo ""
 echo -e "  ${CYAN}Полезные команды:${NC}"
 echo -e "  cd $PROJECT_DIR"

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Личный кабинет — НИИ АЯ</title>
+    <title>Личный кабинет — Каскадный VPN</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <script>
@@ -11,12 +11,7 @@
         theme: {
           extend: {
             colors: {
-              space: {
-                900: "#0a0a1a",
-                800: "#0f0f2e",
-                700: "#1a1a3e",
-                600: "#252554",
-              },
+              space: { 900: "#0a0a1a", 800: "#0f0f2e", 700: "#1a1a3e", 600: "#252554" },
               acid: { 400: "#00ffc8", 500: "#00e6b4", 600: "#00cc9f" },
             },
           },
@@ -24,623 +19,250 @@
       };
     </script>
     <style>
-      body {
-        background: #0a0a1a;
-        min-height: 100vh;
-      }
-      .stars {
-        position: fixed;
-        inset: 0;
-        z-index: 0;
-        pointer-events: none;
-        background-image:
-          radial-gradient(
-            1px 1px at 10% 20%,
-            rgba(255, 255, 255, 0.7),
-            transparent
-          ),
-          radial-gradient(
-            1px 1px at 55% 15%,
-            rgba(255, 255, 255, 0.5),
-            transparent
-          ),
-          radial-gradient(
-            1px 1px at 88% 40%,
-            rgba(255, 255, 255, 0.6),
-            transparent
-          ),
-          radial-gradient(
-            1px 1px at 30% 65%,
-            rgba(0, 255, 200, 0.2),
-            transparent
-          ),
-          radial-gradient(
-            1px 1px at 72% 80%,
-            rgba(255, 255, 255, 0.4),
-            transparent
-          );
-        background-size: 300px 300px;
-        animation: twinkle 6s ease-in-out infinite alternate;
-      }
-      @keyframes twinkle {
-        from {
-          opacity: 0.4;
-        }
-        to {
-          opacity: 1;
-        }
-      }
-      .glow-green {
-        text-shadow: 0 0 15px rgba(0, 255, 200, 0.4);
-      }
-      .glow-box {
-        box-shadow:
-          0 0 25px rgba(0, 255, 200, 0.05),
-          inset 0 1px 0 rgba(255, 255, 255, 0.03);
-      }
-      .card {
-        background: rgba(255, 255, 255, 0.02);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        border-radius: 1rem;
-      }
-      .card:hover {
-        border-color: rgba(0, 255, 200, 0.1);
-      }
-      .scanline {
-        background: repeating-linear-gradient(
-          0deg,
-          transparent,
-          transparent 2px,
-          rgba(0, 255, 200, 0.01) 2px,
-          rgba(0, 255, 200, 0.01) 4px
-        );
-      }
-
-      /* Табы */
-      .tab-btn {
-        transition: all 0.2s;
-      }
-      .tab-btn.active {
-        color: #00ffc8;
-        border-color: #00ffc8;
-        background: rgba(0, 255, 200, 0.05);
-      }
-      .tab-panel {
-        display: none;
-      }
-      .tab-panel.active {
-        display: block;
-      }
-
-      /* Копирование */
-      .copy-feedback {
-        transition: opacity 0.3s;
-      }
+      body { background: #0a0a1a; min-height: 100vh; }
+      .stars { position: fixed; inset: 0; z-index: 0; pointer-events: none; background-image: radial-gradient(1px 1px at 10% 20%,rgba(255,255,255,.7),transparent), radial-gradient(1px 1px at 55% 15%,rgba(255,255,255,.5),transparent), radial-gradient(1px 1px at 88% 40%,rgba(255,255,255,.6),transparent), radial-gradient(1px 1px at 30% 65%,rgba(0,255,200,.2),transparent), radial-gradient(1px 1px at 72% 80%,rgba(255,255,255,.4),transparent); background-size: 300px 300px; animation: twinkle 6s ease-in-out infinite alternate; }
+      @keyframes twinkle { from { opacity: .4; } to { opacity: 1; } }
+      .glow-green { text-shadow: 0 0 15px rgba(0,255,200,.4); }
+      .glow-box { box-shadow: 0 0 25px rgba(0,255,200,.05), inset 0 1px 0 rgba(255,255,255,.03); }
+      .card { background: rgba(255,255,255,.02); border: 1px solid rgba(255,255,255,.05); border-radius: 1rem; }
+      .card:hover { border-color: rgba(0,255,200,.1); }
+      .scanline { background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,200,.01) 2px, rgba(0,255,200,.01) 4px); }
+      .tab-btn { transition: all .2s; }
+      .tab-btn.active { color: #00ffc8; border-color: #00ffc8; background: rgba(0,255,200,.05); }
+      .tab-panel { display: none; }
+      .tab-panel.active { display: block; }
     </style>
   </head>
   <body class="text-gray-300 font-sans relative scanline">
     <div class="stars"></div>
 
-    <!-- Навигация -->
     <nav class="relative z-10 border-b border-white/5">
-      <div
-        class="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between"
-      >
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
         <a href="/" class="flex items-center gap-2">
-          <span class="text-xl">👁️</span>
-          <span
-            class="text-lg font-bold text-acid-400 glow-green tracking-wider hidden sm:inline"
-            >НИИ АЯ</span
-          >
+          <span class="text-xl">🛡️</span>
+          <span class="text-lg font-bold text-acid-400 glow-green tracking-wider hidden sm:inline">Каскадный VPN</span>
         </a>
         <div class="flex items-center gap-2 sm:gap-4">
           <span class="text-gray-600 text-xs sm:text-sm hidden md:inline">
-            ID:
-            <span class="text-gray-400 font-mono">{{ user.telegram_id }}</span>
-            {% if user.telegram_username %}
-            <span class="text-gray-700">@{{ user.telegram_username }}</span>
-            {% endif %}
+            ID: <span class="text-gray-400 font-mono">{{ user.telegram_id }}</span>
+            {% if user.telegram_username %}<span class="text-gray-700">@{{ user.telegram_username }}</span>{% endif %}
           </span>
           {% if user.is_admin %}
-          <a
-            href="/admin"
-            class="px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-400/80 border border-amber-500/20 text-xs hover:bg-amber-500/20 transition"
-            >Админ</a
-          >
+          <a href="/admin" class="px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-400/80 border border-amber-500/20 text-xs hover:bg-amber-500/20 transition">Админ</a>
           {% endif %}
-          <a
-            href="/logout"
-            class="px-3 py-1.5 rounded-lg border border-white/5 text-gray-600 text-xs hover:text-gray-400 hover:border-white/10 transition"
-            >Выход</a
-          >
+          <a href="/logout" class="px-3 py-1.5 rounded-lg border border-white/5 text-gray-600 text-xs hover:text-gray-400 hover:border-white/10 transition">Выход</a>
         </div>
       </div>
     </nav>
 
     <main class="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 py-8">
-      {% if error %}
-      <div class="card p-4 mb-6 border-red-500/20 bg-red-500/5">
-        <p class="text-red-400 text-sm">⚠️ {{ error }}</p>
-      </div>
-      {% endif %} {% if not user.marzban_username %}
-      <!-- ═══ VPN не подключён ═══ -->
+
+      {% if not keys_data %}
+      <!-- ═══ Нет ключей ═══ -->
       <div class="card p-12 text-center glow-box">
-        <div class="text-5xl mb-5 opacity-40">📡</div>
-        <h2 class="text-xl font-semibold text-gray-300 mb-2">
-          Подключение не активировано
-        </h2>
-        <p class="text-gray-600 text-sm max-w-md mx-auto">
-          Ваш аккаунт зарегистрирован, но VPN-профиль ещё не создан. Обратитесь
-          к администратору для активации.
-        </p>
+        <div class="text-5xl mb-5 opacity-40">🔑</div>
+        <h2 class="text-xl font-semibold text-gray-300 mb-2">VPN-ключи не созданы</h2>
+        <p class="text-gray-600 text-sm max-w-md mx-auto">Ваш аккаунт зарегистрирован. Обратитесь к администратору для создания VPN-ключей.</p>
       </div>
 
-      {% elif vpn %}
-      <!-- ═══ Статус-карточки ═══ -->
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <!-- Статус -->
-        <div class="card p-5 glow-box">
-          <p class="text-gray-600 text-xs uppercase tracking-wider mb-2">
-            Статус
-          </p>
-          {% if vpn.status == 'active' %}
-          <div class="flex items-center gap-2">
-            <span
-              class="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-lg shadow-emerald-400/30"
-            ></span>
-            <span class="text-lg font-bold text-emerald-400">Активен</span>
-          </div>
-          {% elif vpn.status == 'limited' %}
-          <div class="flex items-center gap-2">
-            <span
-              class="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-lg shadow-amber-400/30"
-            ></span>
-            <span class="text-lg font-bold text-amber-400">Ограничен</span>
-          </div>
-          {% elif vpn.status == 'expired' %}
-          <div class="flex items-center gap-2">
-            <span
-              class="w-2.5 h-2.5 rounded-full bg-red-400 shadow-lg shadow-red-400/30"
-            ></span>
-            <span class="text-lg font-bold text-red-400">Истёк</span>
-          </div>
-          {% elif vpn.status == 'disabled' %}
-          <div class="flex items-center gap-2">
-            <span class="w-2.5 h-2.5 rounded-full bg-gray-500"></span>
-            <span class="text-lg font-bold text-gray-500">Отключён</span>
-          </div>
-          {% else %}
-          <span class="text-lg font-bold text-gray-500">{{ vpn.status }}</span>
-          {% endif %}
-        </div>
+      {% else %}
 
-        <!-- Трафик -->
-        <div class="card p-5 glow-box">
-          <p class="text-gray-600 text-xs uppercase tracking-wider mb-2">
-            Трафик
-          </p>
-          <p class="text-lg font-bold text-acid-400">
-            {{ format_bytes(vpn.used_traffic | default(0)) }}
-          </p>
-        </div>
-
-        <!-- Лимит -->
-        <div class="card p-5 glow-box">
-          <p class="text-gray-600 text-xs uppercase tracking-wider mb-2">
-            Лимит
-          </p>
-          {% if vpn.data_limit %}
-          <p class="text-lg font-bold text-gray-200">
-            {{ format_bytes(vpn.data_limit) }}
-          </p>
-          {% else %}
-          <p class="text-lg font-bold text-emerald-400">∞ Безлимит</p>
-          {% endif %}
-        </div>
-
-        <!-- Срок действия -->
-        <div class="card p-5 glow-box">
-          <p class="text-gray-600 text-xs uppercase tracking-wider mb-2">
-            Истекает
-          </p>
-          {% if expire_info.days_left is not none %}
-          <p
-            class="text-lg font-bold {% if expire_info.days_left <= 3 %}text-red-400{% elif expire_info.days_left <= 7 %}text-amber-400{% else %}text-gray-200{% endif %}"
-          >
-            {{ expire_info.days_left }} дн.
-          </p>
-          <p class="text-gray-600 text-xs mt-0.5">{{ expire_info.date_str }}</p>
-          {% else %}
-          <p class="text-lg font-bold text-emerald-400">∞ Бессрочно</p>
-          {% endif %}
-        </div>
-      </div>
-
-      <!-- ═══ Прогресс-бар трафика ═══ -->
-      {% if vpn.data_limit and vpn.data_limit > 0 %} {% set used =
-      vpn.used_traffic | default(0) %} {% set pct = (used / vpn.data_limit *
-      100) | round(1) %}
+      <!-- ═══ Схема каскадного VPN ═══ -->
       <div class="card p-5 mb-6 glow-box">
-        <div
-          class="flex items-center justify-between text-xs text-gray-500 mb-2"
-        >
-          <span>{{ format_bytes(used) }} использовано</span>
-          <span
-            class="font-mono {% if pct > 90 %}text-red-400{% elif pct > 70 %}text-amber-400{% else %}text-acid-400{% endif %}"
-            >{{ pct }}%</span
-          >
-        </div>
-        <div class="w-full bg-white/5 rounded-full h-2.5 overflow-hidden">
-          <div
-            class="h-full rounded-full transition-all duration-500 {% if pct > 90 %}bg-gradient-to-r from-red-500 to-red-400 {% elif pct > 70 %}bg-gradient-to-r from-amber-500 to-amber-400 {% else %}bg-gradient-to-r from-acid-600 to-acid-400{% endif %}"
-            style="width: {{ [pct, 100] | min }}%"
-          ></div>
-        </div>
-        <div class="flex justify-between text-xs text-gray-700 mt-1.5">
-          <span>0</span>
-          <span>{{ format_bytes(vpn.data_limit) }}</span>
+        <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-3">🌐 Каскадный VPN</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="bg-black/20 rounded-xl p-4">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="text-lg">🇷🇺</span>
+              <span class="text-gray-200 font-medium text-sm">Российский сервер</span>
+            </div>
+            <p class="text-gray-500 text-xs">Трафик к .ru, .su, .рф — через Россию. Быстрый доступ к российским ресурсам.</p>
+          </div>
+          <div class="bg-black/20 rounded-xl p-4">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="text-lg">🇳🇱</span>
+              <span class="text-gray-200 font-medium text-sm">Сервер в Нидерландах</span>
+            </div>
+            <p class="text-gray-500 text-xs">Весь остальной трафик — через Европу. YouTube, Google, Instagram и всё остальное.</p>
+          </div>
         </div>
       </div>
-      {% endif %}
 
       <!-- ═══ Подписка ═══ -->
       {% if subscription_url %}
       <div class="card p-5 mb-6 glow-box">
         <div class="flex items-center justify-between mb-3">
-          <h2
-            class="text-sm font-semibold text-gray-300 uppercase tracking-wider"
-          >
-            🔗 Ссылка подписки
-          </h2>
-          <button
-            onclick="copyText('{{ subscription_url }}', this)"
-            class="px-3 py-1 bg-acid-400/10 text-acid-400 rounded-lg text-xs hover:bg-acid-400/20 transition flex items-center gap-1.5"
-          >
-            <svg
-              class="w-3.5 h-3.5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
-              />
-            </svg>
+          <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wider">🔗 Ссылка подписки (все ключи)</h2>
+          <button onclick="copyText('{{ subscription_url }}')" class="px-3 py-1 bg-acid-400/10 text-acid-400 rounded-lg text-xs hover:bg-acid-400/20 transition flex items-center gap-1.5">
             <span class="copy-label">Копировать</span>
           </button>
         </div>
         <div class="bg-black/30 rounded-xl p-3 overflow-x-auto">
-          <code class="text-xs text-acid-400/70 font-mono break-all select-all"
-            >{{ subscription_url }}</code
-          >
+          <code class="text-xs text-acid-400/70 font-mono break-all select-all">{{ subscription_url }}</code>
         </div>
-        <p class="text-gray-700 text-xs mt-2">
-          Эту ссылку можно добавить в любое V2Ray-совместимое приложение
-        </p>
-      </div>
-      {% endif %}
+        <p class="text-gray-700 text-xs mt-2">Вставьте эту ссылку в приложение — все серверы подключатся автоматически</p>
 
-      <!-- ═══ QR-код ═══ -->
-      {% if subscription_url %}
-      <div class="card p-5 mb-6 glow-box">
-        <h2
-          class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4"
-        >
-          📱 QR-код
-        </h2>
-        <div class="flex justify-center">
+        <!-- QR-код -->
+        <div class="flex justify-center mt-4">
           <div id="qrcode" class="bg-white rounded-xl p-3 inline-block"></div>
         </div>
-        <p class="text-gray-700 text-xs text-center mt-3">
-          Отсканируйте камерой телефона или приложением
-        </p>
       </div>
       {% endif %}
 
-      <!-- ═══ Конфиг-ссылки по платформам ═══ -->
-      {% if config_links %}
-      <div class="card p-5 mb-6 glow-box">
-        <h2
-          class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4"
-        >
-          📋 Конфигурации
-        </h2>
+      <!-- ═══ VPN-ключи ═══ -->
+      {% for kd in keys_data %}
+      <div class="card p-5 mb-4 glow-box">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-3">
+            <h3 class="text-sm font-semibold text-gray-200">🔑 {{ kd.key.name }}</h3>
+            {% if kd.status == 'active' %}
+            <span class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs">Активен</span>
+            {% elif kd.status == 'expired' %}
+            <span class="px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 text-xs">Истёк</span>
+            {% elif kd.status == 'limited' %}
+            <span class="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-xs">Лимит</span>
+            {% elif kd.status == 'disabled' %}
+            <span class="px-2 py-0.5 rounded-full bg-gray-500/10 text-gray-500 text-xs">Отключён</span>
+            {% endif %}
+          </div>
+          <div class="flex gap-4 text-xs text-gray-600">
+            <span>Трафик: {{ format_bytes(kd.key.data_used) }}{% if kd.key.data_limit %} / {{ format_bytes(kd.key.data_limit) }}{% else %} / ∞{% endif %}</span>
+            <span>Срок: {% if kd.key.expire_at %}{{ kd.key.expire_at.strftime('%d.%m.%Y') }}{% else %}∞{% endif %}</span>
+          </div>
+        </div>
+
+        <!-- Прогресс-бар трафика -->
+        {% if kd.key.data_limit and kd.key.data_limit > 0 %}
+        {% set pct = (kd.key.data_used / kd.key.data_limit * 100) | round(1) %}
+        <div class="mb-4">
+          <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
+            <span>{{ format_bytes(kd.key.data_used) }}</span>
+            <span class="font-mono {% if pct > 90 %}text-red-400{% elif pct > 70 %}text-amber-400{% else %}text-acid-400{% endif %}">{{ pct }}%</span>
+          </div>
+          <div class="w-full bg-white/5 rounded-full h-2 overflow-hidden">
+            <div class="h-full rounded-full transition-all duration-500 {% if pct > 90 %}bg-gradient-to-r from-red-500 to-red-400{% elif pct > 70 %}bg-gradient-to-r from-amber-500 to-amber-400{% else %}bg-gradient-to-r from-acid-600 to-acid-400{% endif %}" style="width: {{ [pct, 100] | min }}%"></div>
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Серверы -->
+        {% if kd.links %}
         <div class="space-y-2">
-          {% for link in config_links %}
-          <div
-            class="flex items-center gap-2 bg-black/20 rounded-lg p-2.5 group"
-          >
-            <code
-              class="flex-1 text-xs text-gray-400 font-mono break-all leading-relaxed"
-              >{{ link[:100] }}{% if link|length > 100 %}…{% endif %}</code
-            >
-            <button
-              onclick="copyText({{ link | tojson }}, this)"
-              class="px-2.5 py-1 bg-white/5 rounded-md text-gray-500 text-xs hover:text-acid-400 hover:bg-acid-400/10 transition shrink-0"
-            >
-              <span class="copy-label">📋</span>
-            </button>
+          {% for link in kd.links %}
+          <div class="flex items-center gap-2 bg-black/20 rounded-lg p-2.5 group">
+            <span class="text-xs text-gray-400 w-40 shrink-0">{{ link.name }}</span>
+            <code class="flex-1 text-xs text-gray-500 font-mono break-all leading-relaxed">{{ link.link[:80] }}{% if link.link|length > 80 %}…{% endif %}</code>
+            <button onclick="copyText({{ link.link | tojson }})" class="px-2.5 py-1 bg-white/5 rounded-md text-gray-500 text-xs hover:text-acid-400 hover:bg-acid-400/10 transition shrink-0">📋</button>
           </div>
           {% endfor %}
         </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+
+      <!-- ═══ Инструкции ═══ -->
+      <div class="card p-5 glow-box mt-6">
+        <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-5">📖 Инструкции по подключению</h2>
+
+        <div class="flex flex-wrap gap-2 mb-5 border-b border-white/5 pb-4">
+          <button class="tab-btn active px-4 py-2 rounded-lg border border-white/5 text-xs font-medium" data-tab="ios">🍎 iOS</button>
+          <button class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500" data-tab="android">🤖 Android</button>
+          <button class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500" data-tab="windows">🖥️ Windows</button>
+          <button class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500" data-tab="macos">💻 macOS</button>
+        </div>
+
+        <div class="tab-panel active" id="tab-ios">
+          <div class="bg-black/20 rounded-xl p-5">
+            <h3 class="text-acid-400 font-semibold text-sm mb-3">Hiddify (рекомендуется)</h3>
+            <ol class="space-y-2 text-gray-400 text-sm list-decimal list-inside">
+              <li>Установите <strong class="text-gray-300">Hiddify</strong> из App Store</li>
+              <li>Нажмите <strong class="text-gray-300">+</strong> → <strong class="text-gray-300">«Добавить по ссылке»</strong></li>
+              <li>Вставьте ссылку подписки или отсканируйте QR-код</li>
+              <li>Появятся оба сервера (🇷🇺 Россия + 🇳🇱 Европа)</li>
+              <li>Включите подключение — маршрутизация автоматическая</li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="tab-android">
+          <div class="bg-black/20 rounded-xl p-5">
+            <h3 class="text-acid-400 font-semibold text-sm mb-3">Hiddify / v2rayNG</h3>
+            <ol class="space-y-2 text-gray-400 text-sm list-decimal list-inside">
+              <li>Установите <strong class="text-gray-300">Hiddify</strong> из Google Play / GitHub</li>
+              <li>Нажмите <strong class="text-gray-300">«Новый профиль»</strong> → <strong class="text-gray-300">«По ссылке»</strong></li>
+              <li>Вставьте ссылку подписки</li>
+              <li>Или используйте <strong class="text-gray-300">v2rayNG</strong> → <strong class="text-gray-300">Подписки</strong> → добавьте URL</li>
+              <li>Включите VPN</li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="tab-windows">
+          <div class="bg-black/20 rounded-xl p-5">
+            <h3 class="text-acid-400 font-semibold text-sm mb-3">Hiddify / Nekoray</h3>
+            <ol class="space-y-2 text-gray-400 text-sm list-decimal list-inside">
+              <li>Скачайте <strong class="text-gray-300">Hiddify</strong> с github.com/hiddify</li>
+              <li><strong class="text-gray-300">«Новый профиль»</strong> → <strong class="text-gray-300">«По ссылке»</strong></li>
+              <li>Вставьте ссылку подписки → <strong class="text-gray-300">«Сохранить»</strong></li>
+              <li>Выберите сервер и подключайтесь</li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="tab-macos">
+          <div class="bg-black/20 rounded-xl p-5">
+            <h3 class="text-acid-400 font-semibold text-sm mb-3">Hiddify</h3>
+            <ol class="space-y-2 text-gray-400 text-sm list-decimal list-inside">
+              <li>Скачайте <strong class="text-gray-300">Hiddify</strong> (.dmg) с GitHub</li>
+              <li>Добавьте профиль по ссылке подписки</li>
+              <li>Подключайтесь</li>
+            </ol>
+          </div>
+        </div>
       </div>
       {% endif %}
-
-      <!-- ═══ Инструкции по платформам ═══ -->
-      <div class="card p-5 glow-box">
-        <h2
-          class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-5"
-        >
-          📖 Инструкции по подключению
-        </h2>
-
-        <!-- Табы -->
-        <div class="flex flex-wrap gap-2 mb-5 border-b border-white/5 pb-4">
-          <button
-            class="tab-btn active px-4 py-2 rounded-lg border border-white/5 text-xs font-medium"
-            data-tab="ios"
-          >
-            🍎 iOS
-          </button>
-          <button
-            class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500"
-            data-tab="android"
-          >
-            🤖 Android
-          </button>
-          <button
-            class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500"
-            data-tab="windows"
-          >
-            🖥️ Windows
-          </button>
-          <button
-            class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500"
-            data-tab="macos"
-          >
-            💻 macOS
-          </button>
-        </div>
-
-        <!-- iOS -->
-        <div class="tab-panel active" id="tab-ios">
-          <div class="space-y-4">
-            <div class="bg-black/20 rounded-xl p-5">
-              <h3 class="text-acid-400 font-semibold text-sm mb-3">
-                Hiddify (рекомендуется)
-              </h3>
-              <ol
-                class="space-y-2 text-gray-400 text-sm list-decimal list-inside"
-              >
-                <li>
-                  Установите <strong class="text-gray-300">Hiddify</strong> из
-                  App Store
-                </li>
-                <li>
-                  Откройте приложение → нажмите
-                  <strong class="text-gray-300">+</strong> (добавить профиль)
-                </li>
-                <li>
-                  Выберите
-                  <strong class="text-gray-300">«Добавить по ссылке»</strong>
-                </li>
-                <li>
-                  Вставьте ссылку подписки (скопируйте выше) или отсканируйте
-                  QR-код
-                </li>
-                <li>
-                  Нажмите <strong class="text-gray-300">«Сохранить»</strong>,
-                  затем включите подключение
-                </li>
-              </ol>
-            </div>
-            <div class="bg-black/20 rounded-xl p-5">
-              <h3 class="text-gray-400 font-semibold text-sm mb-3">
-                Streisand
-              </h3>
-              <ol
-                class="space-y-2 text-gray-400 text-sm list-decimal list-inside"
-              >
-                <li>
-                  Установите <strong class="text-gray-300">Streisand</strong> из
-                  App Store
-                </li>
-                <li>
-                  Нажмите <strong class="text-gray-300">+</strong> →
-                  <strong class="text-gray-300">«Импорт из буфера»</strong>
-                </li>
-                <li>Скопируйте ссылку подписки и вставьте</li>
-                <li>Подтвердите добавление → подключайтесь</li>
-              </ol>
-            </div>
-          </div>
-        </div>
-
-        <!-- Android -->
-        <div class="tab-panel" id="tab-android">
-          <div class="space-y-4">
-            <div class="bg-black/20 rounded-xl p-5">
-              <h3 class="text-acid-400 font-semibold text-sm mb-3">
-                Hiddify (рекомендуется)
-              </h3>
-              <ol
-                class="space-y-2 text-gray-400 text-sm list-decimal list-inside"
-              >
-                <li>
-                  Установите <strong class="text-gray-300">Hiddify</strong> из
-                  Google Play или GitHub
-                </li>
-                <li>
-                  Откройте → нажмите
-                  <strong class="text-gray-300">«Новый профиль»</strong>
-                </li>
-                <li>
-                  Выберите
-                  <strong class="text-gray-300">«Добавить по ссылке»</strong> и
-                  вставьте ссылку подписки
-                </li>
-                <li>Или нажмите сканер QR → наведите на QR-код выше</li>
-                <li>Включите VPN-подключение</li>
-              </ol>
-            </div>
-            <div class="bg-black/20 rounded-xl p-5">
-              <h3 class="text-gray-400 font-semibold text-sm mb-3">v2rayNG</h3>
-              <ol
-                class="space-y-2 text-gray-400 text-sm list-decimal list-inside"
-              >
-                <li>
-                  Установите <strong class="text-gray-300">v2rayNG</strong> из
-                  Google Play
-                </li>
-                <li>
-                  Меню <strong class="text-gray-300">⋮</strong> →
-                  <strong class="text-gray-300">«Импорт из буфера»</strong>
-                </li>
-                <li>
-                  Или: <strong class="text-gray-300">⋮</strong> →
-                  <strong class="text-gray-300">«Подписки»</strong> → добавьте
-                  URL подписки
-                </li>
-                <li>Выберите сервер → нажмите ▶️ для подключения</li>
-              </ol>
-            </div>
-          </div>
-        </div>
-
-        <!-- Windows -->
-        <div class="tab-panel" id="tab-windows">
-          <div class="space-y-4">
-            <div class="bg-black/20 rounded-xl p-5">
-              <h3 class="text-acid-400 font-semibold text-sm mb-3">
-                Hiddify (рекомендуется)
-              </h3>
-              <ol
-                class="space-y-2 text-gray-400 text-sm list-decimal list-inside"
-              >
-                <li>
-                  Скачайте <strong class="text-gray-300">Hiddify</strong> с
-                  <span class="text-gray-500">github.com/hiddify</span>
-                </li>
-                <li>Установите и запустите</li>
-                <li>
-                  Нажмите
-                  <strong class="text-gray-300">«Новый профиль»</strong> →
-                  <strong class="text-gray-300">«По ссылке»</strong>
-                </li>
-                <li>
-                  Вставьте ссылку подписки →
-                  <strong class="text-gray-300">«Сохранить»</strong>
-                </li>
-                <li>Выберите сервер и включите</li>
-              </ol>
-            </div>
-            <div class="bg-black/20 rounded-xl p-5">
-              <h3 class="text-gray-400 font-semibold text-sm mb-3">Nekoray</h3>
-              <ol
-                class="space-y-2 text-gray-400 text-sm list-decimal list-inside"
-              >
-                <li>
-                  Скачайте <strong class="text-gray-300">Nekoray</strong> с
-                  GitHub
-                </li>
-                <li>
-                  Распакуйте и запустите
-                  <strong class="text-gray-300">nekoray.exe</strong>
-                </li>
-                <li>
-                  <strong class="text-gray-300">Сервер</strong> →
-                  <strong class="text-gray-300"
-                    >«Добавить ссылку из буфера»</strong
-                  >
-                </li>
-                <li>
-                  Или: <strong class="text-gray-300">Настройки</strong> →
-                  <strong class="text-gray-300">«Группы»</strong> → подписка по
-                  URL
-                </li>
-                <li>
-                  ПКМ на сервер →
-                  <strong class="text-gray-300">«Запустить»</strong>
-                </li>
-              </ol>
-            </div>
-          </div>
-        </div>
-
-        <!-- macOS -->
-        <div class="tab-panel" id="tab-macos">
-          <div class="space-y-4">
-            <div class="bg-black/20 rounded-xl p-5">
-              <h3 class="text-acid-400 font-semibold text-sm mb-3">Hiddify</h3>
-              <ol
-                class="space-y-2 text-gray-400 text-sm list-decimal list-inside"
-              >
-                <li>
-                  Скачайте <strong class="text-gray-300">Hiddify</strong> из
-                  GitHub (macOS .dmg)
-                </li>
-                <li>Установите и откройте</li>
-                <li>Добавьте профиль по ссылке подписки</li>
-                <li>Выберите сервер → подключайтесь</li>
-              </ol>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {% endif %}{# vpn #}
     </main>
 
     <script>
-      // ── Табы ──
+      // Табы
       document.querySelectorAll('.tab-btn').forEach(function(btn) {
-          btn.addEventListener('click', function() {
-              document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); b.classList.add('text-gray-500'); });
-              document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
-              btn.classList.add('active');
-              btn.classList.remove('text-gray-500');
-              var panel = document.getElementById('tab-' + btn.dataset.tab);
-              if (panel) panel.classList.add('active');
-          });
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); b.classList.add('text-gray-500'); });
+          document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+          btn.classList.add('active'); btn.classList.remove('text-gray-500');
+          var panel = document.getElementById('tab-' + btn.dataset.tab);
+          if (panel) panel.classList.add('active');
+        });
       });
 
-      // ── Копирование в буфер ──
-      function copyText(text, btn) {
-          navigator.clipboard.writeText(text).then(function() {
-              var label = btn.querySelector('.copy-label');
-              var original = label.textContent;
-              label.textContent = '✓';
-              btn.classList.add('text-emerald-400');
-              setTimeout(function() {
-                  label.textContent = original;
-                  btn.classList.remove('text-emerald-400');
-              }, 1500);
-          });
+      // Копирование
+      function copyText(text) {
+        navigator.clipboard.writeText(text).then(function() {
+          var toast = document.createElement('div');
+          toast.className = 'fixed top-4 right-4 z-50 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-sm';
+          toast.textContent = '✓ Скопировано';
+          document.body.appendChild(toast);
+          setTimeout(function() { toast.remove(); }, 2000);
+        });
       }
 
-      // ── QR-код ──
+      // QR-код
       document.addEventListener('DOMContentLoaded', function() {
-          var qrEl = document.getElementById('qrcode');
-          if (!qrEl) return;
-          {% if subscription_url %}
-          var subUrl = {{ subscription_url | tojson }};
-          {% elif config_links %}
-          var subUrl = {{ config_links[0] | tojson }};
-          {% else %}
-          var subUrl = null;
-          {% endif %}
-          if (subUrl) {
-              QRCode.toCanvas(document.createElement('canvas'), subUrl, {
-                  width: 220,
-                  margin: 1,
-                  color: { dark: '#0a0a1a', light: '#ffffff' }
-              }, function(err, canvas) {
-                  if (!err) qrEl.appendChild(canvas);
-              });
-          }
+        var qrEl = document.getElementById('qrcode');
+        if (!qrEl) return;
+        {% if subscription_url %}
+        var subUrl = {{ subscription_url | tojson }};
+        {% else %}
+        var subUrl = null;
+        {% endif %}
+        if (subUrl) {
+          QRCode.toCanvas(document.createElement('canvas'), subUrl, {
+            width: 220, margin: 1,
+            color: { dark: '#0a0a1a', light: '#ffffff' }
+          }, function(err, canvas) {
+            if (!err) qrEl.appendChild(canvas);
+          });
+        }
       });
     </script>
   </body>

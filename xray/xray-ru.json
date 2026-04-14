@@ -1,0 +1,183 @@
+{
+  "_comment": "RU-сервер (Россия) — каскадный. .ru/.su/.рф → DIRECT, всё остальное → NL-сервер",
+  "log": {
+    "loglevel": "warning",
+    "access": "/var/log/xray/access.log",
+    "error": "/var/log/xray/error.log"
+  },
+  "api": {
+    "tag": "api",
+    "services": ["StatsService"]
+  },
+  "stats": {},
+  "policy": {
+    "levels": {
+      "0": {
+        "statsUserUplink": true,
+        "statsUserDownlink": true
+      }
+    },
+    "system": {
+      "statsInboundUplink": true,
+      "statsInboundDownlink": true,
+      "statsOutboundUplink": true,
+      "statsOutboundDownlink": true
+    }
+  },
+  "inbounds": [
+    {
+      "tag": "api-inbound",
+      "listen": "127.0.0.1",
+      "port": 10085,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "127.0.0.1"
+      }
+    },
+    {
+      "tag": "VLESS-WS",
+      "listen": "0.0.0.0",
+      "port": 8443,
+      "protocol": "vless",
+      "settings": {
+        "clients": [],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {
+          "path": "/vless-ws"
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls", "quic"]
+      }
+    },
+    {
+      "tag": "VLESS-REALITY",
+      "listen": "0.0.0.0",
+      "port": 443,
+      "protocol": "vless",
+      "settings": {
+        "clients": [],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "reality",
+        "realitySettings": {
+          "show": false,
+          "dest": "www.samsung.com:443",
+          "xver": 0,
+          "serverNames": ["www.samsung.com", "samsung.com"],
+          "privateKey": "REPLACE_WITH_PRIVATE_KEY",
+          "shortIds": ["REPLACE_WITH_SHORT_ID"]
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls", "quic"]
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "_comment": "Для .ru/.su/.рф — напрямую",
+      "tag": "DIRECT",
+      "protocol": "freedom"
+    },
+    {
+      "_comment": "Каскад: весь остальной трафик → NL-сервер через VLESS-REALITY",
+      "tag": "NL-PROXY",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "REPLACE_NL_SERVER_IP",
+            "port": 443,
+            "users": [
+              {
+                "id": "REPLACE_WITH_TRANSIT_UUID",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "reality",
+        "realitySettings": {
+          "show": false,
+          "fingerprint": "chrome",
+          "serverName": "www.samsung.com",
+          "publicKey": "REPLACE_WITH_NL_PUBLIC_KEY",
+          "shortId": "REPLACE_WITH_NL_SHORT_ID"
+        }
+      }
+    },
+    {
+      "tag": "BLACKHOLE",
+      "protocol": "blackhole"
+    }
+  ],
+  "routing": {
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+      {
+        "type": "field",
+        "inboundTag": ["api-inbound"],
+        "outboundTag": "api"
+      },
+      {
+        "type": "field",
+        "outboundTag": "BLACKHOLE",
+        "protocol": ["bittorrent"]
+      },
+      {
+        "type": "field",
+        "outboundTag": "BLACKHOLE",
+        "ip": ["geoip:private"]
+      },
+      {
+        "_comment": "Российские домены — напрямую",
+        "type": "field",
+        "outboundTag": "DIRECT",
+        "domain": [
+          "regexp:\\.ru$",
+          "regexp:\\.su$",
+          "regexp:\\.рф$",
+          "domain:yandex.com",
+          "domain:mail.ru",
+          "domain:vk.com",
+          "domain:ok.ru",
+          "domain:sberbank.ru",
+          "domain:gosuslugi.ru",
+          "domain:nalog.gov.ru",
+          "domain:mos.ru",
+          "domain:rt.ru",
+          "domain:tinkoff.ru",
+          "domain:wildberries.ru",
+          "domain:ozon.ru",
+          "domain:avito.ru",
+          "domain:1c.ru"
+        ]
+      },
+      {
+        "_comment": "Российские IP — напрямую",
+        "type": "field",
+        "outboundTag": "DIRECT",
+        "ip": ["geoip:ru"]
+      },
+      {
+        "_comment": "Всё остальное — через NL-сервер",
+        "type": "field",
+        "outboundTag": "NL-PROXY",
+        "network": "tcp,udp"
+      }
+    ]
+  }
+}

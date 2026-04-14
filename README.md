@@ -1,75 +1,164 @@
-# 🛸 VPNBZK — Система управления VPN
+# 🛸 VPNBZK — Каскадный VPN на Xray
 
-Веб-приложение для управления VPN-подключениями с космической тематикой.
+Веб-приложение для управления каскадным VPN на голом ядре Xray с космической тематикой.
 
 ## Архитектура
+
+```
+Клиент → RU-сервер (Россия)
+              ├── .ru / .su / .рф / geoip:ru → DIRECT (напрямую)
+              └── всё остальное → NL-сервер (Нидерланды) → Интернет
+```
 
 | Компонент   | Технология                      |
 | ----------- | ------------------------------- |
 | Backend     | Python FastAPI                  |
 | Frontend    | Jinja2 + TailwindCSS (CDN)      |
 | Авторизация | Telegram-бот (одноразовые коды) |
-| VPN-панель  | Marzban (REST API)              |
+| VPN-ядро    | Xray (VLESS WS+TLS, REALITY)    |
 | База данных | SQLite через SQLAlchemy         |
 | Деплой      | Docker Compose                  |
+
+## Серверы
+
+| Сервер | Расположение | Роль                                                              |
+| ------ | ------------ | ----------------------------------------------------------------- |
+| **NL** | Нидерланды   | Основной сервер + веб-панель. Весь нерусский трафик выходит здесь |
+| **RU** | Россия       | Точка входа. .ru/.su/.рф → напрямую, остальное → каскад в NL      |
+
+## Протоколы подключения
+
+| Протокол      | Порт | Описание                                  |
+| ------------- | ---- | ----------------------------------------- |
+| VLESS WS+TLS  | 443  | Через CDN (Cloudflare). Лучшая маскировка |
+| VLESS REALITY | 2053 | Прямое подключение. Быстрее, но без CDN   |
 
 ## Структура проекта
 
 ```
 vpnbzk/
 ├── app/
-│   ├── __init__.py
 │   ├── main.py          # FastAPI — маршруты, lifespan, middleware
 │   ├── auth.py          # Генерация и проверка одноразовых кодов
-│   ├── marzban.py       # Обёртка Marzban REST API
-│   ├── models.py        # SQLAlchemy модели (User, AuthCode)
+│   ├── xray.py          # Управление Xray — конфиги, ссылки, перезагрузка
+│   ├── models.py        # SQLAlchemy модели (User, VPNKey, AuthCode)
 │   ├── bot.py           # Telegram-бот (aiogram 3)
-│   ├── templates/
-│   │   ├── index.html   # Главная — космическая тема
-│   │   ├── login.html   # Ввод кода
-│   │   ├── cabinet.html # Личный кабинет (конфиг, QR, трафик)
-│   │   └── admin.html   # Админ-панель
+│   ├── templates/       # Jinja2 шаблоны (космическая тема)
 │   └── static/
-│       └── style.css
-├── docker-compose.yml
+├── xray/
+│   ├── xray-nl.json     # Шаблон конфига для NL-сервера
+│   └── xray-ru.json     # Шаблон конфига для RU-сервера (каскад)
+├── scripts/
+│   ├── 01-prepare-server.sh   # Подготовка ОС (Docker, UFW, swap)
+│   ├── 02-install.sh          # Полная установка на основной сервер
+│   ├── 03-deploy.sh           # Обновление (zero-downtime)
+│   ├── 05-setup-reality.sh    # Генерация REALITY-ключей
+│   ├── setup-nl-server.sh     # Установка Xray на NL-сервер
+│   └── setup-ru-server.sh     # Установка Xray на RU-сервер
+├── nginx/
+│   └── nginx.conf       # Reverse proxy + SSL termination
+├── docker-compose.yml   # Production (Nginx + Xray + App + Certbot)
+├── docker-compose.dev.yml # Разработка (App + Xray)
 ├── Dockerfile
 ├── requirements.txt
-├── .env.example
-├── .env.marzban.example
-└── .gitignore
+└── .env.example
 ```
 
-## Быстрый старт
+---
 
-### 1. Конфигурация
+## Установка с нуля — пошаговая инструкция
+
+### Шаг 1. Подготовка серверов
+
+Вам нужны 2 VPS:
+
+- **NL-сервер** (Нидерланды или любая Европа) — основной, здесь будет веб-панель
+- **RU-сервер** (Россия) — точка входа для пользователей
+
+Требования: Ubuntu 22.04+, минимум 1 ГБ RAM, 1 CPU.
+
+### Шаг 2. Подготовка NL-сервера (основной)
 
 ```bash
-cp .env.example .env
-cp .env.marzban.example .env.marzban
+# SSH на NL-сервер
+ssh root@<NL_IP>
+
+# Подготовка системы
+bash scripts/01-prepare-server.sh
+
+# Установка Xray + генерация транзитного UUID
+bash scripts/setup-nl-server.sh
 ```
 
-Отредактируйте `.env`:
+**Сохраните вывод скрипта!** Вам понадобятся:
 
-- `SECRET_KEY` — случайная строка
-- `TELEGRAM_BOT_TOKEN` — токен от @BotFather
-- `WEBAPP_URL` — публичный URL вашего сайта
-- `MARZBAN_ADMIN_USER` / `MARZBAN_ADMIN_PASS` — данные администратора Marzban
+- `REALITY Public Key`
+- `REALITY Private Key`
+- `Short ID`
+- `Transit UUID`
+- `NL_SERVER_IP`
 
-### 2. Запуск
+### Шаг 3. Установка основного стека на NL-сервер
 
 ```bash
-docker compose up -d --build
+# Установка проекта (Docker Compose)
+bash scripts/02-install.sh
 ```
 
-Приложение будет доступно на `http://localhost:8000`.  
-Marzban-панель — на `http://localhost:8880`.
+Скрипт спросит:
 
-### 3. Создание первого администратора
+- Домен (например, `vpn.example.com`)
+- Email для SSL
+- Telegram Bot Token и Username
+- IP серверов (NL и RU)
+- Ваш IP для whitelist админки
 
-После первого входа через бота выполните в БД:
+### Шаг 4. Настройка REALITY на основном сервере
 
 ```bash
-docker compose exec web python -c "
+bash scripts/05-setup-reality.sh
+```
+
+Запишите `Public Key` и `Short ID` — они нужны клиентам.
+
+### Шаг 5. Настройка RU-сервера (каскад)
+
+```bash
+# SSH на RU-сервер
+ssh root@<RU_IP>
+
+# Подготовка системы
+bash scripts/01-prepare-server.sh
+
+# Установка Xray-каскада
+bash scripts/setup-ru-server.sh
+```
+
+Скрипт спросит данные от NL-сервера (из шага 2):
+
+- NL-сервер IP
+- NL REALITY Public Key
+- NL REALITY Short ID
+- Transit UUID
+
+### Шаг 6. DNS
+
+Настройте A-запись:
+
+```
+vpn.example.com → <NL_SERVER_IP>
+```
+
+Если используете Cloudflare CDN — включите проксирование (оранжевое облако).
+
+### Шаг 7. Первый администратор
+
+1. Напишите вашему Telegram-боту `/start`
+2. Получите код и войдите на сайт
+3. Назначьте себя суперадмином:
+
+```bash
+docker compose exec ufo-app python -c "
 from app.models import SessionLocal, User
 db = SessionLocal()
 u = db.query(User).first()
@@ -79,39 +168,83 @@ print(f'Пользователь {u.telegram_id} назначен админис
 "
 ```
 
-## Как работает авторизация
+Или задайте `SUPERADMIN_TELEGRAM_ID` в `.env`.
 
-1. Пользователь пишет боту `/login` в Telegram
-2. Бот создаёт запись в `auth_codes` с 6-значным кодом (TTL 5 минут)
-3. Пользователь вводит код на `/login`
-4. Система проверяет код, создаёт/обновляет пользователя, выдаёт cookie-сессию
+---
 
-## Компоненты
+## Управление
 
-### `models.py`
+### Админ-панель
 
-- **User** — пользователь (telegram_id, marzban_username, is_admin, is_active)
-- **AuthCode** — одноразовые коды входа с TTL
+Доступна по `https://ваш-домен/admin` (только с разрешённых IP).
 
-### `auth.py`
+Возможности:
 
-- `generate_auth_code()` — создаёт 6-значный код
-- `verify_auth_code()` — проверяет код, возвращает пользователя
+- Просмотр всех пользователей
+- Создание/удаление VPN-ключей (несколько на пользователя)
+- Включение/отключение ключей
+- Установка лимитов трафика и срока действия
+- Синхронизация конфига Xray
 
-### `marzban.py`
+### Личный кабинет пользователя
 
-- Асинхронный HTTP-клиент для Marzban API
-- Автоматическое получение и обновление токена
-- CRUD-операции над VPN-пользователями
+Доступен по `https://ваш-домен/cabinet`.
 
-### `bot.py`
+Показывает:
 
-- `/start` — приветствие
-- `/login` — генерация кода, создание пользователя в БД
-- `/help` — справка
+- Все VPN-ключи пользователя
+- Ссылки для подключения (с кнопкой «Скопировать»)
+- URL подписки для автообновления
+- Инструкции для iOS, Android, Windows, macOS
 
-### `main.py`
+### Подписки
 
-- Публичные страницы: `/`, `/login`, `/logout`
-- Личный кабинет: `/cabinet`
-- Админ-панель: `/admin`, `/admin/link`, `/admin/toggle`, `/admin/make-admin`, `/admin/delete`, `/admin/create-vpn`
+URL подписки для клиентов: `https://ваш-домен/sub/<user_id>`
+
+Поддерживается автообновление в:
+
+- v2rayNG (Android)
+- Hiddify (Android/iOS)
+- Streisand (iOS)
+- V2Box (iOS)
+- Nekoray (Windows/macOS/Linux)
+
+---
+
+## Полезные команды
+
+```bash
+# Статус всех контейнеров
+docker compose ps
+
+# Логи в реальном времени
+docker compose logs -f
+
+# Логи конкретного сервиса
+docker compose logs -f ufo-app
+docker compose logs -f xray
+
+# Перезапуск после изменения .env
+docker compose down && docker compose up -d
+
+# Обновление проекта
+bash scripts/03-deploy.sh
+
+# Бэкап БД
+cp data/vpnbzk.db data/vpnbzk.db.bak
+```
+
+## Переменные окружения (.env)
+
+| Переменная              | Описание                  |
+| ----------------------- | ------------------------- |
+| `DOMAIN`                | Домен сайта               |
+| `SECRET_KEY`            | Секрет для подписи сессий |
+| `TELEGRAM_BOT_TOKEN`    | Токен Telegram-бота       |
+| `TELEGRAM_BOT_USERNAME` | Username бота (без @)     |
+| `NL_SERVER_IP`          | IP NL-сервера             |
+| `RU_SERVER_IP`          | IP RU-сервера             |
+| `REALITY_PUBLIC_KEY`    | Публичный ключ REALITY    |
+| `REALITY_PRIVATE_KEY`   | Приватный ключ REALITY    |
+| `REALITY_SHORT_ID`      | Short ID для REALITY      |
+| `ADMIN_IPS`             | IP для доступа к админке  |

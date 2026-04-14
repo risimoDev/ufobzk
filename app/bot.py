@@ -8,8 +8,8 @@ from aiogram import Bot, Dispatcher, F, Router, types
 from aiogram.filters import CommandStart
 
 from app.auth import generate_code, mark_invite_used, use_invite_key
-from app.marzban import MarzbanError, marzban
-from app.models import SUPERADMIN_TELEGRAM_ID, SessionLocal, User
+from app.models import SUPERADMIN_TELEGRAM_ID, SessionLocal, User, VPNKey
+from app.xray import generate_uuid, sync_and_reload
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 WEBAPP_URL = os.getenv("WEBAPP_URL", "http://localhost:8000")
@@ -40,7 +40,6 @@ async def cmd_start_with_key(message: types.Message) -> None:
 
     db = SessionLocal()
     try:
-        # Уже зарегистрирован → просто отправляем код
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         if user:
             if not user.is_active:
@@ -50,7 +49,6 @@ async def cmd_start_with_key(message: types.Message) -> None:
             await message.answer(_send_login_message(code), parse_mode="HTML")
             return
 
-        # Не зарегистрирован — нужен валидный ключ
         if not key:
             await message.answer(
                 "⛔ Для регистрации необходим инвайт-ключ.\n"
@@ -64,7 +62,6 @@ async def cmd_start_with_key(message: types.Message) -> None:
             await message.answer("❌ Недействительный или уже использованный ключ.", parse_mode="HTML")
             return
 
-        # Регистрация
         is_admin = telegram_id == SUPERADMIN_TELEGRAM_ID
         new_user = User(
             telegram_id=telegram_id,
@@ -77,16 +74,20 @@ async def cmd_start_with_key(message: types.Message) -> None:
         db.flush()
         mark_invite_used(db, invite, new_user.id)
 
-        # Автоматическое создание VPN-аккаунта
-        vpn_username = f"vpn_{telegram_id}"
+        # Создание VPN-ключа
+        vpn_key = VPNKey(
+            user_id=new_user.id,
+            name="default",
+            uuid=generate_uuid(),
+            protocol="vless",
+        )
+        db.add(vpn_key)
+        db.commit()
+
         try:
-            await marzban.create_user(username=vpn_username)
-            new_user.marzban_username = vpn_username
-            db.commit()
-            logger.info("VPN-аккаунт %s создан для tg=%d", vpn_username, telegram_id)
-        except MarzbanError as e:
-            db.commit()  # user сохраняем даже если VPN не создался
-            logger.error("Не удалось создать VPN для tg=%d: %s", telegram_id, e)
+            sync_and_reload(db)
+        except Exception as e:
+            logger.error("Не удалось синхронизировать Xray для tg=%d: %s", telegram_id, e)
 
         code = generate_code(telegram_id)
         await message.answer(
@@ -99,7 +100,6 @@ async def cmd_start_with_key(message: types.Message) -> None:
 
 @router.message(CommandStart(deep_link=False))
 async def cmd_start_no_key(message: types.Message) -> None:
-    """/start без ключа — вход для зарегистрированных, подсказка для новых."""
     if not message.from_user:
         return
 
@@ -125,9 +125,8 @@ async def cmd_start_no_key(message: types.Message) -> None:
 
 @router.message(F.text)
 async def fallback_handler(message: types.Message) -> None:
-    """Ответ на любое текстовое сообщение, кроме /start."""
     await message.answer(
-        "👁️ <b>НИИ АЯ — Бот авторизации</b>\n\n"
+        "🛡️ <b>Каскадный VPN — Бот авторизации</b>\n\n"
         "Доступные команды:\n"
         "• /start — получить код для входа\n"
         "• /start <code>КЛЮЧ</code> — регистрация по инвайт-ключу\n\n"
@@ -137,7 +136,6 @@ async def fallback_handler(message: types.Message) -> None:
 
 
 async def start_bot() -> None:
-    """Запуск бота (вызывается из main.py через lifespan)."""
     if not BOT_TOKEN:
         logger.warning("TELEGRAM_BOT_TOKEN не задан — бот не запущен.")
         return

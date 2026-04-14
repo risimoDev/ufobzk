@@ -2,4 +2,3 @@
 
 # Shell-скрипты всегда LF
 *.sh text eol=lf
-docker/marzban/entrypoint.sh text eol=lf

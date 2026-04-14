@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════
-#  Локальная разработка — только ufo-app + marzban
+#  Локальная разработка — только ufo-app + xray
 #  Без nginx, без SSL, без certbot
 # ═══════════════════════════════════════════
 #  Запуск: docker compose -f docker-compose.dev.yml up -d --build
@@ -18,28 +18,25 @@ services:
     env_file:
       - .env
     environment:
-      - MARZBAN_BASE_URL=https://marzban:8000
+      - XRAY_CONFIG_PATH=/etc/xray/config.json
     volumes:
       - ./data:/project/data
       - ./app:/project/app
+      - xray-config:/etc/xray
     depends_on:
-      - marzban
+      - xray
 
-  marzban:
-    image: gozargah/marzban:latest
-    container_name: vpnbzk-marzban
+  xray:
+    image: teddysun/xray:latest
+    container_name: vpnbzk-xray
     restart: unless-stopped
     ports:
-      - "8880:8000"
-    env_file:
-      - .env
-    environment:
-      - UVICORN_HOST=0.0.0.0
-      - UVICORN_PORT=8000
-      - SUDO_USERNAME=${SUDO_USERNAME:-admin}
-      - SUDO_PASSWORD=${SUDO_PASSWORD:-admin}
+      - "8443:8443"
     volumes:
-      - marzban-data:/var/lib/marzban
+      - xray-config:/etc/xray
+      - xray-logs:/var/log/xray
+    command: ["xray", "run", "-config", "/etc/xray/config.json"]
 
 volumes:
-  marzban-data:
+  xray-config:
+  xray-logs:
