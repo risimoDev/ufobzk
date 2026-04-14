@@ -21,13 +21,11 @@ DATABASE_URL = "sqlite:///./data/vpnbzk.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-_sa_raw = os.getenv("SUPERADMIN_TELEGRAM_ID", "")
-if not _sa_raw:
-    raise RuntimeError(
-        "SUPERADMIN_TELEGRAM_ID не задан в .env. "
-        "Укажите Telegram ID суперадмина."
-    )
-SUPERADMIN_TELEGRAM_ID = int(_sa_raw)
+_sa_raw = os.getenv("SUPERADMIN_TELEGRAM_ID", "0")
+try:
+    SUPERADMIN_TELEGRAM_ID = int(_sa_raw) if _sa_raw.strip() else 0
+except ValueError:
+    SUPERADMIN_TELEGRAM_ID = 0
 
 
 class Base(DeclarativeBase):

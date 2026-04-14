@@ -70,20 +70,23 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from app.models import SessionLocal
     _db = SessionLocal()
     try:
-        sa = _db.query(User).filter(User.telegram_id == SUPERADMIN_TELEGRAM_ID).first()
-        if sa:
-            if not sa.is_admin:
-                sa.is_admin = True
+        if SUPERADMIN_TELEGRAM_ID:
+            sa = _db.query(User).filter(User.telegram_id == SUPERADMIN_TELEGRAM_ID).first()
+            if sa:
+                if not sa.is_admin:
+                    sa.is_admin = True
+                    _db.commit()
+            else:
+                sa = User(
+                    telegram_id=SUPERADMIN_TELEGRAM_ID,
+                    display_name="Суперадмин",
+                    is_admin=True,
+                    is_active=True,
+                )
+                _db.add(sa)
                 _db.commit()
         else:
-            sa = User(
-                telegram_id=SUPERADMIN_TELEGRAM_ID,
-                display_name="Суперадмин",
-                is_admin=True,
-                is_active=True,
-            )
-            _db.add(sa)
-            _db.commit()
+            logger.warning("SUPERADMIN_TELEGRAM_ID не задан — суперадмин не создан автоматически.")
         # Синхронизация Xray при старте
         try:
             sync_and_reload(_db)
