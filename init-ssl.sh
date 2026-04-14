@@ -25,7 +25,7 @@ fi
 echo "═══ Шаг 1: Запуск nginx с HTTP-only конфигом ═══"
 
 # Подменяем конфиг на начальный (без SSL)
-docker compose run -d --rm --name vpnbzk-nginx-init \
+docker compose run -d --rm --name ufobzk-nginx-init \
     -v "$(pwd)/nginx/nginx-initial.conf:/etc/nginx/nginx.conf.template:ro" \
     -v "vpnbzk_certbot-webroot:/var/www/certbot" \
     -p 80:80 \
@@ -45,7 +45,7 @@ docker compose run --rm certbot certonly \
     --no-eff-email
 
 echo "═══ Шаг 3: Остановка временного nginx ═══"
-docker stop vpnbzk-nginx-init 2>/dev/null || true
+docker stop ufobzk-nginx-init 2>/dev/null || true
 
 echo ""
 echo "✅ Сертификат получен!"

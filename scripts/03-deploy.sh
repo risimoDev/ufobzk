@@ -109,7 +109,7 @@ cp .env "$BACKUP_DIR/.env"
 ok "Конфигурация сохранена"
 
 # Запоминаем текущий образ (для отката)
-PREV_IMAGE=$(docker inspect vpnbzk-app --format='{{.Image}}' 2>/dev/null || echo "")
+PREV_IMAGE=$(docker inspect ufobzk-app --format='{{.Image}}' 2>/dev/null || echo "")
 
 # Удалить старые бэкапы (хранить 10)
 if [ -d "$PROJECT_DIR/backups" ]; then
@@ -160,7 +160,7 @@ log "Ожидание готовности приложения..."
 MAX_WAIT=60
 ELAPSED=0
 while [ $ELAPSED -lt $MAX_WAIT ]; do
-    STATUS=$(docker inspect vpnbzk-app --format='{{.State.Health.Status}}' 2>/dev/null || echo "starting")
+    STATUS=$(docker inspect ufobzk-app --format='{{.State.Health.Status}}' 2>/dev/null || echo "starting")
     if [ "$STATUS" = "healthy" ]; then
         break
     fi
@@ -171,20 +171,20 @@ done
 echo ""
 
 # Проверка
-STATUS=$(docker inspect vpnbzk-app --format='{{.State.Health.Status}}' 2>/dev/null || echo "unknown")
+STATUS=$(docker inspect ufobzk-app --format='{{.State.Health.Status}}' 2>/dev/null || echo "unknown")
 if [ "$STATUS" != "healthy" ]; then
     err "Приложение не стало healthy за ${MAX_WAIT}s (status: ${STATUS})"
     warn "Попытка отката..."
 
     if [ -n "$PREV_IMAGE" ]; then
-        docker stop vpnbzk-app 2>/dev/null || true
-        docker rm vpnbzk-app 2>/dev/null || true
+        docker stop ufobzk-app 2>/dev/null || true
+        docker rm ufobzk-app 2>/dev/null || true
         # Восстанавливаем БД
         if [ -f "$BACKUP_DIR/vpnbzk.db" ]; then
             cp "$BACKUP_DIR/vpnbzk.db" data/vpnbzk.db 2>/dev/null || true
         fi
         docker compose -f "$COMPOSE_FILE" up -d
-        err "Откат выполнен. Проверьте логи: docker logs vpnbzk-app"
+        err "Откат выполнен. Проверьте логи: docker logs ufobzk-app"
     fi
     exit 1
 fi

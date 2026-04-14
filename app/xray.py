@@ -206,7 +206,7 @@ def reload_xray() -> bool:
     3. killall -HUP xray (bare metal без systemd)
     """
     docker_sock = "/var/run/docker.sock"
-    container_name = os.getenv("XRAY_CONTAINER_NAME", "vpnbzk-xray")
+    container_name = os.getenv("XRAY_CONTAINER_NAME", "ufobzk-xray")
 
     # ── Попытка 1: Docker socket ──
     if os.path.exists(docker_sock):

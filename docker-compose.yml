@@ -8,7 +8,7 @@ services:
   # ── Nginx — reverse proxy + SSL ──
   nginx:
     image: nginx:1.27-alpine
-    container_name: vpnbzk-nginx
+    container_name: ufobzk-nginx
     restart: unless-stopped
     ports:
       - "80:80"
@@ -40,7 +40,7 @@ services:
   # ── Certbot — SSL auto-renew ──
   certbot:
     image: certbot/certbot:latest
-    container_name: vpnbzk-certbot
+    container_name: ufobzk-certbot
     volumes:
       - certbot-webroot:/var/www/certbot
       - certbot-certs:/etc/letsencrypt
@@ -54,7 +54,7 @@ services:
   # ── Xray — VPN ядро ──
   xray:
     image: teddysun/xray:latest
-    container_name: vpnbzk-xray
+    container_name: ufobzk-xray
     restart: unless-stopped
     ports:
       # REALITY порт — прямое подключение без CDN
@@ -75,7 +75,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: vpnbzk-app
+    container_name: ufobzk-app
     restart: unless-stopped
     expose:
       - "8000"

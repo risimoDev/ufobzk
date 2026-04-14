@@ -229,7 +229,7 @@ if [ "$CERT_EXISTS" = false ]; then
         # Запуск временного nginx для ACME challenge
         log "Запуск временного nginx (HTTP-only)..."
 
-        docker run -d --rm --name vpnbzk-nginx-init \
+        docker run -d --rm --name ufobzk-nginx-init \
             -v "$PROJECT_DIR/nginx/nginx-initial.conf:/etc/nginx/nginx.conf.template:ro" \
             -v "vpnbzk_certbot-webroot:/var/www/certbot" \
             -p 80:80 \
@@ -251,7 +251,7 @@ if [ "$CERT_EXISTS" = false ]; then
             --agree-tos \
             --no-eff-email
 
-        docker stop vpnbzk-nginx-init 2>/dev/null || true
+        docker stop ufobzk-nginx-init 2>/dev/null || true
         ok "SSL-сертификат получен"
     fi
 else

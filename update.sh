@@ -66,7 +66,7 @@ if [[ "$NEED_RESTART" == true ]]; then
     info "Стек перезапущен"
 else
     # Даже если структурных изменений нет — перезапустим app на всякий
-    if docker ps --format '{{.Names}}' | grep -q 'vpnbzk-app'; then
+    if docker ps --format '{{.Names}}' | grep -q 'ufobzk-app'; then
         step "Перезапуск приложения..."
         docker compose restart ufo-app
         info "Приложение перезапущено"

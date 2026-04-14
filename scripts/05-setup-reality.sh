@@ -12,7 +12,7 @@ error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 ENV_FILE="$PROJECT_DIR/.env"
-CONTAINER_NAME="vpnbzk-xray"
+CONTAINER_NAME="ufobzk-xray"
 
 # ─── Проверки ────────────────────────────────────
 [ -f "$ENV_FILE" ] || error ".env не найден: $ENV_FILE"

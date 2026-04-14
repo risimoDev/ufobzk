@@ -11,7 +11,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: vpnbzk-app
+    container_name: ufobzk-app
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -28,7 +28,7 @@ services:
 
   xray:
     image: teddysun/xray:latest
-    container_name: vpnbzk-xray
+    container_name: ufobzk-xray
     restart: unless-stopped
     ports:
       - "8443:8443"
