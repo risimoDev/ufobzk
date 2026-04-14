@@ -70,8 +70,15 @@ fi
 # Если вызвали из клонированного репо — копируем
 if [ -f "$REPO_DIR/docker-compose.yml" ] && [ "$REPO_DIR" != "$PROJECT_DIR" ]; then
     log "Копирование файлов проекта..."
-    rsync -a --exclude='.git' --exclude='data/' --exclude='.env' \
-        "$REPO_DIR/" "$PROJECT_DIR/"
+    if command -v rsync &>/dev/null; then
+        rsync -a --exclude='.git' --exclude='data/' --exclude='.env' \
+            "$REPO_DIR/" "$PROJECT_DIR/"
+    else
+        # Fallback: cp без rsync
+        find "$REPO_DIR" -mindepth 1 -maxdepth 1 \
+            ! -name '.git' ! -name 'data' ! -name '.env' \
+            -exec cp -r {} "$PROJECT_DIR/" \;
+    fi
     ok "Файлы скопированы"
 fi
 
