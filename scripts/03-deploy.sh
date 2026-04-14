@@ -38,12 +38,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_DIR"
 
-# Если запущен из /opt/vpnbzk/scripts — значит PROJECT_DIR = /opt/vpnbzk
+# Если запущен из /opt/ufobzk/scripts — значит PROJECT_DIR = /opt/ufobzk
 # Если запущен из клонированного репо — тоже ОК
 if [ ! -f "docker-compose.yml" ]; then
-    # Попробуем /opt/vpnbzk
-    if [ -f "/opt/vpnbzk/docker-compose.yml" ]; then
-        PROJECT_DIR="/opt/vpnbzk"
+    # Попробуем /opt/ufobzk
+    if [ -f "/opt/ufobzk/docker-compose.yml" ]; then
+        PROJECT_DIR="/opt/ufobzk"
         cd "$PROJECT_DIR"
     else
         err "docker-compose.yml не найден"

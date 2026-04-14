@@ -83,9 +83,9 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 if [ -f "$PROJECT_DIR/.env" ]; then
     source "$PROJECT_DIR/.env"
-elif [ -f "/opt/vpnbzk/.env" ]; then
-    source /opt/vpnbzk/.env
-    PROJECT_DIR="/opt/vpnbzk"
+elif [ -f "/opt/ufobzk/.env" ]; then
+    source /opt/ufobzk/.env
+    PROJECT_DIR="/opt/ufobzk"
 else
     err ".env не найден. Сначала: bash scripts/02-install.sh"
     exit 1

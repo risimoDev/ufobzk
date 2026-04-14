@@ -11,7 +11,7 @@ warn()  { echo -e "${YELLOW}[!]${NC} $*"; }
 step()  { echo -e "${CYAN}→${NC} $*"; }
 die()   { echo -e "${RED}[✗]${NC} $*"; exit 1; }
 
-PROJECT_DIR="/opt/vpnbzk"
+PROJECT_DIR="/opt/ufobzk"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 [[ -f "$REPO_DIR/docker-compose.yml" ]] || die "Запускайте из корня репозитория"
