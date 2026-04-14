@@ -230,12 +230,13 @@ if [ "$CERT_EXISTS" = false ]; then
         log "Запуск временного nginx (HTTP-only)..."
 
         docker run -d --rm --name vpnbzk-nginx-init \
-            -v "$(pwd)/nginx/nginx-initial.conf:/etc/nginx/nginx.conf.template:ro" \
+            -v "$PROJECT_DIR/nginx/nginx-initial.conf:/etc/nginx/nginx.conf.template:ro" \
             -v "vpnbzk_certbot-webroot:/var/www/certbot" \
             -p 80:80 \
             -e DOMAIN="${DOMAIN}" \
-            --entrypoint "/bin/sh -c 'envsubst \"\\\$$DOMAIN\" < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && nginx -g \"daemon off;\"'" \
-            nginx:1.27-alpine
+            --entrypoint /bin/sh \
+            nginx:1.27-alpine \
+            -c 'envsubst < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && nginx -g "daemon off;"'
 
         sleep 3
 
