@@ -170,10 +170,12 @@ logpath = %(sshd_log)s
 backend = systemd
 EOF
 
-# Копируем фильтр и jail для VPNBZK
-if [ -d "$PROJECT_DIR/fail2ban" ]; then
-    cp "$PROJECT_DIR/fail2ban/filter.d/vpnbzk.conf" /etc/fail2ban/filter.d/ 2>/dev/null || true
-    cp "$PROJECT_DIR/fail2ban/jail.d/vpnbzk.conf" /etc/fail2ban/jail.d/ 2>/dev/null || true
+# Копируем фильтр и jail для VPNBZK (если скрипт запущен из репо)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(dirname "$SCRIPT_DIR")"
+if [ -d "$REPO_DIR/fail2ban" ]; then
+    cp "$REPO_DIR/fail2ban/filter.d/vpnbzk.conf" /etc/fail2ban/filter.d/ 2>/dev/null || true
+    cp "$REPO_DIR/fail2ban/jail.d/vpnbzk.conf" /etc/fail2ban/jail.d/ 2>/dev/null || true
     log "Установлен fail2ban-фильтр VPNBZK"
 fi
 
