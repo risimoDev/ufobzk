@@ -53,6 +53,10 @@ echo ""
 
 PROJECT_DIR="/opt/vpnbzk"
 
+# Вычисляем путь к репо ДО смены директории (иначе относительный путь сломается)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(dirname "$SCRIPT_DIR")"
+
 if [ -d "$PROJECT_DIR" ]; then
     ok "Директория $PROJECT_DIR уже существует"
     cd "$PROJECT_DIR"
@@ -64,9 +68,6 @@ else
 fi
 
 # Если вызвали из клонированного репо — копируем
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="$(dirname "$SCRIPT_DIR")"
-
 if [ -f "$REPO_DIR/docker-compose.yml" ] && [ "$REPO_DIR" != "$PROJECT_DIR" ]; then
     log "Копирование файлов проекта..."
     rsync -a --exclude='.git' --exclude='data/' --exclude='.env' \
