@@ -48,7 +48,7 @@ class User(Base):
     last_login = Column(DateTime, nullable=True)
 
     vpn_keys = relationship("VPNKey", back_populates="user", cascade="all, delete-orphan")
-    payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
+    payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan", foreign_keys="[Payment.user_id]")
 
 
 class Payment(Base):
