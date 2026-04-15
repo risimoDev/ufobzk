@@ -420,7 +420,17 @@ async def admin_dashboard(request: Request, admin: User = Depends(_require_admin
         user_keys = [k for k in all_keys if k.user_id == u.id]
         enriched_users.append({
             "user": u,
-            "keys": user_keys,
+            "keys": [{
+                "id": k.id,
+                "name": k.name,
+                "uuid": k.uuid,
+                "protocol": k.protocol,
+                "is_active": k.is_active,
+                "data_used": k.data_used or 0,
+                "data_limit": k.data_limit,
+                "expire_at": k.expire_at.isoformat() if k.expire_at else None,
+                "status": k.status,
+            } for k in user_keys],
             "keys_count": len(user_keys),
             "active_keys": sum(1 for k in user_keys if k.status == "active"),
         })
