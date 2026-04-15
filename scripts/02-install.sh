@@ -134,17 +134,17 @@ if [ "${WRITE_ENV:-false}" = true ]; then
     read -rp "$(echo -e "${BOLD}RU-сервер IP (Россия, необязательно):${NC} ")" INPUT_RU_IP
     RU_IP="${INPUT_RU_IP:-}"
 
-    # Мой IP для whitelist
+    # Мой IP для информации (но whitelist больше не нужен)
     MY_IP=$(curl -s --max-time 5 https://api.ipify.org 2>/dev/null || echo "")
-    if [ -n "$MY_IP" ]; then
-        read -rp "$(echo -e "${BOLD}Ваш IP для whitelist [${MY_IP}]:${NC} ")" INPUT_IP
-        WHITELIST_IP="${INPUT_IP:-$MY_IP}"
-    else
-        read -rp "$(echo -e "${BOLD}Ваш IP для admin whitelist:${NC} ")" WHITELIST_IP
-    fi
 
-    # Генерация SECRET_KEY
+    # Генерация SECRET_KEY и ADMIN_PASSWORD
     SECRET_KEY=$(openssl rand -hex 32)
+    ADMIN_PASSWORD=$(openssl rand -base64 18 | tr -d '=+/' | cut -c1-24)
+
+    echo ""
+    warn "Пароль администратора: ${BOLD}${ADMIN_PASSWORD}${NC}"
+    warn "Сохраните его — он нужен для входа на сайт без Telegram!"
+    echo ""
 
     # Запись .env
     cat > .env <<ENVEOF
@@ -182,7 +182,8 @@ REALITY_DEST=www.samsung.com:443
 REALITY_SERVER_NAMES=www.samsung.com,samsung.com
 
 # ── Доступ ──
-ADMIN_IPS=${WHITELIST_IP}
+SUPERADMIN_TELEGRAM_ID=
+ADMIN_PASSWORD=${ADMIN_PASSWORD}
 ENVEOF
 
     chmod 600 .env

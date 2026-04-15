@@ -36,6 +36,7 @@ from app.auth import (
     list_invite_keys,
     load_session_token,
     validate_csrf_token,
+    verify_admin_password,
     verify_code_and_get_user,
 )
 from app.bot import TELEGRAM_BOT_USERNAME, start_bot
@@ -105,6 +106,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(title="VPNBZK Cascade", lifespan=lifespan)
 app.state.limiter = limiter
+
+
+class _NeedsLogin(Exception):
+    """Пользователь не аутентифицирован — нужен редирект на /login."""
+
+
+@app.exception_handler(_NeedsLogin)
+async def _needs_login_handler(request: Request, exc: _NeedsLogin):
+    return RedirectResponse(url="/login", status_code=303)
 
 
 # ── Security middleware ──
@@ -196,7 +206,7 @@ def _require_admin(request: Request, db: Session = Depends(get_db)) -> User:
         raise HTTPException(status_code=429, detail="Доступ временно заблокирован")
     user = _get_current_user(request, db)
     if not user:
-        raise HTTPException(status_code=303, headers={"Location": "/login"})
+        raise _NeedsLogin()
     if not user.is_admin:
         admin_guard.record_failure(ip)
         logger.warning("Неудачный доступ к админке: IP=%s user=%s", ip, user.telegram_id)
@@ -286,23 +296,44 @@ async def login_submit(
         )
 
     _verify_csrf(request, csrf_token)
-    user = verify_code_and_get_user(db, code.strip())
+
+    user = None
+
+    # ── Сначала пробуем пароль администратора ──
+    if verify_admin_password(code.strip()):
+        user = db.query(User).filter(
+            User.telegram_id == SUPERADMIN_TELEGRAM_ID,
+            User.is_active == True,  # noqa: E712
+        ).first() if SUPERADMIN_TELEGRAM_ID else None
+        if user is None:
+            # fallback: любой активный admin
+            user = db.query(User).filter(
+                User.is_admin == True,  # noqa: E712
+                User.is_active == True,  # noqa: E712
+            ).first()
+        if user is None:
+            logger.warning("Верный ADMIN_PASSWORD, но admin-пользователь не найден в БД (IP=%s)", ip)
+
+    # ── Затем пробуем одноразовый Telegram-код ──
+    if user is None:
+        user = verify_code_and_get_user(db, code.strip())
 
     if user is None:
         login_guard.record_failure(ip)
-        logger.warning("Неудачный вход: IP=%s code=%s", ip, code[:2] + "****")
+        logger.warning("Неудачный вход: IP=%s", ip)
         return templates.TemplateResponse(
             "login.html",
             {
                 "request": request,
-                "error": "Неверный или просроченный код.",
+                "error": "Неверный код или пароль.",
                 "bot_username": TELEGRAM_BOT_USERNAME,
                 "csrf_token": generate_csrf_token(),
             },
         )
 
     login_guard.record_success(ip)
-    response = RedirectResponse(url="/cabinet", status_code=303)
+    redirect_url = "/admin" if user.is_admin else "/cabinet"
+    response = RedirectResponse(url=redirect_url, status_code=303)
     response.set_cookie(
         SESSION_COOKIE,
         create_session_token(user.id),

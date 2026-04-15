@@ -21,6 +21,7 @@ SESSION_MAX_AGE = 86400  # 24 часа
 CSRF_MAX_AGE = 3600  # 1 час
 SECRET_KEY = os.getenv("SECRET_KEY", "")
 SESSION_COOKIE = "vpnbzk_session"
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 
 if not SECRET_KEY or SECRET_KEY.startswith("change-me"):
     if os.getenv("TESTING"):
@@ -170,3 +171,10 @@ def delete_invite_key(db: Session, key_id: int) -> bool:
     db.delete(invite)
     db.commit()
     return True
+
+
+def verify_admin_password(password: str) -> bool:
+    """Проверяет пароль администратора. Защищён от timing-атак."""
+    if not ADMIN_PASSWORD:
+        return False
+    return secrets.compare_digest(password.strip(), ADMIN_PASSWORD)
