@@ -297,6 +297,24 @@
         </button>
         <button
           class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500"
+          data-tab="billing"
+        >
+          💰 Биллинг
+        </button>
+        <button
+          class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500"
+          data-tab="appsettings"
+        >
+          ⚙️ Настройки
+        </button>
+        <button
+          class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500"
+          data-tab="migrate"
+        >
+          🚀 Переезд
+        </button>
+        <button
+          class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500"
           data-tab="audit"
         >
           &#x1f4cb; Аудит
@@ -532,7 +550,8 @@
             </div>
           </form>
           <p class="text-gray-700 text-xs mt-2">
-            Минимум: имя или логин. Telegram ID и настройки ключа — опционально. 0 ГБ / 0 дней = безлимит / бессрочно
+            Минимум: имя или логин. Telegram ID и настройки ключа — опционально.
+            0 ГБ / 0 дней = безлимит / бессрочно
           </p>
         </div>
 
@@ -804,6 +823,316 @@
           <span>Всего: {{ invite_keys|length }}</span>
           <span class="text-emerald-400/60">Свободных: {{ free_invites }}</span>
           <span class="text-gray-500">Использовано: {{ used_invites }}</span>
+        </div>
+      </div>
+
+      <!-- TAB: BILLING -->
+      <div class="tab-panel" id="tab-billing">
+        <!-- Сводка по задолженностям -->
+        <div class="card p-5 mb-6 glow-box">
+          <div class="flex items-center justify-between mb-4">
+            <h3
+              class="text-sm font-semibold text-gray-300 uppercase tracking-wider"
+            >
+              💰 Биллинг — состояние счетов
+            </h3>
+            <div class="flex gap-2">
+              <button
+                onclick="loadBillingSummary()"
+                class="btn-secondary text-xs"
+              >
+                🔄 Обновить
+              </button>
+              <button
+                onclick="openAddPaymentModal(null)"
+                class="btn-primary text-xs"
+              >
+                + Запись
+              </button>
+            </div>
+          </div>
+          <div id="billing-summary" class="overflow-x-auto">
+            <p class="text-gray-700 text-xs text-center py-6">Загрузка...</p>
+          </div>
+        </div>
+
+        <!-- История платежей -->
+        <div class="card p-5 glow-box">
+          <div class="flex items-center justify-between mb-4">
+            <h3
+              class="text-sm font-semibold text-gray-300 uppercase tracking-wider"
+            >
+              📋 История записей
+            </h3>
+            <input
+              type="text"
+              id="payment-search"
+              placeholder="🔍 Поиск по имени..."
+              class="search-input"
+              oninput="filterPayments()"
+            />
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full tbl" id="payments-table">
+              <thead>
+                <tr class="text-left">
+                  <th class="px-4 py-3">Пользователь</th>
+                  <th class="px-4 py-3">Статус</th>
+                  <th class="px-4 py-3">Сумма</th>
+                  <th class="px-4 py-3">Период</th>
+                  <th class="px-4 py-3">Заметка</th>
+                  <th class="px-4 py-3">Дата</th>
+                  <th class="px-4 py-3 text-right">Удалить</th>
+                </tr>
+              </thead>
+              <tbody id="payments-tbody">
+                <tr>
+                  <td
+                    colspan="7"
+                    class="text-gray-700 text-xs text-center py-6"
+                  >
+                    Загрузка...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: APP SETTINGS -->
+      <div class="tab-panel" id="tab-appsettings">
+        <div class="card p-5 mb-6 glow-box">
+          <div class="flex items-center justify-between mb-4">
+            <h3
+              class="text-sm font-semibold text-gray-300 uppercase tracking-wider"
+            >
+              ⚙️ Инструкции по подключению
+            </h3>
+            <button onclick="saveSettings()" class="btn-primary text-xs">
+              💾 Сохранить всё
+            </button>
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {% for platform, label in [('ios','🍎 iOS'), ('android','🤖
+            Android'), ('windows','🖥️ Windows'), ('macos','💻 macOS')] %}
+            <div class="bg-black/20 rounded-xl p-4">
+              <h4
+                class="text-xs font-semibold text-acid-400 mb-3 uppercase tracking-wider"
+              >
+                {{ label }}
+              </h4>
+              <div class="space-y-2">
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1"
+                    >Ссылка на приложение</label
+                  >
+                  <input
+                    type="url"
+                    id="setting-app_link_{{ platform }}"
+                    class="input-field text-xs"
+                    placeholder="https://..."
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1"
+                    >Текст инструкций (Markdown поддерживается)</label
+                  >
+                  <textarea
+                    id="setting-instructions_{{ platform }}"
+                    rows="5"
+                    class="input-field text-xs font-mono"
+                    style="resize: vertical"
+                    placeholder="1. Установите приложение&#10;2. Добавьте подписку"
+                  ></textarea>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="card p-5 glow-box">
+          <h3
+            class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4"
+          >
+            💬 Текст поддержки
+          </h3>
+          <textarea
+            id="setting-support_text"
+            rows="3"
+            class="input-field text-sm w-full"
+            placeholder="По вопросам обратитесь..."
+          ></textarea>
+          <p class="text-gray-700 text-xs mt-2">
+            Отображается в личном кабинете пользователя
+          </p>
+        </div>
+      </div>
+
+      <!-- TAB: MIGRATE -->
+      <div class="tab-panel" id="tab-migrate">
+        <div class="card p-5 mb-6 glow-box border border-amber-500/10">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="text-amber-400 text-2xl">⚠️</span>
+            <div>
+              <h3
+                class="text-sm font-semibold text-amber-400 uppercase tracking-wider"
+              >
+                Быстрый переезд NL сервера
+              </h3>
+              <p class="text-gray-600 text-xs mt-0.5">
+                Заполните только изменившиеся поля. Остальные оставьте пустыми —
+                текущие значения сохранятся.
+              </p>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+            <div>
+              <label class="block text-xs text-gray-500 mb-1"
+                >NL_SERVER_IP (новый IP NL)</label
+              >
+              <input
+                type="text"
+                id="mg-nl-ip"
+                placeholder="{{ nl_server_ip or 'Текущий: не задан' }}"
+                class="input-field"
+              />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1"
+                >REALITY_PUBLIC_KEY</label
+              >
+              <input
+                type="text"
+                id="mg-pub-key"
+                placeholder="Новый публичный ключ"
+                class="input-field"
+              />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1"
+                >REALITY_PRIVATE_KEY</label
+              >
+              <input
+                type="text"
+                id="mg-priv-key"
+                placeholder="Новый приватный ключ"
+                class="input-field"
+              />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1"
+                >REALITY_SHORT_ID</label
+              >
+              <input
+                type="text"
+                id="mg-short-id"
+                placeholder="Новый Short ID"
+                class="input-field"
+              />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1"
+                >RU_TRANSIT_UUID (UUID на RU-транзите)</label
+              >
+              <input
+                type="text"
+                id="mg-ru-uuid"
+                placeholder="Если UUID RU изменился"
+                class="input-field"
+              />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1"
+                >RU_TRANSIT_PUBLIC_KEY</label
+              >
+              <input
+                type="text"
+                id="mg-ru-pub"
+                placeholder="Если ключи RU изменились"
+                class="input-field"
+              />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1"
+                >RU_TRANSIT_SHORT_ID</label
+              >
+              <input
+                type="text"
+                id="mg-ru-short"
+                placeholder="Если Short ID RU изменился"
+                class="input-field"
+              />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1"
+                >RU_TRANSIT_PORT (по умолч. 8443)</label
+              >
+              <input
+                type="number"
+                id="mg-ru-port"
+                placeholder="8443"
+                class="input-field"
+              />
+            </div>
+          </div>
+          <div class="bg-black/30 rounded-xl p-4 mb-4 text-xs text-gray-500">
+            <p class="text-amber-400/70 font-semibold mb-1">
+              ⚡ Что произойдёт при нажатии «Применить»:
+            </p>
+            <ol class="list-decimal list-inside space-y-1">
+              <li>
+                Создаётся резервная копия .env (файл .env.backup.TIMESTAMP)
+              </li>
+              <li>Заполненные поля обновляются в файле .env</li>
+              <li>Xray-конфиг перегенерируется с новыми параметрами</li>
+              <li>
+                Все пользователи автоматически получат новые ссылки при
+                следующем обновлении подписки
+              </li>
+            </ol>
+            <p class="mt-2 text-gray-600">
+              Ссылки типа <code>vless://...</code> будут обновлены немедленно.
+              Пользователям с ручными ссылками (не подпиской) нужно
+              переподключиться.
+            </p>
+          </div>
+          <div
+            id="migrate-result"
+            class="hidden text-xs p-3 rounded-xl mb-3"
+          ></div>
+          <button onclick="applyMigration()" class="btn-primary w-full">
+            ⚡ Применить изменения и пересинхронизировать Xray
+          </button>
+        </div>
+
+        <div class="card p-5 glow-box">
+          <h3
+            class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-3"
+          >
+            📋 Текущая конфигурация серверов
+          </h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div class="bg-black/20 rounded-lg p-3">
+              <span class="text-gray-600 block mb-1">NL_SERVER_IP</span>
+              <code class="text-acid-400/80">{{ nl_server_ip or '—' }}</code>
+            </div>
+            <div class="bg-black/20 rounded-lg p-3">
+              <span class="text-gray-600 block mb-1">RU_SERVER_IP</span>
+              <code class="text-acid-400/80">{{ ru_server_ip or '—' }}</code>
+            </div>
+            <div class="bg-black/20 rounded-lg p-3">
+              <span class="text-gray-600 block mb-1">REALITY_PORT</span>
+              <code class="text-acid-400/80">{{ reality_port }}</code>
+            </div>
+            <div class="bg-black/20 rounded-lg p-3">
+              <span class="text-gray-600 block mb-1">REALITY ключ активен</span>
+              <code class="text-acid-400/80"
+                >{{ '✅' if reality_active else '❌' }}</code
+              >
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1630,6 +1959,323 @@
           else { showToast(data.detail || 'Ошибка', 'error'); }
         } catch(e) { showToast('Ошибка сети', 'error'); }
       }
+
+      // ── BILLING ──
+      var _billingData = [];
+      var _paymentsData = [];
+
+      async function loadBillingSummary() {
+        try {
+          var r = await fetch('/admin/payments/summary');
+          var data = await r.json();
+          _billingData = data;
+          renderBillingSummary(data);
+        } catch(e) { document.getElementById('billing-summary').innerHTML = '<p class="text-red-400 text-xs text-center py-4">Ошибка загрузки</p>'; }
+      }
+
+      function renderBillingSummary(data) {
+        if (!data.length) {
+          document.getElementById('billing-summary').innerHTML = '<p class="text-gray-700 text-xs text-center py-6">Нет пользователей</p>';
+          return;
+        }
+        var totalDebt = data.reduce(function(s, u) { return s + u.debt_total; }, 0);
+        var debtors = data.filter(function(u) { return u.has_debt; }).length;
+        var html = '<div class="flex gap-4 mb-4 text-xs">' +
+          '<span class="text-gray-500">Всего: <b class="text-gray-300">' + data.length + '</b></span>' +
+          '<span class="text-red-400/80">Должников: <b>' + debtors + '</b></span>' +
+          '<span class="text-amber-400/80">Общий долг: <b>' + totalDebt.toFixed(0) + ' ₽</b></span>' +
+          '</div>';
+        html += '<table class="w-full tbl"><thead><tr class="text-left">' +
+          '<th class="px-3 py-2">Пользователь</th>' +
+          '<th class="px-3 py-2">Ключей</th>' +
+          '<th class="px-3 py-2">Оплачено</th>' +
+          '<th class="px-3 py-2">Долг</th>' +
+          '<th class="px-3 py-2">Баланс</th>' +
+          '<th class="px-3 py-2">Посл. оплата</th>' +
+          '<th class="px-3 py-2 text-right">Действия</th>' +
+          '</tr></thead><tbody>';
+        data.forEach(function(u) {
+          var rowCls = u.has_debt ? 'bg-red-500/5' : '';
+          html += '<tr class="' + rowCls + '">' +
+            '<td class="px-3 py-2">' +
+              '<span class="text-gray-200 text-sm">' + escapeHtml(u.user_name) + '</span>' +
+              (u.has_debt ? '<span class="ml-2 badge badge-red text-xs">ДОЛГ</span>' : '') +
+            '</td>' +
+            '<td class="px-3 py-2 text-cyan-400 font-mono text-xs">' + u.keys_count + '</td>' +
+            '<td class="px-3 py-2 text-emerald-400 font-mono text-xs">' + u.paid_total.toFixed(0) + ' ₽</td>' +
+            '<td class="px-3 py-2 ' + (u.debt_total > 0 ? 'text-red-400' : 'text-gray-600') + ' font-mono text-xs">' + u.debt_total.toFixed(0) + ' ₽</td>' +
+            '<td class="px-3 py-2 ' + (u.balance >= 0 ? 'text-emerald-400' : 'text-red-400') + ' font-mono text-xs font-bold">' + (u.balance >= 0 ? '+' : '') + u.balance.toFixed(0) + ' ₽</td>' +
+            '<td class="px-3 py-2 text-xs text-gray-500">' + (u.last_paid || '—') + '</td>' +
+            '<td class="px-3 py-2 text-right">' +
+              '<button onclick="openAddPaymentModal(' + u.user_id + ')" class="p-1.5 rounded bg-white/5 text-xs text-gray-500 hover:text-emerald-400 hover:bg-emerald-400/10 transition" title="Добавить запись">+</button>' +
+            '</td>' +
+          '</tr>';
+        });
+        html += '</tbody></table>';
+        document.getElementById('billing-summary').innerHTML = html;
+      }
+
+      async function loadPayments() {
+        try {
+          var r = await fetch('/admin/payments');
+          var data = await r.json();
+          _paymentsData = data;
+          renderPayments(data);
+        } catch(e) {}
+      }
+
+      function renderPayments(data) {
+        var tbody = document.getElementById('payments-tbody');
+        if (!data.length) {
+          tbody.innerHTML = '<tr><td colspan="7" class="text-gray-700 text-xs text-center py-6">Нет записей</td></tr>';
+          return;
+        }
+        var html = '';
+        data.forEach(function(p) {
+          var sc = p.status === 'paid' ? 'badge-green' : p.status === 'debt' ? 'badge-red' : 'badge-amber';
+          var sl = p.status === 'paid' ? 'Оплачено' : p.status === 'debt' ? 'Долг' : 'Ожидание';
+          html += '<tr class="payment-row" data-search="' + escapeHtml((p.user_name || '').toLowerCase()) + '">' +
+            '<td class="px-4 py-2 text-gray-200 text-sm">' + escapeHtml(p.user_name) + '</td>' +
+            '<td class="px-4 py-2"><span class="badge ' + sc + '">' + sl + '</span></td>' +
+            '<td class="px-4 py-2 font-mono text-xs text-gray-300">' + p.amount.toFixed(0) + ' ' + escapeHtml(p.currency) + '</td>' +
+            '<td class="px-4 py-2 text-xs text-gray-500">' + (p.period_start ? p.period_start + ' — ' + (p.period_end || '?') : '—') + '</td>' +
+            '<td class="px-4 py-2 text-xs text-gray-500 max-w-xs truncate" title="' + escapeHtml(p.note) + '">' + escapeHtml(p.note || '—') + '</td>' +
+            '<td class="px-4 py-2 text-xs text-gray-600">' + (p.created_at || '—') + '</td>' +
+            '<td class="px-4 py-2 text-right"><button onclick="deletePayment(' + p.id + ')" class="p-1 rounded bg-white/5 text-gray-500 hover:text-red-400 transition text-xs">🗑️</button></td>' +
+          '</tr>';
+        });
+        tbody.innerHTML = html;
+      }
+
+      function filterPayments() {
+        var q = document.getElementById('payment-search').value.toLowerCase();
+        document.querySelectorAll('.payment-row').forEach(function(row) {
+          row.style.display = row.dataset.search.includes(q) ? '' : 'none';
+        });
+      }
+
+      var _addPaymentUserId = null;
+      function openAddPaymentModal(userId) {
+        _addPaymentUserId = userId;
+        document.getElementById('pay-user-id').value = userId || '';
+        document.getElementById('pay-amount').value = '';
+        document.getElementById('pay-note').value = '';
+        document.getElementById('pay-period-start').value = '';
+        document.getElementById('pay-period-end').value = '';
+        document.getElementById('pay-status').value = 'paid';
+        document.getElementById('add-payment-modal').classList.remove('hidden');
+      }
+      function closeAddPaymentModal() { document.getElementById('add-payment-modal').classList.add('hidden'); }
+
+      async function submitPayment() {
+        var uid = parseInt(document.getElementById('pay-user-id').value);
+        if (!uid) return showToast('Выберите пользователя', 'error');
+        var body = {
+          user_id: uid,
+          amount: parseFloat(document.getElementById('pay-amount').value) || 0,
+          status: document.getElementById('pay-status').value,
+          currency: 'RUB',
+          note: document.getElementById('pay-note').value.trim(),
+          period_start: document.getElementById('pay-period-start').value || null,
+          period_end: document.getElementById('pay-period-end').value || null,
+        };
+        try {
+          var r = await fetch('/admin/payments', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+          var d = await r.json();
+          if (d.ok) { showToast('Запись добавлена', 'success'); closeAddPaymentModal(); loadBillingSummary(); loadPayments(); }
+          else { showToast(d.detail || 'Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
+      }
+
+      async function deletePayment(id) {
+        if (!confirm('Удалить запись?')) return;
+        try {
+          var r = await fetch('/admin/payments/' + id, { method: 'DELETE' });
+          var d = await r.json();
+          if (d.ok) { showToast('Удалено', 'success'); loadBillingSummary(); loadPayments(); }
+          else { showToast(d.detail || 'Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
+      }
+
+      // ── APP SETTINGS ──
+      async function loadAppSettings() {
+        try {
+          var r = await fetch('/admin/settings');
+          var d = await r.json();
+          Object.keys(d).forEach(function(k) {
+            var el = document.getElementById('setting-' + k);
+            if (el) el.value = d[k] || '';
+          });
+        } catch(e) { showToast('Ошибка загрузки настроек', 'error'); }
+      }
+
+      async function saveSettings() {
+        var keys = ['instructions_ios','instructions_android','instructions_windows','instructions_macos',
+                    'app_link_ios','app_link_android','app_link_windows','app_link_macos','support_text'];
+        var body = {};
+        keys.forEach(function(k) {
+          var el = document.getElementById('setting-' + k);
+          if (el) body[k] = el.value;
+        });
+        try {
+          var r = await fetch('/admin/settings', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+          var d = await r.json();
+          if (d.ok) { showToast('Настройки сохранены (' + d.saved.length + ' полей)', 'success'); }
+          else { showToast(d.detail || 'Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
+      }
+
+      // ── MIGRATION ──
+      async function applyMigration() {
+        var body = {};
+        var map = {
+          'NL_SERVER_IP': 'mg-nl-ip',
+          'REALITY_PUBLIC_KEY': 'mg-pub-key',
+          'REALITY_PRIVATE_KEY': 'mg-priv-key',
+          'REALITY_SHORT_ID': 'mg-short-id',
+          'RU_TRANSIT_UUID': 'mg-ru-uuid',
+          'RU_TRANSIT_PUBLIC_KEY': 'mg-ru-pub',
+          'RU_TRANSIT_SHORT_ID': 'mg-ru-short',
+          'RU_TRANSIT_PORT': 'mg-ru-port',
+        };
+        Object.keys(map).forEach(function(k) {
+          var val = document.getElementById(map[k]).value.trim();
+          if (val) body[k] = val;
+        });
+        if (!Object.keys(body).length) return showToast('Заполните хотя бы одно поле', 'error');
+        if (!confirm('Применить изменения конфигурации? Xray будет перезагружен.')) return;
+        var resultEl = document.getElementById('migrate-result');
+        resultEl.className = 'text-xs p-3 rounded-xl mb-3 bg-cyan-500/10 border border-cyan-500/20 text-cyan-400';
+        resultEl.textContent = '⏳ Применяю...';
+        resultEl.classList.remove('hidden');
+        try {
+          var r = await fetch('/admin/migrate-nl', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+          var d = await r.json();
+          if (d.ok) {
+            resultEl.className = 'text-xs p-3 rounded-xl mb-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400';
+            resultEl.textContent = '✅ Применено. Изменены: ' + d.changed.join(', ') + '. Xray перегенерирован. Рекомендуется перезапустить контейнер: docker compose restart ufo-app';
+            showToast('Миграция применена!', 'success');
+          } else {
+            resultEl.className = 'text-xs p-3 rounded-xl mb-3 bg-red-500/10 border border-red-500/20 text-red-400';
+            resultEl.textContent = '❌ ' + (d.detail || 'Ошибка');
+            showToast('Ошибка миграции', 'error');
+          }
+        } catch(e) {
+          resultEl.className = 'text-xs p-3 rounded-xl mb-3 bg-red-500/10 border border-red-500/20 text-red-400';
+          resultEl.textContent = '❌ Ошибка сети';
+        }
+      }
+
+      // Load billing/settings on tab switch
+      var _billingLoaded = false;
+      var _settingsLoaded = false;
+      var origSwitchTab = switchTab;
+      switchTab = function(tabName) {
+        origSwitchTab(tabName);
+        if (tabName === 'billing' && !_billingLoaded) {
+          _billingLoaded = true;
+          loadBillingSummary();
+          loadPayments();
+        }
+        if (tabName === 'appsettings' && !_settingsLoaded) {
+          _settingsLoaded = true;
+          loadAppSettings();
+        }
+      };
     </script>
+
+    <!-- MODAL: ADD PAYMENT -->
+    <div id="add-payment-modal" class="fixed inset-0 z-40 hidden">
+      <div
+        class="modal-backdrop absolute inset-0"
+        onclick="closeAddPaymentModal()"
+      ></div>
+      <div
+        class="relative z-50 flex items-center justify-center min-h-screen p-4"
+      >
+        <div class="modal-content rounded-2xl w-full max-w-md p-6 shadow-2xl">
+          <div class="flex items-center justify-between mb-5">
+            <h3
+              class="text-sm font-semibold text-gray-200 uppercase tracking-wider"
+            >
+              💰 Добавить запись
+            </h3>
+            <button
+              onclick="closeAddPaymentModal()"
+              class="text-gray-600 hover:text-gray-400 text-lg"
+            >
+              &times;
+            </button>
+          </div>
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs text-gray-500 mb-1"
+                >Пользователь</label
+              >
+              <select id="pay-user-id" class="input-field">
+                <option value="">— выберите —</option>
+                {% for row in enriched_users %} {% set u = row['user'] %}
+                <option value="{{ u.id }}">
+                  {{ u.display_name or u.username or ('tg:' ~ u.telegram_id) }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs text-gray-500 mb-1"
+                  >Сумма (₽)</label
+                >
+                <input
+                  type="number"
+                  id="pay-amount"
+                  value="500"
+                  min="0"
+                  step="50"
+                  class="input-field"
+                />
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Статус</label>
+                <select id="pay-status" class="input-field">
+                  <option value="paid">✅ Оплачено</option>
+                  <option value="debt">🔴 Долг</option>
+                  <option value="pending">⏳ Ожидание</option>
+                </select>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Период с</label>
+                <input type="date" id="pay-period-start" class="input-field" />
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1"
+                  >Период по</label
+                >
+                <input type="date" id="pay-period-end" class="input-field" />
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Заметка</label>
+              <input
+                type="text"
+                id="pay-note"
+                placeholder="Апрель 2026, перевод СБП..."
+                class="input-field"
+              />
+            </div>
+            <div class="flex gap-3 pt-2">
+              <button onclick="submitPayment()" class="btn-primary flex-1">
+                Добавить
+              </button>
+              <button onclick="closeAddPaymentModal()" class="btn-secondary">
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </body>
 </html>

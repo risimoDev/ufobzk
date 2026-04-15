@@ -11,7 +11,12 @@
         theme: {
           extend: {
             colors: {
-              space: { 900: "#0a0a1a", 800: "#0f0f2e", 700: "#1a1a3e", 600: "#252554" },
+              space: {
+                900: "#0a0a1a",
+                800: "#0f0f2e",
+                700: "#1a1a3e",
+                600: "#252554",
+              },
               acid: { 400: "#00ffc8", 500: "#00e6b4", 600: "#00cc9f" },
             },
           },
@@ -19,71 +24,178 @@
       };
     </script>
     <style>
-      body { background: #0a0a1a; min-height: 100vh; }
-      .stars { position: fixed; inset: 0; z-index: 0; pointer-events: none; background-image: radial-gradient(1px 1px at 10% 20%,rgba(255,255,255,.7),transparent), radial-gradient(1px 1px at 55% 15%,rgba(255,255,255,.5),transparent), radial-gradient(1px 1px at 88% 40%,rgba(255,255,255,.6),transparent), radial-gradient(1px 1px at 30% 65%,rgba(0,255,200,.2),transparent), radial-gradient(1px 1px at 72% 80%,rgba(255,255,255,.4),transparent); background-size: 300px 300px; animation: twinkle 6s ease-in-out infinite alternate; }
-      @keyframes twinkle { from { opacity: .4; } to { opacity: 1; } }
-      .glow-green { text-shadow: 0 0 15px rgba(0,255,200,.4); }
-      .glow-box { box-shadow: 0 0 25px rgba(0,255,200,.05), inset 0 1px 0 rgba(255,255,255,.03); }
-      .card { background: rgba(255,255,255,.02); border: 1px solid rgba(255,255,255,.05); border-radius: 1rem; }
-      .card:hover { border-color: rgba(0,255,200,.1); }
-      .scanline { background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,200,.01) 2px, rgba(0,255,200,.01) 4px); }
-      .tab-btn { transition: all .2s; }
-      .tab-btn.active { color: #00ffc8; border-color: #00ffc8; background: rgba(0,255,200,.05); }
-      .tab-panel { display: none; }
-      .tab-panel.active { display: block; }
+      body {
+        background: #0a0a1a;
+        min-height: 100vh;
+      }
+      .stars {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        background-image:
+          radial-gradient(
+            1px 1px at 10% 20%,
+            rgba(255, 255, 255, 0.7),
+            transparent
+          ),
+          radial-gradient(
+            1px 1px at 55% 15%,
+            rgba(255, 255, 255, 0.5),
+            transparent
+          ),
+          radial-gradient(
+            1px 1px at 88% 40%,
+            rgba(255, 255, 255, 0.6),
+            transparent
+          ),
+          radial-gradient(
+            1px 1px at 30% 65%,
+            rgba(0, 255, 200, 0.2),
+            transparent
+          ),
+          radial-gradient(
+            1px 1px at 72% 80%,
+            rgba(255, 255, 255, 0.4),
+            transparent
+          );
+        background-size: 300px 300px;
+        animation: twinkle 6s ease-in-out infinite alternate;
+      }
+      @keyframes twinkle {
+        from {
+          opacity: 0.4;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      .glow-green {
+        text-shadow: 0 0 15px rgba(0, 255, 200, 0.4);
+      }
+      .glow-box {
+        box-shadow:
+          0 0 25px rgba(0, 255, 200, 0.05),
+          inset 0 1px 0 rgba(255, 255, 255, 0.03);
+      }
+      .card {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 1rem;
+      }
+      .card:hover {
+        border-color: rgba(0, 255, 200, 0.1);
+      }
+      .scanline {
+        background: repeating-linear-gradient(
+          0deg,
+          transparent,
+          transparent 2px,
+          rgba(0, 255, 200, 0.01) 2px,
+          rgba(0, 255, 200, 0.01) 4px
+        );
+      }
+      .tab-btn {
+        transition: all 0.2s;
+      }
+      .tab-btn.active {
+        color: #00ffc8;
+        border-color: #00ffc8;
+        background: rgba(0, 255, 200, 0.05);
+      }
+      .tab-panel {
+        display: none;
+      }
+      .tab-panel.active {
+        display: block;
+      }
     </style>
   </head>
   <body class="text-gray-300 font-sans relative scanline">
     <div class="stars"></div>
 
     <nav class="relative z-10 border-b border-white/5">
-      <div class="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+      <div
+        class="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between"
+      >
         <a href="/" class="flex items-center gap-2">
           <span class="text-xl">🛡️</span>
-          <span class="text-lg font-bold text-acid-400 glow-green tracking-wider hidden sm:inline">Каскадный VPN</span>
+          <span
+            class="text-lg font-bold text-acid-400 glow-green tracking-wider hidden sm:inline"
+            >Каскадный VPN</span
+          >
         </a>
         <div class="flex items-center gap-2 sm:gap-4">
           <span class="text-gray-600 text-xs sm:text-sm hidden md:inline">
-            ID: <span class="text-gray-400 font-mono">{{ user.telegram_id }}</span>
-            {% if user.telegram_username %}<span class="text-gray-700">@{{ user.telegram_username }}</span>{% endif %}
+            ID:
+            <span class="text-gray-400 font-mono">{{ user.telegram_id }}</span>
+            {% if user.telegram_username %}<span class="text-gray-700"
+              >@{{ user.telegram_username }}</span
+            >{% endif %}
           </span>
           {% if user.is_admin %}
-          <a href="/admin" class="px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-400/80 border border-amber-500/20 text-xs hover:bg-amber-500/20 transition">Админ</a>
+          <a
+            href="/admin"
+            class="px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-400/80 border border-amber-500/20 text-xs hover:bg-amber-500/20 transition"
+            >Админ</a
+          >
           {% endif %}
-          <a href="/logout" class="px-3 py-1.5 rounded-lg border border-white/5 text-gray-600 text-xs hover:text-gray-400 hover:border-white/10 transition">Выход</a>
+          <a
+            href="/logout"
+            class="px-3 py-1.5 rounded-lg border border-white/5 text-gray-600 text-xs hover:text-gray-400 hover:border-white/10 transition"
+            >Выход</a
+          >
         </div>
       </div>
     </nav>
 
     <main class="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 py-8">
-
       {% if not keys_data %}
       <!-- ═══ Нет ключей ═══ -->
       <div class="card p-12 text-center glow-box">
         <div class="text-5xl mb-5 opacity-40">🔑</div>
-        <h2 class="text-xl font-semibold text-gray-300 mb-2">VPN-ключи не созданы</h2>
-        <p class="text-gray-600 text-sm max-w-md mx-auto">Ваш аккаунт зарегистрирован. Обратитесь к администратору для создания VPN-ключей.</p>
+        <h2 class="text-xl font-semibold text-gray-300 mb-2">
+          VPN-ключи не созданы
+        </h2>
+        <p class="text-gray-600 text-sm max-w-md mx-auto">
+          Ваш аккаунт зарегистрирован. Обратитесь к администратору для создания
+          VPN-ключей.
+        </p>
       </div>
 
       {% else %}
 
       <!-- ═══ Схема каскадного VPN ═══ -->
       <div class="card p-5 mb-6 glow-box">
-        <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-3">🌐 Каскадный VPN</h2>
+        <h2
+          class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-3"
+        >
+          🌐 Каскадный VPN
+        </h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="bg-black/20 rounded-xl p-4">
             <div class="flex items-center gap-2 mb-2">
               <span class="text-lg">🇷🇺</span>
-              <span class="text-gray-200 font-medium text-sm">Российский сервер</span>
+              <span class="text-gray-200 font-medium text-sm"
+                >Российский сервер</span
+              >
             </div>
-            <p class="text-gray-500 text-xs">Трафик к .ru, .su, .рф — через Россию. Быстрый доступ к российским ресурсам.</p>
+            <p class="text-gray-500 text-xs">
+              Трафик к .ru, .su, .рф — через Россию. Быстрый доступ к российским
+              ресурсам.
+            </p>
           </div>
           <div class="bg-black/20 rounded-xl p-4">
             <div class="flex items-center gap-2 mb-2">
               <span class="text-lg">🇳🇱</span>
-              <span class="text-gray-200 font-medium text-sm">Сервер в Нидерландах</span>
+              <span class="text-gray-200 font-medium text-sm"
+                >Сервер в Нидерландах</span
+              >
             </div>
-            <p class="text-gray-500 text-xs">Весь остальной трафик — через Европу. YouTube, Google, Instagram и всё остальное.</p>
+            <p class="text-gray-500 text-xs">
+              Весь остальной трафик — через Европу. YouTube, Google, Instagram и
+              всё остальное.
+            </p>
           </div>
         </div>
       </div>
@@ -92,15 +204,27 @@
       {% if subscription_url %}
       <div class="card p-5 mb-6 glow-box">
         <div class="flex items-center justify-between mb-3">
-          <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wider">🔗 Ссылка подписки (все ключи)</h2>
-          <button onclick="copyText('{{ subscription_url }}')" class="px-3 py-1 bg-acid-400/10 text-acid-400 rounded-lg text-xs hover:bg-acid-400/20 transition flex items-center gap-1.5">
+          <h2
+            class="text-sm font-semibold text-gray-300 uppercase tracking-wider"
+          >
+            🔗 Ссылка подписки (все ключи)
+          </h2>
+          <button
+            onclick="copyText('{{ subscription_url }}')"
+            class="px-3 py-1 bg-acid-400/10 text-acid-400 rounded-lg text-xs hover:bg-acid-400/20 transition flex items-center gap-1.5"
+          >
             <span class="copy-label">Копировать</span>
           </button>
         </div>
         <div class="bg-black/30 rounded-xl p-3 overflow-x-auto">
-          <code class="text-xs text-acid-400/70 font-mono break-all select-all">{{ subscription_url }}</code>
+          <code class="text-xs text-acid-400/70 font-mono break-all select-all"
+            >{{ subscription_url }}</code
+          >
         </div>
-        <p class="text-gray-700 text-xs mt-2">Вставьте эту ссылку в приложение — все серверы подключатся автоматически</p>
+        <p class="text-gray-700 text-xs mt-2">
+          Вставьте эту ссылку в приложение — все серверы подключатся
+          автоматически
+        </p>
 
         <!-- QR-код -->
         <div class="flex justify-center mt-4">
@@ -114,33 +238,63 @@
       <div class="card p-5 mb-4 glow-box">
         <div class="flex items-center justify-between mb-3">
           <div class="flex items-center gap-3">
-            <h3 class="text-sm font-semibold text-gray-200">🔑 {{ kd.key.name }}</h3>
+            <h3 class="text-sm font-semibold text-gray-200">
+              🔑 {{ kd.key.name }}
+            </h3>
             {% if kd.status == 'active' %}
-            <span class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs">Активен</span>
+            <span
+              class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs"
+              >Активен</span
+            >
             {% elif kd.status == 'expired' %}
-            <span class="px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 text-xs">Истёк</span>
+            <span
+              class="px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 text-xs"
+              >Истёк</span
+            >
             {% elif kd.status == 'limited' %}
-            <span class="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-xs">Лимит</span>
+            <span
+              class="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-xs"
+              >Лимит</span
+            >
             {% elif kd.status == 'disabled' %}
-            <span class="px-2 py-0.5 rounded-full bg-gray-500/10 text-gray-500 text-xs">Отключён</span>
+            <span
+              class="px-2 py-0.5 rounded-full bg-gray-500/10 text-gray-500 text-xs"
+              >Отключён</span
+            >
             {% endif %}
           </div>
           <div class="flex gap-4 text-xs text-gray-600">
-            <span>Трафик: {{ format_bytes(kd.key.data_used) }}{% if kd.key.data_limit %} / {{ format_bytes(kd.key.data_limit) }}{% else %} / ∞{% endif %}</span>
-            <span>Срок: {% if kd.key.expire_at %}{{ kd.key.expire_at.strftime('%d.%m.%Y') }}{% else %}∞{% endif %}</span>
+            <span
+              >Трафик: {{ format_bytes(kd.key.data_used) }}{% if
+              kd.key.data_limit %} / {{ format_bytes(kd.key.data_limit) }}{%
+              else %} / ∞{% endif %}</span
+            >
+            <span
+              >Срок: {% if kd.key.expire_at %}{{
+              kd.key.expire_at.strftime('%d.%m.%Y') }}{% else %}∞{% endif
+              %}</span
+            >
           </div>
         </div>
 
         <!-- Прогресс-бар трафика -->
-        {% if kd.key.data_limit and kd.key.data_limit > 0 %}
-        {% set pct = (kd.key.data_used / kd.key.data_limit * 100) | round(1) %}
+        {% if kd.key.data_limit and kd.key.data_limit > 0 %} {% set pct =
+        (kd.key.data_used / kd.key.data_limit * 100) | round(1) %}
         <div class="mb-4">
-          <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
+          <div
+            class="flex items-center justify-between text-xs text-gray-500 mb-1"
+          >
             <span>{{ format_bytes(kd.key.data_used) }}</span>
-            <span class="font-mono {% if pct > 90 %}text-red-400{% elif pct > 70 %}text-amber-400{% else %}text-acid-400{% endif %}">{{ pct }}%</span>
+            <span
+              class="font-mono {% if pct > 90 %}text-red-400{% elif pct > 70 %}text-amber-400{% else %}text-acid-400{% endif %}"
+              >{{ pct }}%</span
+            >
           </div>
           <div class="w-full bg-white/5 rounded-full h-2 overflow-hidden">
-            <div class="h-full rounded-full transition-all duration-500 {% if pct > 90 %}bg-gradient-to-r from-red-500 to-red-400{% elif pct > 70 %}bg-gradient-to-r from-amber-500 to-amber-400{% else %}bg-gradient-to-r from-acid-600 to-acid-400{% endif %}" style="width: {{ [pct, 100] | min }}%"></div>
+            <div
+              class="h-full rounded-full transition-all duration-500 {% if pct > 90 %}bg-gradient-to-r from-red-500 to-red-400{% elif pct > 70 %}bg-gradient-to-r from-amber-500 to-amber-400{% else %}bg-gradient-to-r from-acid-600 to-acid-400{% endif %}"
+              style="width: {{ [pct, 100] | min }}%"
+            ></div>
           </div>
         </div>
         {% endif %}
@@ -149,90 +303,213 @@
         {% if kd.links %}
         <div class="space-y-2">
           {% for link in kd.links %}
-          <div class="flex items-center gap-2 bg-black/20 rounded-lg p-2.5 group">
-            <span class="text-xs text-gray-400 w-40 shrink-0">{{ link.name }}</span>
-            <code class="flex-1 text-xs text-gray-500 font-mono break-all leading-relaxed">{{ link.link[:80] }}{% if link.link|length > 80 %}…{% endif %}</code>
-            <button onclick="copyText({{ link.link | tojson }})" class="px-2.5 py-1 bg-white/5 rounded-md text-gray-500 text-xs hover:text-acid-400 hover:bg-acid-400/10 transition shrink-0">📋</button>
-            <button onclick="openQr({{ link.link | tojson }}, {{ link.name | tojson }})" class="px-2.5 py-1 bg-white/5 rounded-md text-gray-500 text-xs hover:text-acid-400 hover:bg-acid-400/10 transition shrink-0">QR</button>
+          <div
+            class="flex items-center gap-2 bg-black/20 rounded-lg p-2.5 group"
+          >
+            <span class="text-xs text-gray-400 w-40 shrink-0"
+              >{{ link.name }}</span
+            >
+            <code
+              class="flex-1 text-xs text-gray-500 font-mono break-all leading-relaxed"
+              >{{ link.link[:80] }}{% if link.link|length > 80 %}…{% endif
+              %}</code
+            >
+            <button
+              onclick="copyText({{ link.link | tojson }})"
+              class="px-2.5 py-1 bg-white/5 rounded-md text-gray-500 text-xs hover:text-acid-400 hover:bg-acid-400/10 transition shrink-0"
+            >
+              📋
+            </button>
+            <button
+              onclick="openQr({{ link.link | tojson }}, {{ link.name | tojson }})"
+              class="px-2.5 py-1 bg-white/5 rounded-md text-gray-500 text-xs hover:text-acid-400 hover:bg-acid-400/10 transition shrink-0"
+            >
+              QR
+            </button>
           </div>
           {% endfor %}
         </div>
 
         {% if kd.key_sub_url and kd.status == 'active' %}
         <div class="mt-3 pt-3 border-t border-white/5">
-          <p class="text-xs text-gray-600 mb-2">👥 Поделиться ключом с родственником / другом — отдельная ссылка подписки:</p>
+          <p class="text-xs text-gray-600 mb-2">
+            👥 Поделиться ключом с родственником / другом — отдельная ссылка
+            подписки:
+          </p>
           <div class="flex items-center gap-2 bg-black/20 rounded-lg p-2.5">
-            <code class="flex-1 text-xs text-acid-400/60 font-mono break-all select-all">{{ kd.key_sub_url }}</code>
-            <button onclick="copyText({{ kd.key_sub_url | tojson }})" class="px-2.5 py-1 bg-white/5 rounded-md text-gray-500 text-xs hover:text-acid-400 hover:bg-acid-400/10 transition shrink-0">📋</button>
-            <button onclick="openQr({{ kd.key_sub_url | tojson }}, {{ ('Ключ: ' ~ kd.key.name) | tojson }})" class="px-2.5 py-1 bg-white/5 rounded-md text-gray-500 text-xs hover:text-acid-400 hover:bg-acid-400/10 transition shrink-0">QR</button>
+            <code
+              class="flex-1 text-xs text-acid-400/60 font-mono break-all select-all"
+              >{{ kd.key_sub_url }}</code
+            >
+            <button
+              onclick="copyText({{ kd.key_sub_url | tojson }})"
+              class="px-2.5 py-1 bg-white/5 rounded-md text-gray-500 text-xs hover:text-acid-400 hover:bg-acid-400/10 transition shrink-0"
+            >
+              📋
+            </button>
+            <button
+              onclick="openQr({{ kd.key_sub_url | tojson }}, {{ ('Ключ: ' ~ kd.key.name) | tojson }})"
+              class="px-2.5 py-1 bg-white/5 rounded-md text-gray-500 text-xs hover:text-acid-400 hover:bg-acid-400/10 transition shrink-0"
+            >
+              QR
+            </button>
           </div>
         </div>
-        {% endif %}
-        {% endif %}
+        {% endif %} {% endif %}
       </div>
       {% endfor %}
 
       <!-- ═══ Инструкции ═══ -->
       <div class="card p-5 glow-box mt-6">
-        <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-5">📖 Инструкции по подключению</h2>
+        <h2
+          class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-5"
+        >
+          📖 Инструкции по подключению
+        </h2>
 
         <div class="flex flex-wrap gap-2 mb-5 border-b border-white/5 pb-4">
-          <button class="tab-btn active px-4 py-2 rounded-lg border border-white/5 text-xs font-medium" data-tab="ios">🍎 iOS</button>
-          <button class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500" data-tab="android">🤖 Android</button>
-          <button class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500" data-tab="windows">🖥️ Windows</button>
-          <button class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500" data-tab="macos">💻 macOS</button>
+          <button
+            class="tab-btn active px-4 py-2 rounded-lg border border-white/5 text-xs font-medium"
+            data-tab="ios"
+          >
+            🍎 iOS
+          </button>
+          <button
+            class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500"
+            data-tab="android"
+          >
+            🤖 Android
+          </button>
+          <button
+            class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500"
+            data-tab="windows"
+          >
+            🖥️ Windows
+          </button>
+          <button
+            class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500"
+            data-tab="macos"
+          >
+            💻 macOS
+          </button>
         </div>
 
         <div class="tab-panel active" id="tab-ios">
           <div class="bg-black/20 rounded-xl p-5">
-            <h3 class="text-acid-400 font-semibold text-sm mb-3">Hiddify (рекомендуется)</h3>
-            <ol class="space-y-2 text-gray-400 text-sm list-decimal list-inside">
-              <li>Установите <strong class="text-gray-300">Hiddify</strong> из App Store</li>
-              <li>Нажмите <strong class="text-gray-300">+</strong> → <strong class="text-gray-300">«Добавить по ссылке»</strong></li>
-              <li>Вставьте ссылку подписки или отсканируйте QR-код</li>
-              <li>Появятся оба сервера (🇷🇺 Россия + 🇳🇱 Европа)</li>
-              <li>Включите подключение — маршрутизация автоматическая</li>
-            </ol>
+            {% if settings.app_link_ios %}
+            <a
+              href="{{ settings.app_link_ios }}"
+              target="_blank"
+              rel="noopener"
+              class="inline-flex items-center gap-2 mb-3 px-3 py-1.5 bg-acid-400/10 text-acid-400 rounded-lg text-xs hover:bg-acid-400/20 transition"
+            >
+              ⬇️ Скачать приложение
+            </a>
+            {% endif %}
+            <div id="inst-ios" class="text-gray-400 text-sm space-y-1"></div>
           </div>
         </div>
 
         <div class="tab-panel" id="tab-android">
           <div class="bg-black/20 rounded-xl p-5">
-            <h3 class="text-acid-400 font-semibold text-sm mb-3">Hiddify / v2rayNG</h3>
-            <ol class="space-y-2 text-gray-400 text-sm list-decimal list-inside">
-              <li>Установите <strong class="text-gray-300">Hiddify</strong> из Google Play / GitHub</li>
-              <li>Нажмите <strong class="text-gray-300">«Новый профиль»</strong> → <strong class="text-gray-300">«По ссылке»</strong></li>
-              <li>Вставьте ссылку подписки</li>
-              <li>Или используйте <strong class="text-gray-300">v2rayNG</strong> → <strong class="text-gray-300">Подписки</strong> → добавьте URL</li>
-              <li>Включите VPN</li>
-            </ol>
+            {% if settings.app_link_android %}
+            <a
+              href="{{ settings.app_link_android }}"
+              target="_blank"
+              rel="noopener"
+              class="inline-flex items-center gap-2 mb-3 px-3 py-1.5 bg-acid-400/10 text-acid-400 rounded-lg text-xs hover:bg-acid-400/20 transition"
+            >
+              ⬇️ Скачать приложение
+            </a>
+            {% endif %}
+            <div
+              id="inst-android"
+              class="text-gray-400 text-sm space-y-1"
+            ></div>
           </div>
         </div>
 
         <div class="tab-panel" id="tab-windows">
           <div class="bg-black/20 rounded-xl p-5">
-            <h3 class="text-acid-400 font-semibold text-sm mb-3">Hiddify / Nekoray</h3>
-            <ol class="space-y-2 text-gray-400 text-sm list-decimal list-inside">
-              <li>Скачайте <strong class="text-gray-300">Hiddify</strong> с github.com/hiddify</li>
-              <li><strong class="text-gray-300">«Новый профиль»</strong> → <strong class="text-gray-300">«По ссылке»</strong></li>
-              <li>Вставьте ссылку подписки → <strong class="text-gray-300">«Сохранить»</strong></li>
-              <li>Выберите сервер и подключайтесь</li>
-            </ol>
+            {% if settings.app_link_windows %}
+            <a
+              href="{{ settings.app_link_windows }}"
+              target="_blank"
+              rel="noopener"
+              class="inline-flex items-center gap-2 mb-3 px-3 py-1.5 bg-acid-400/10 text-acid-400 rounded-lg text-xs hover:bg-acid-400/20 transition"
+            >
+              ⬇️ Скачать приложение
+            </a>
+            {% endif %}
+            <div
+              id="inst-windows"
+              class="text-gray-400 text-sm space-y-1"
+            ></div>
           </div>
         </div>
 
         <div class="tab-panel" id="tab-macos">
           <div class="bg-black/20 rounded-xl p-5">
-            <h3 class="text-acid-400 font-semibold text-sm mb-3">Hiddify</h3>
-            <ol class="space-y-2 text-gray-400 text-sm list-decimal list-inside">
-              <li>Скачайте <strong class="text-gray-300">Hiddify</strong> (.dmg) с GitHub</li>
-              <li>Добавьте профиль по ссылке подписки</li>
-              <li>Подключайтесь</li>
-            </ol>
+            {% if settings.app_link_macos %}
+            <a
+              href="{{ settings.app_link_macos }}"
+              target="_blank"
+              rel="noopener"
+              class="inline-flex items-center gap-2 mb-3 px-3 py-1.5 bg-acid-400/10 text-acid-400 rounded-lg text-xs hover:bg-acid-400/20 transition"
+            >
+              ⬇️ Скачать приложение
+            </a>
+            {% endif %}
+            <div id="inst-macos" class="text-gray-400 text-sm space-y-1"></div>
           </div>
         </div>
       </div>
-      {% endif %}
+
+      {% if settings.support_text %}
+      <div class="card p-4 glow-box mt-4 text-center">
+        <p class="text-gray-500 text-xs">{{ settings.support_text }}</p>
+      </div>
+      {% endif %} {% if has_password %}
+      <!-- ═══ Смена пароля ═══ -->
+      <div class="card p-5 glow-box mt-6">
+        <h2
+          class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4"
+        >
+          🔑 Сменить пароль
+        </h2>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs text-gray-500 mb-1"
+              >Текущий пароль</label
+            >
+            <input
+              type="password"
+              id="pw-old"
+              autocomplete="current-password"
+              class="w-full bg-black/30 border border-white/5 rounded-lg px-3 py-2 text-sm text-gray-300 focus:border-acid-400/30 outline-none"
+            />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Новый пароль</label>
+            <input
+              type="password"
+              id="pw-new"
+              autocomplete="new-password"
+              class="w-full bg-black/30 border border-white/5 rounded-lg px-3 py-2 text-sm text-gray-300 focus:border-acid-400/30 outline-none"
+            />
+          </div>
+          <div class="flex items-end">
+            <button
+              onclick="changePassword()"
+              class="w-full px-4 py-2 bg-acid-400/10 text-acid-400 border border-acid-400/20 rounded-lg text-sm hover:bg-acid-400/20 transition"
+            >
+              Сменить
+            </button>
+          </div>
+        </div>
+        <p id="pw-msg" class="text-xs mt-2 hidden"></p>
+      </div>
+      {% endif %} {% endif %}
     </main>
 
     <script>
@@ -281,6 +558,31 @@
 
       // QR-код подписки
       document.addEventListener('DOMContentLoaded', function() {
+        // Render instructions from settings
+        var instMap = {
+          'inst-ios': {{ settings.instructions_ios | tojson }},
+          'inst-android': {{ settings.instructions_android | tojson }},
+          'inst-windows': {{ settings.instructions_windows | tojson }},
+          'inst-macos': {{ settings.instructions_macos | tojson }},
+        };
+        Object.keys(instMap).forEach(function(id) {
+          var el = document.getElementById(id);
+          if (!el) return;
+          var text = instMap[id] || '';
+          var lines = text.split('\n').filter(function(l) { return l.trim(); });
+          var html = '<ol class="list-decimal list-inside space-y-2">';
+          lines.forEach(function(line) {
+            // Strip leading "1. " etc
+            var clean = line.replace(/^\s*\d+\.\s*/, '');
+            // Bold **text**
+            clean = clean.replace(/\*\*(.*?)\*\*/g, '<strong class="text-gray-200">$1</strong>');
+            html += '<li>' + clean + '</li>';
+          });
+          html += '</ol>';
+          el.innerHTML = html;
+        });
+
+        // QR sub
         var qrEl = document.getElementById('qrcode');
         if (!qrEl) return;
         {% if subscription_url %}
@@ -299,16 +601,68 @@
           });
         }
       });
+
+      async function changePassword() {
+        var oldPw = document.getElementById('pw-old').value.trim();
+        var newPw = document.getElementById('pw-new').value.trim();
+        var msg = document.getElementById('pw-msg');
+        if (!oldPw || !newPw) {
+          msg.textContent = 'Заполните оба поля.';
+          msg.className = 'text-xs mt-2 text-red-400';
+          msg.classList.remove('hidden');
+          return;
+        }
+        try {
+          var r = await fetch('/cabinet/change-password', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ old_password: oldPw, new_password: newPw })
+          });
+          var d = await r.json();
+          if (d.ok) {
+            msg.textContent = '✓ Пароль изменён успешно.';
+            msg.className = 'text-xs mt-2 text-emerald-400';
+            document.getElementById('pw-old').value = '';
+            document.getElementById('pw-new').value = '';
+          } else {
+            msg.textContent = d.detail || 'Ошибка';
+            msg.className = 'text-xs mt-2 text-red-400';
+          }
+          msg.classList.remove('hidden');
+        } catch(e) {
+          msg.textContent = 'Ошибка сети';
+          msg.className = 'text-xs mt-2 text-red-400';
+          msg.classList.remove('hidden');
+        }
+      }
     </script>
 
     <!-- QR modal -->
-    <div id="qr-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/80 backdrop-blur-sm" onclick="closeQr()">
-      <div class="bg-space-800 border border-white/10 rounded-2xl p-6 text-center max-w-xs mx-4" onclick="event.stopPropagation()">
+    <div
+      id="qr-modal"
+      class="fixed inset-0 z-50 hidden items-center justify-center bg-black/80 backdrop-blur-sm"
+      onclick="closeQr()"
+    >
+      <div
+        class="bg-space-800 border border-white/10 rounded-2xl p-6 text-center max-w-xs mx-4"
+        onclick="event.stopPropagation()"
+      >
         <div class="flex items-center justify-between mb-4">
-          <h3 id="qr-modal-title" class="text-sm font-semibold text-gray-200 truncate pr-2"></h3>
-          <button onclick="closeQr()" class="text-gray-500 hover:text-gray-300 transition text-lg leading-none shrink-0">✕</button>
+          <h3
+            id="qr-modal-title"
+            class="text-sm font-semibold text-gray-200 truncate pr-2"
+          ></h3>
+          <button
+            onclick="closeQr()"
+            class="text-gray-500 hover:text-gray-300 transition text-lg leading-none shrink-0"
+          >
+            ✕
+          </button>
         </div>
-        <div id="qr-modal-canvas" class="bg-white rounded-xl p-3 inline-block mb-3"></div>
+        <div
+          id="qr-modal-canvas"
+          class="bg-white rounded-xl p-3 inline-block mb-3"
+        ></div>
         <p class="text-gray-600 text-xs">Отсканируйте код в приложении</p>
       </div>
     </div>

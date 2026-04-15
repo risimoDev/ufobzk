@@ -41,7 +41,10 @@ from app.auth import (
 )
 from app.bot import TELEGRAM_BOT_USERNAME, start_bot
 from app.bruteforce import admin_guard, api_guard, login_guard
-from app.models import SUPERADMIN_TELEGRAM_ID, AuditLog, User, VPNKey, get_db, init_db
+from app.models import (
+    SUPERADMIN_TELEGRAM_ID, AppSetting, AuditLog, Payment,
+    User, VPNKey, get_db, get_setting, init_db, set_setting,
+)
 from app.xray import (
     DOMAIN,
     NL_SERVER_IP,
@@ -489,6 +492,10 @@ async def cabinet(request: Request, db: Session = Depends(get_db)):
 
     subscription_url = f"{webapp_url}/sub/{user.id}" if user.vpn_keys else ""
 
+    # Load editable settings for cabinet
+    from app.models import DEFAULT_SETTINGS
+    settings = {k: get_setting(db, k) or DEFAULT_SETTINGS.get(k, "") for k in DEFAULT_SETTINGS}
+
     return templates.TemplateResponse(
         "cabinet.html",
         {
@@ -496,6 +503,8 @@ async def cabinet(request: Request, db: Session = Depends(get_db)):
             "user": user,
             "keys_data": keys_data,
             "subscription_url": subscription_url,
+            "has_password": bool(user.password_hash),
+            "settings": settings,
         },
     )
 
@@ -581,6 +590,7 @@ async def admin_dashboard(request: Request, admin: User = Depends(_require_admin
             "superadmin_tg_id": SUPERADMIN_TELEGRAM_ID,
             "bot_username": TELEGRAM_BOT_USERNAME,
             "webapp_url": webapp_url,
+            "admin_id": admin.id,
         },
     )
 
@@ -1048,3 +1058,282 @@ async def admin_create_bulk_invites(
         created.append(invite.key)
     _log_action(db, admin.id, "create_bulk_invites", "", f"count={count}")
     return JSONResponse({"ok": True, "count": len(created), "keys": created})
+
+
+# ── Платежи / биллинг ──
+
+
+@app.get("/admin/payments")
+async def admin_list_payments(
+    request: Request,
+    _: User = Depends(_require_admin),
+    db: Session = Depends(get_db),
+):
+    payments = db.query(Payment).order_by(Payment.id.desc()).limit(500).all()
+    users = {u.id: u for u in db.query(User).all()}
+    result = []
+    for p in payments:
+        u = users.get(p.user_id)
+        result.append({
+            "id": p.id,
+            "user_id": p.user_id,
+            "user_name": u.display_name or u.username or f"ID:{p.user_id}" if u else f"ID:{p.user_id}",
+            "amount": p.amount,
+            "currency": p.currency,
+            "status": p.status,
+            "note": p.note or "",
+            "period_start": p.period_start.strftime("%d.%m.%Y") if p.period_start else None,
+            "period_end": p.period_end.strftime("%d.%m.%Y") if p.period_end else None,
+            "created_at": p.created_at.strftime("%d.%m.%Y %H:%M") if p.created_at else None,
+        })
+    return JSONResponse(result)
+
+
+@app.get("/admin/payments/summary")
+async def admin_payments_summary(
+    request: Request,
+    _: User = Depends(_require_admin),
+    db: Session = Depends(get_db),
+):
+    users = db.query(User).filter(User.is_active == True).all()  # noqa: E712
+    summary = []
+    for u in users:
+        payments = [p for p in u.payments]
+        paid_total = sum(p.amount for p in payments if p.status == "paid")
+        debt_total = sum(p.amount for p in payments if p.status == "debt")
+        last_paid = max((p.created_at for p in payments if p.status == "paid"), default=None)
+        summary.append({
+            "user_id": u.id,
+            "user_name": u.display_name or u.username or f"tg:{u.telegram_id}",
+            "telegram_id": u.telegram_id,
+            "username": u.username,
+            "keys_count": len(u.vpn_keys),
+            "paid_total": paid_total,
+            "debt_total": debt_total,
+            "balance": paid_total - debt_total,
+            "last_paid": last_paid.strftime("%d.%m.%Y") if last_paid else None,
+            "has_debt": debt_total > 0,
+        })
+    summary.sort(key=lambda x: (-x["has_debt"], x["user_name"]))
+    return JSONResponse(summary)
+
+
+@app.post("/admin/payments")
+async def admin_create_payment(
+    request: Request,
+    admin: User = Depends(_require_admin),
+    db: Session = Depends(get_db),
+):
+    body = await request.json()
+    user_id = int(body.get("user_id", 0))
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id обязателен")
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    amount = float(body.get("amount", 0))
+    status = body.get("status", "paid")
+    if status not in ("paid", "debt", "pending"):
+        raise HTTPException(status_code=400, detail="Недопустимый статус")
+    currency = str(body.get("currency", "RUB"))[:8]
+    note = str(body.get("note", ""))[:256]
+
+    from datetime import date
+    period_start_raw = body.get("period_start")
+    period_end_raw = body.get("period_end")
+
+    def _parse_date(s):
+        if not s:
+            return None
+        try:
+            return datetime.strptime(s, "%Y-%m-%d")
+        except Exception:
+            return None
+
+    payment = Payment(
+        user_id=user_id,
+        amount=amount,
+        currency=currency,
+        status=status,
+        note=note,
+        period_start=_parse_date(period_start_raw),
+        period_end=_parse_date(period_end_raw),
+        created_by=admin.id,
+    )
+    db.add(payment)
+    db.commit()
+
+    _log_action(db, admin.id, "add_payment", str(user_id), f"status={status} amount={amount} note={note}")
+    return JSONResponse({"ok": True, "id": payment.id})
+
+
+@app.delete("/admin/payments/{payment_id}")
+async def admin_delete_payment(
+    payment_id: int,
+    request: Request,
+    admin: User = Depends(_require_admin),
+    db: Session = Depends(get_db),
+):
+    p = db.query(Payment).filter(Payment.id == payment_id).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Запись не найдена")
+    db.delete(p)
+    db.commit()
+    _log_action(db, admin.id, "delete_payment", str(payment_id))
+    return JSONResponse({"ok": True})
+
+
+# ── Настройки приложения ──
+
+
+@app.get("/admin/settings")
+async def admin_get_settings(
+    request: Request,
+    _: User = Depends(_require_admin),
+    db: Session = Depends(get_db),
+):
+    from app.models import DEFAULT_SETTINGS
+    rows = db.query(AppSetting).all()
+    data = {r.key: r.value for r in rows}
+    # fill defaults for missing
+    for k, v in DEFAULT_SETTINGS.items():
+        if k not in data:
+            data[k] = v
+    return JSONResponse(data)
+
+
+@app.put("/admin/settings")
+async def admin_save_settings(
+    request: Request,
+    admin: User = Depends(_require_admin),
+    db: Session = Depends(get_db),
+):
+    body = await request.json()
+    allowed_keys = {
+        "instructions_ios", "instructions_android",
+        "instructions_windows", "instructions_macos",
+        "app_link_ios", "app_link_android",
+        "app_link_windows", "app_link_macos",
+        "support_text",
+    }
+    saved = []
+    for k, v in body.items():
+        if k in allowed_keys:
+            set_setting(db, k, str(v)[:4000])
+            saved.append(k)
+    _log_action(db, admin.id, "save_settings", "", f"keys={saved}")
+    return JSONResponse({"ok": True, "saved": saved})
+
+
+# ── Смена пароля пользователем ──
+
+
+@app.post("/cabinet/change-password")
+@limiter.limit("5/minute")
+async def cabinet_change_password(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = _get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=302, headers={"Location": "/login"})
+    body = await request.json()
+    old_pw = str(body.get("old_password", "")).strip()
+    new_pw = str(body.get("new_password", "")).strip()
+
+    if not user.password_hash:
+        raise HTTPException(status_code=400, detail="У вашего аккаунта нет пароля (вход через Telegram). Обратитесь к администратору.")
+    if not old_pw:
+        raise HTTPException(status_code=400, detail="Введите текущий пароль")
+    if not verify_user_credentials(db, user.username or "", old_pw):
+        raise HTTPException(status_code=400, detail="Неверный текущий пароль")
+    if len(new_pw) < 4:
+        raise HTTPException(status_code=400, detail="Новый пароль минимум 4 символа")
+    if old_pw == new_pw:
+        raise HTTPException(status_code=400, detail="Новый пароль совпадает со старым")
+
+    user.password_hash = hash_password(new_pw)
+    db.commit()
+    return JSONResponse({"ok": True})
+
+
+# ── Публичный эндпоинт настроек (для кабинета) ──
+
+
+@app.get("/api/settings")
+async def api_settings(request: Request, db: Session = Depends(get_db)):
+    """Возвращает только публичные настройки (инструкции, ссылки)."""
+    keys = [
+        "instructions_ios", "instructions_android",
+        "instructions_windows", "instructions_macos",
+        "app_link_ios", "app_link_android",
+        "app_link_windows", "app_link_macos",
+        "support_text",
+    ]
+    return JSONResponse({k: get_setting(db, k) for k in keys})
+
+
+# ── Миграция NL сервера ──
+
+
+@app.post("/admin/migrate-nl")
+async def admin_migrate_nl(
+    request: Request,
+    admin: User = Depends(_require_admin),
+    db: Session = Depends(get_db),
+):
+    """Обновляет переменные окружения NL сервера в .env и перестраивает Xray-конфиг."""
+    body = await request.json()
+
+    import re
+
+    env_path = ".env"
+    try:
+        with open(env_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except FileNotFoundError:
+        content = ""
+
+    def upsert_env(text: str, key: str, val: str) -> str:
+        pattern = rf"^{re.escape(key)}=.*$"
+        new_line = f"{key}={val}"
+        if re.search(pattern, text, re.MULTILINE):
+            return re.sub(pattern, new_line, text, flags=re.MULTILINE)
+        return text.rstrip("\n") + f"\n{new_line}\n"
+
+    changes = {}
+    for field in ("NL_SERVER_IP", "REALITY_PUBLIC_KEY", "REALITY_PRIVATE_KEY",
+                  "REALITY_SHORT_ID", "RU_TRANSIT_UUID", "RU_TRANSIT_PUBLIC_KEY",
+                  "RU_TRANSIT_SHORT_ID", "RU_TRANSIT_PORT", "RU_TRANSIT_SN"):
+        if field in body and str(body[field]).strip():
+            content = upsert_env(content, field, str(body[field]).strip())
+            changes[field] = str(body[field]).strip()
+
+    if not changes:
+        raise HTTPException(status_code=400, detail="Нет данных для обновления")
+
+    # Backup current .env
+    import shutil
+    from datetime import datetime as dt
+    ts = dt.now().strftime("%Y%m%d_%H%M%S")
+    try:
+        shutil.copy(env_path, f".env.backup.{ts}")
+    except Exception:
+        pass
+
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+    # Reload env vars for current process
+    for k, v in changes.items():
+        os.environ[k] = v
+
+    # Rebuild Xray config
+    try:
+        sync_and_reload(db)
+    except Exception as e:
+        logger.error("Xray reload after migration: %s", e)
+
+    _log_action(db, admin.id, "migrate_nl", "", f"changed={list(changes.keys())}")
+    return JSONResponse({"ok": True, "changed": list(changes.keys())})
