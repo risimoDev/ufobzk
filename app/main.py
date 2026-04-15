@@ -108,15 +108,6 @@ app = FastAPI(title="VPNBZK Cascade", lifespan=lifespan)
 app.state.limiter = limiter
 
 
-class _NeedsLogin(Exception):
-    """Пользователь не аутентифицирован — нужен редирект на /login."""
-
-
-@app.exception_handler(_NeedsLogin)
-async def _needs_login_handler(request: Request, exc: _NeedsLogin):
-    return RedirectResponse(url="/login", status_code=303)
-
-
 # ── Security middleware ──
 
 
@@ -196,7 +187,7 @@ def _get_current_user(request: Request, db: Session) -> User | None:
 def _require_user(request: Request, db: Session = Depends(get_db)) -> User:
     user = _get_current_user(request, db)
     if not user:
-        raise HTTPException(status_code=303, headers={"Location": "/login"})
+        raise HTTPException(status_code=302, headers={"Location": "/login"})
     return user
 
 
@@ -206,7 +197,7 @@ def _require_admin(request: Request, db: Session = Depends(get_db)) -> User:
         raise HTTPException(status_code=429, detail="Доступ временно заблокирован")
     user = _get_current_user(request, db)
     if not user:
-        raise _NeedsLogin()
+        raise HTTPException(status_code=302, headers={"Location": "/login"})
     if not user.is_admin:
         admin_guard.record_failure(ip)
         logger.warning("Неудачный доступ к админке: IP=%s user=%s", ip, user.telegram_id)
@@ -410,8 +401,7 @@ async def cabinet(request: Request, db: Session = Depends(get_db)):
 
 
 @app.get("/admin", response_class=HTMLResponse)
-async def admin_dashboard(request: Request, db: Session = Depends(get_db)):
-    admin = _require_admin(request, db)
+async def admin_dashboard(request: Request, admin: User = Depends(_require_admin), db: Session = Depends(get_db)):
 
     all_users = db.query(User).order_by(User.id).all()
     all_keys = db.query(VPNKey).all()
@@ -468,9 +458,9 @@ async def admin_create_user(
     expire_days: int = Form(0),
     key_name: str = Form("default"),
     csrf_token: str = Form(""),
+    admin: User = Depends(_require_admin),
     db: Session = Depends(get_db),
 ):
-    admin = _require_admin(request, db)
     _verify_csrf(request, csrf_token)
 
     if telegram_id < 1 or telegram_id > 9_999_999_999:
@@ -523,9 +513,9 @@ async def admin_create_user(
 async def admin_add_key(
     user_id: int,
     request: Request,
+    admin: User = Depends(_require_admin),
     db: Session = Depends(get_db),
 ):
-    admin = _require_admin(request, db)
     body = await request.json()
 
     target = db.query(User).filter(User.id == user_id).first()
@@ -563,9 +553,9 @@ async def admin_add_key(
 async def admin_edit_user(
     user_id: int,
     request: Request,
+    admin: User = Depends(_require_admin),
     db: Session = Depends(get_db),
 ):
-    admin = _require_admin(request, db)
     target = db.query(User).filter(User.id == user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
@@ -591,9 +581,9 @@ async def admin_edit_user(
 async def admin_edit_key(
     key_id: int,
     request: Request,
+    admin: User = Depends(_require_admin),
     db: Session = Depends(get_db),
 ):
-    admin = _require_admin(request, db)
     key = db.query(VPNKey).filter(VPNKey.id == key_id).first()
     if not key:
         raise HTTPException(status_code=404, detail="Ключ не найден")
@@ -634,9 +624,9 @@ async def admin_edit_key(
 async def admin_delete_user(
     user_id: int,
     request: Request,
+    admin: User = Depends(_require_admin),
     db: Session = Depends(get_db),
 ):
-    admin = _require_admin(request, db)
     target = db.query(User).filter(User.id == user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
@@ -661,9 +651,9 @@ async def admin_delete_user(
 async def admin_delete_key(
     key_id: int,
     request: Request,
+    admin: User = Depends(_require_admin),
     db: Session = Depends(get_db),
 ):
-    admin = _require_admin(request, db)
     key = db.query(VPNKey).filter(VPNKey.id == key_id).first()
     if not key:
         raise HTTPException(status_code=404, detail="Ключ не найден")
@@ -687,9 +677,9 @@ async def admin_delete_key(
 @app.post("/admin/invite-keys")
 async def admin_create_invite_key(
     request: Request,
+    admin: User = Depends(_require_admin),
     db: Session = Depends(get_db),
 ):
-    admin = _require_admin(request, db)
     invite = generate_invite_key(db, admin.id)
     _log_action(db, admin.id, "create_key", invite.key)
     return JSONResponse({"ok": True, "key": invite.key, "id": invite.id})
@@ -698,9 +688,9 @@ async def admin_create_invite_key(
 @app.get("/admin/invite-keys")
 async def admin_list_invite_keys(
     request: Request,
+    _: User = Depends(_require_admin),
     db: Session = Depends(get_db),
 ):
-    _require_admin(request, db)
     keys = list_invite_keys(db)
     return JSONResponse([
         {
@@ -719,9 +709,9 @@ async def admin_list_invite_keys(
 async def admin_delete_invite_key(
     key_id: int,
     request: Request,
+    admin: User = Depends(_require_admin),
     db: Session = Depends(get_db),
 ):
-    admin = _require_admin(request, db)
     if not delete_invite_key(db, key_id):
         raise HTTPException(status_code=404, detail="Ключ не найден")
     _log_action(db, admin.id, "delete_invite_key", str(key_id))
@@ -734,9 +724,9 @@ async def admin_delete_invite_key(
 @app.post("/admin/sync-xray")
 async def admin_sync_xray(
     request: Request,
+    admin: User = Depends(_require_admin),
     db: Session = Depends(get_db),
 ):
-    admin = _require_admin(request, db)
     try:
         success = sync_and_reload(db)
         _log_action(db, admin.id, "sync_xray", "", f"success={success}")
@@ -749,8 +739,7 @@ async def admin_sync_xray(
 
 
 @app.get("/admin/security")
-async def admin_security_stats(request: Request, db: Session = Depends(get_db)):
-    _require_admin(request, db)
+async def admin_security_stats(request: Request, _: User = Depends(_require_admin), db: Session = Depends(get_db)):
     return JSONResponse({
         "login_guard": login_guard.get_stats(),
         "admin_guard": admin_guard.get_stats(),
@@ -761,9 +750,9 @@ async def admin_security_stats(request: Request, db: Session = Depends(get_db)):
 @app.post("/admin/unban")
 async def admin_unban_ip(
     request: Request,
+    admin: User = Depends(_require_admin),
     db: Session = Depends(get_db),
 ):
-    admin = _require_admin(request, db)
     body = await request.json()
     ip = body.get("ip", "").strip()
     if not ip:
