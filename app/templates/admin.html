@@ -117,17 +117,142 @@
           opacity: 1;
         }
       }
+      .tab-btn {
+        transition: all 0.2s;
+        cursor: pointer;
+      }
+      .tab-btn.active {
+        color: #00ffc8;
+        border-color: #00ffc8;
+        background: rgba(0, 255, 200, 0.05);
+      }
+      .tab-panel {
+        display: none;
+      }
+      .tab-panel.active {
+        display: block;
+      }
+      .input-field {
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        color: #d1d5db;
+        outline: none;
+        transition: border-color 0.2s;
+      }
+      .input-field:focus {
+        border-color: rgba(0, 255, 200, 0.3);
+      }
+      .btn-primary {
+        padding: 0.5rem 1rem;
+        background: rgba(0, 255, 200, 0.1);
+        color: #00ffc8;
+        border: 1px solid rgba(0, 255, 200, 0.2);
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .btn-primary:hover {
+        background: rgba(0, 255, 200, 0.2);
+      }
+      .btn-danger {
+        padding: 0.5rem 1rem;
+        background: rgba(239, 68, 68, 0.1);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, 0.2);
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .btn-danger:hover {
+        background: rgba(239, 68, 68, 0.2);
+      }
+      .btn-secondary {
+        padding: 0.5rem 1rem;
+        background: rgba(255, 255, 255, 0.05);
+        color: #9ca3af;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .btn-secondary:hover {
+        color: #d1d5db;
+        background: rgba(255, 255, 255, 0.08);
+      }
+      .badge {
+        display: inline-block;
+        padding: 0.125rem 0.5rem;
+        border-radius: 9999px;
+        font-size: 0.7rem;
+        font-weight: 500;
+      }
+      .badge-green {
+        background: rgba(16, 185, 129, 0.1);
+        color: #34d399;
+      }
+      .badge-red {
+        background: rgba(239, 68, 68, 0.1);
+        color: #f87171;
+      }
+      .badge-amber {
+        background: rgba(245, 158, 11, 0.1);
+        color: #fbbf24;
+      }
+      .badge-gray {
+        background: rgba(107, 114, 128, 0.1);
+        color: #9ca3af;
+      }
+      .badge-cyan {
+        background: rgba(6, 182, 212, 0.1);
+        color: #22d3ee;
+      }
+      .search-input {
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 0.5rem;
+        padding: 0.375rem 0.75rem;
+        font-size: 0.75rem;
+        color: #d1d5db;
+        outline: none;
+        transition: border-color 0.2s;
+      }
+      .search-input:focus {
+        border-color: rgba(0, 255, 200, 0.3);
+      }
+      .key-card {
+        background: rgba(255, 255, 255, 0.015);
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        border-radius: 0.75rem;
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+      }
+      .key-card:hover {
+        border-color: rgba(0, 255, 200, 0.08);
+      }
     </style>
   </head>
   <body class="text-gray-300 font-sans relative">
     <div class="stars"></div>
+    <div
+      id="toast-container"
+      class="fixed top-4 right-4 z-[60] space-y-2"
+    ></div>
 
+    <!-- NAV -->
     <nav class="relative z-10 border-b border-white/5">
       <div
         class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between"
       >
         <a href="/" class="flex items-center gap-2">
-          <span class="text-xl">🛡️</span>
+          <span class="text-xl">&#x1f6e1;&#xfe0f;</span>
           <span
             class="text-lg font-bold text-acid-400 glow-green tracking-wider"
             >Каскадный VPN</span
@@ -138,351 +263,743 @@
           >
         </a>
         <div class="flex items-center gap-3">
-          <a
-            href="/cabinet"
-            class="px-3 py-1.5 rounded-lg border border-white/5 text-gray-500 text-xs hover:text-acid-400 hover:border-acid-400/20 transition"
-            >Кабинет</a
+          <span class="text-gray-600 text-xs hidden md:inline"
+            >{{ user.display_name or user.telegram_id }}</span
           >
-          <a
-            href="/logout"
-            class="px-3 py-1.5 rounded-lg border border-white/5 text-gray-600 text-xs hover:text-gray-400 transition"
+          <a href="/cabinet" class="btn-secondary text-xs py-1.5">Кабинет</a>
+          <a href="/logout" class="btn-secondary text-xs py-1.5 text-gray-600"
             >Выход</a
           >
         </div>
       </div>
     </nav>
 
-    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
-
     <main class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-8">
-      <!-- ═══ ДАШБОРД ═══ -->
-      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-        <div class="card p-5 glow-box">
-          <p class="text-gray-600 text-xs uppercase tracking-wider mb-1">
-            Пользователи
-          </p>
-          <p class="text-2xl font-bold text-gray-200">{{ total_users }}</p>
-          <p class="text-gray-700 text-xs mt-1">{{ active_users }} активных</p>
-        </div>
-        <div class="card p-5 glow-box">
-          <p class="text-gray-600 text-xs uppercase tracking-wider mb-1">
-            VPN-ключей
-          </p>
-          <p class="text-2xl font-bold text-acid-400">{{ total_keys }}</p>
-        </div>
-        <div class="card p-5 glow-box">
-          <p class="text-gray-600 text-xs uppercase tracking-wider mb-1">
-            Активных
-          </p>
-          <p class="text-2xl font-bold text-emerald-400">{{ active_keys }}</p>
-        </div>
-        <div class="card p-5 glow-box">
-          <p class="text-gray-600 text-xs uppercase tracking-wider mb-1">
-            Истекших
-          </p>
-          <p class="text-2xl font-bold text-red-400">{{ expired_keys }}</p>
-        </div>
-        <div class="card p-5 glow-box">
-          <p class="text-gray-600 text-xs uppercase tracking-wider mb-1">
-            Откл. / Лимит
-          </p>
-          <p class="text-2xl font-bold text-gray-500">
-            {{ disabled_keys + limited_keys }}
-          </p>
-        </div>
-        <div class="card p-5 glow-box">
-          <p class="text-gray-600 text-xs uppercase tracking-wider mb-1">
-            Трафик
-          </p>
-          <p class="text-2xl font-bold text-cyan-400">
-            {{ format_bytes(traffic_total) }}
-          </p>
-        </div>
-      </div>
-
-      <!-- Кнопка синхронизации Xray -->
-      <div class="flex gap-3 mb-6">
+      <!-- TABS -->
+      <div class="flex flex-wrap gap-2 mb-6 border-b border-white/5 pb-4">
         <button
-          onclick="syncXray()"
-          class="px-4 py-2 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-lg text-xs font-medium hover:bg-cyan-500/20 transition"
+          class="tab-btn active px-4 py-2 rounded-lg border border-white/5 text-xs font-medium"
+          data-tab="dashboard"
         >
-          🔄 Синхронизировать Xray
+          &#x1f4ca; Дашборд
+        </button>
+        <button
+          class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500"
+          data-tab="users"
+        >
+          &#x1f465; Пользователи
+        </button>
+        <button
+          class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500"
+          data-tab="invites"
+        >
+          &#x1f39f;&#xfe0f; Инвайты
+        </button>
+        <button
+          class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500"
+          data-tab="audit"
+        >
+          &#x1f4cb; Аудит
+        </button>
+        <button
+          class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500"
+          data-tab="system"
+        >
+          &#x2699;&#xfe0f; Система
         </button>
       </div>
 
-      <!-- ═══ СОЗДАТЬ ПОЛЬЗОВАТЕЛЯ ═══ -->
-      <div class="card p-5 mb-8 glow-box">
-        <h2
-          class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4"
-        >
-          ➕ Создать пользователя
-        </h2>
-        <form
-          method="POST"
-          action="/admin/users"
-          class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 items-end"
-        >
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-          <div>
-            <label class="block text-xs text-gray-500 mb-1">Имя</label>
-            <input
-              type="text"
-              name="display_name"
-              placeholder="Иван"
-              class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 placeholder-gray-700 focus:border-acid-400/30 focus:outline-none transition"
-            />
+      <!-- TAB: DASHBOARD -->
+      <div class="tab-panel active" id="tab-dashboard">
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+          <div class="card p-5 glow-box">
+            <p class="text-gray-600 text-xs uppercase tracking-wider mb-1">
+              Пользователи
+            </p>
+            <p class="text-2xl font-bold text-gray-200">{{ total_users }}</p>
+            <p class="text-gray-700 text-xs mt-1">{{ active_users }} акт.</p>
           </div>
-          <div>
-            <label class="block text-xs text-gray-500 mb-1"
-              >Telegram ID <span class="text-red-400">*</span></label
-            >
-            <input
-              type="number"
-              name="telegram_id"
-              required
-              placeholder="123456789"
-              class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 placeholder-gray-700 focus:border-acid-400/30 focus:outline-none transition"
-            />
+          <div class="card p-5 glow-box">
+            <p class="text-gray-600 text-xs uppercase tracking-wider mb-1">
+              VPN-ключей
+            </p>
+            <p class="text-2xl font-bold text-acid-400">{{ total_keys }}</p>
           </div>
-          <div>
-            <label class="block text-xs text-gray-500 mb-1">Имя ключа</label>
-            <input
-              type="text"
-              name="key_name"
-              value="default"
-              class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 focus:border-acid-400/30 focus:outline-none transition"
-            />
+          <div class="card p-5 glow-box">
+            <p class="text-gray-600 text-xs uppercase tracking-wider mb-1">
+              Активных
+            </p>
+            <p class="text-2xl font-bold text-emerald-400">{{ active_keys }}</p>
           </div>
-          <div>
-            <label class="block text-xs text-gray-500 mb-1">Лимит (ГБ)</label>
-            <input
-              type="number"
-              name="data_limit_gb"
-              value="0"
-              step="0.1"
-              min="0"
-              class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 focus:border-acid-400/30 focus:outline-none transition"
-            />
+          <div class="card p-5 glow-box">
+            <p class="text-gray-600 text-xs uppercase tracking-wider mb-1">
+              Истекших
+            </p>
+            <p class="text-2xl font-bold text-red-400">{{ expired_keys }}</p>
           </div>
-          <div>
-            <label class="block text-xs text-gray-500 mb-1">Срок (дни)</label>
-            <input
-              type="number"
-              name="expire_days"
-              value="0"
-              min="0"
-              class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 focus:border-acid-400/30 focus:outline-none transition"
-            />
+          <div class="card p-5 glow-box">
+            <p class="text-gray-600 text-xs uppercase tracking-wider mb-1">
+              Откл. / Лимит
+            </p>
+            <p class="text-2xl font-bold text-gray-500">
+              {{ disabled_keys + limited_keys }}
+            </p>
           </div>
-          <div>
-            <button
-              type="submit"
-              class="w-full px-4 py-2 bg-acid-400/10 text-acid-400 border border-acid-400/20 rounded-lg text-sm font-medium hover:bg-acid-400/20 transition"
-            >
-              Создать
+          <div class="card p-5 glow-box">
+            <p class="text-gray-600 text-xs uppercase tracking-wider mb-1">
+              Трафик
+            </p>
+            <p class="text-2xl font-bold text-cyan-400">
+              {{ format_bytes(traffic_total) }}
+            </p>
+          </div>
+        </div>
+
+        <!-- Quick actions -->
+        <div class="card p-5 glow-box mb-6">
+          <h3
+            class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4"
+          >
+            &#x26a1; Быстрые действия
+          </h3>
+          <div class="flex flex-wrap gap-3">
+            <button onclick="syncXray()" class="btn-primary text-xs">
+              &#x1f504; Синх. Xray
+            </button>
+            <button onclick="switchTab('users')" class="btn-secondary text-xs">
+              &#x2795; Новый пользователь
+            </button>
+            <button onclick="generateInviteKey()" class="btn-secondary text-xs">
+              &#x1f39f;&#xfe0f; Создать инвайт
+            </button>
+            <button onclick="switchTab('audit')" class="btn-secondary text-xs">
+              &#x1f4cb; Лог действий
+            </button>
+            <button onclick="switchTab('system')" class="btn-secondary text-xs">
+              &#x1f512; Безопасность
             </button>
           </div>
-        </form>
-        <p class="text-gray-700 text-xs mt-2">
-          0 ГБ / 0 дней = безлимит / бессрочно. VPN-ключ создаётся
-          автоматически.
-        </p>
-      </div>
-
-      <!-- ═══ ТАБЛИЦА ПОЛЬЗОВАТЕЛЕЙ ═══ -->
-      <div class="card glow-box overflow-hidden mb-8">
-        <div
-          class="px-5 py-4 border-b border-white/5 flex items-center justify-between"
-        >
-          <h2
-            class="text-sm font-semibold text-gray-300 uppercase tracking-wider"
-          >
-            👥 Пользователи
-          </h2>
-          <span class="text-xs text-gray-600"
-            >{{ enriched_users | length }} записей</span
-          >
         </div>
-        <div class="overflow-x-auto">
-          <table class="w-full tbl">
-            <thead>
-              <tr class="text-left">
-                <th class="px-4 py-3">Имя</th>
-                <th class="px-4 py-3">Telegram</th>
-                <th class="px-4 py-3">Ключей</th>
-                <th class="px-4 py-3">Статус</th>
-                <th class="px-4 py-3">Роль</th>
-                <th class="px-4 py-3 text-right">Действия</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for row in enriched_users %} {% set u = row.user %}
-              <tr id="user-row-{{ u.id }}">
-                <td class="px-4 py-3">
-                  <span class="text-gray-200">{{ u.display_name or '—' }}</span>
-                </td>
-                <td class="px-4 py-3">
-                  <span class="text-acid-400/80 font-mono text-xs"
-                    >{{ u.telegram_id }}</span
-                  >
-                  {% if u.telegram_username %}<br /><span
-                    class="text-gray-600 text-xs"
-                    >@{{ u.telegram_username }}</span
-                  >{% endif %}
-                </td>
-                <td class="px-4 py-3">
-                  <span class="text-cyan-400 font-mono text-xs"
-                    >{{ row.keys_count }}</span
-                  >
-                  <span class="text-gray-600 text-xs"
-                    >({{ row.active_keys }} акт.)</span
-                  >
-                </td>
-                <td class="px-4 py-3">
-                  {% if u.is_active %}
-                  <span
-                    class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs"
-                    >Активен</span
-                  >
-                  {% else %}
-                  <span
-                    class="px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 text-xs"
-                    >Блок</span
-                  >
-                  {% endif %}
-                </td>
-                <td class="px-4 py-3">
-                  {% if u.is_admin %}
-                  <span
-                    class="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-xs"
-                    >Админ</span
-                  >
-                  {% else %}
-                  <span class="text-gray-600 text-xs">user</span>
-                  {% endif %}
-                </td>
-                <td class="px-4 py-3">
-                  <div class="flex items-center justify-end gap-1">
-                    <button
-                      onclick="openEditModal({{ u.id }}, {{ u.display_name | tojson }}, {{ u.is_active | tojson }}, {{ u.is_admin | tojson }})"
-                      class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-acid-400 hover:bg-acid-400/10 transition text-xs"
-                      title="Редактировать"
+
+        <!-- Recent users -->
+        <div class="card glow-box overflow-hidden">
+          <div class="px-5 py-4 border-b border-white/5">
+            <h3
+              class="text-sm font-semibold text-gray-300 uppercase tracking-wider"
+            >
+              &#x1f550; Последние пользователи
+            </h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full tbl">
+              <thead>
+                <tr class="text-left">
+                  <th class="px-4 py-3">Имя</th>
+                  <th class="px-4 py-3">Telegram</th>
+                  <th class="px-4 py-3">Ключей</th>
+                  <th class="px-4 py-3">Регистрация</th>
+                  <th class="px-4 py-3">Последний вход</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in enriched_users[-5:]|reverse %} {% set u =
+                row['user'] %}
+                <tr>
+                  <td class="px-4 py-3 text-gray-200">
+                    {{ u.display_name or '—' }}
+                  </td>
+                  <td class="px-4 py-3">
+                    <span class="text-acid-400/80 font-mono text-xs"
+                      >{{ u.telegram_id }}</span
                     >
-                      ✏️
-                    </button>
-                    <button
-                      onclick="openKeysModal({{ u.id }}, {{ u.display_name | tojson }}, {{ row['keys'] | tojson }})"
-                      class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-cyan-400 hover:bg-cyan-400/10 transition text-xs"
-                      title="Ключи"
+                  </td>
+                  <td class="px-4 py-3">
+                    <span class="text-cyan-400 font-mono text-xs"
+                      >{{ row['keys_count'] }}</span
                     >
-                      🔑
-                    </button>
-                    <button
-                      onclick="deleteUser({{ u.id }}, {{ u.display_name | tojson or u.telegram_id }})"
-                      class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition text-xs"
-                      title="Удалить"
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+                  </td>
+                  <td class="px-4 py-3 text-xs text-gray-500">
+                    {{ u.created_at.strftime('%d.%m.%Y %H:%M') if u.created_at
+                    else '—' }}
+                  </td>
+                  <td class="px-4 py-3 text-xs text-gray-500">
+                    {{ u.last_login.strftime('%d.%m.%Y %H:%M') if u.last_login
+                    else 'никогда' }}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
-      <!-- ═══ ИНВАЙТ-КЛЮЧИ ═══ -->
-      <div class="card glow-box overflow-hidden mb-8">
-        <div
-          class="px-5 py-4 border-b border-white/5 flex items-center justify-between"
-        >
-          <h2
+      <!-- TAB: USERS -->
+      <div class="tab-panel" id="tab-users">
+        <!-- Create user -->
+        <div class="card p-5 mb-6 glow-box">
+          <h3
+            class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4"
+          >
+            &#x2795; Создать пользователя
+          </h3>
+          <form method="POST" action="/admin/users" class="space-y-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Имя</label>
+                <input
+                  type="text"
+                  name="display_name"
+                  placeholder="Иван"
+                  class="input-field"
+                />
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Логин</label>
+                <input
+                  type="text"
+                  name="username"
+                  placeholder="ivan2024"
+                  class="input-field"
+                />
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Пароль</label>
+                <input
+                  type="text"
+                  name="password"
+                  placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;"
+                  class="input-field"
+                />
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1"
+                  >Telegram ID</label
+                >
+                <input
+                  type="number"
+                  name="telegram_id"
+                  placeholder="123456789"
+                  class="input-field"
+                />
+              </div>
+            </div>
+            <div
+              class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end"
+            >
+              <div>
+                <label class="block text-xs text-gray-500 mb-1"
+                  >Имя ключа</label
+                >
+                <input
+                  type="text"
+                  name="key_name"
+                  value="default"
+                  class="input-field"
+                />
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1"
+                  >Лимит (ГБ)</label
+                >
+                <input
+                  type="number"
+                  name="data_limit_gb"
+                  value="0"
+                  step="0.1"
+                  min="0"
+                  class="input-field"
+                />
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1"
+                  >Срок (дни)</label
+                >
+                <input
+                  type="number"
+                  name="expire_days"
+                  value="0"
+                  min="0"
+                  class="input-field"
+                />
+              </div>
+              <div>
+                <button type="submit" class="btn-primary w-full">
+                  Создать
+                </button>
+              </div>
+            </div>
+          </form>
+          <p class="text-gray-700 text-xs mt-2">
+            Укажите логин+пароль и/или Telegram ID. 0 ГБ / 0 дней = безлимит /
+            бессрочно
+          </p>
+        </div>
+
+        <!-- Search -->
+        <div class="flex items-center gap-3 mb-4">
+          <input
+            type="text"
+            id="user-search"
+            placeholder="&#x1f50d; Поиск по имени, Telegram ID..."
+            class="search-input flex-1"
+            oninput="filterUsers()"
+          />
+          <span class="text-xs text-gray-600" id="user-count"
+            >{{ enriched_users|length }} пользователей</span
+          >
+        </div>
+
+        <!-- Users table -->
+        <div class="card glow-box overflow-hidden mb-8">
+          <div class="overflow-x-auto">
+            <table class="w-full tbl" id="users-table">
+              <thead>
+                <tr class="text-left">
+                  <th class="px-4 py-3">ID</th>
+                  <th class="px-4 py-3">Имя</th>
+                  <th class="px-4 py-3">Логин</th>
+                  <th class="px-4 py-3">Telegram</th>
+                  <th class="px-4 py-3">Авторизация</th>
+                  <th class="px-4 py-3">Ключей</th>
+                  <th class="px-4 py-3">Трафик</th>
+                  <th class="px-4 py-3">Статус</th>
+                  <th class="px-4 py-3">Роль</th>
+                  <th class="px-4 py-3">Регистрация</th>
+                  <th class="px-4 py-3">Последний вход</th>
+                  <th class="px-4 py-3 text-right">Действия</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in enriched_users %} {% set u = row['user'] %}
+                <tr
+                  id="user-row-{{ u.id }}"
+                  class="user-row"
+                  data-search="{{ (u.display_name or '')|lower }} {{ u.telegram_id }} {{ (u.telegram_username or '')|lower }} {{ (u.username or '')|lower }}"
+                >
+                  <td class="px-4 py-3 text-gray-500 font-mono text-xs">
+                    {{ u.id }}
+                  </td>
+                  <td class="px-4 py-3 text-gray-200">
+                    {{ u.display_name or '—' }}
+                  </td>
+                  <td class="px-4 py-3">
+                    {% if u.username %}<span
+                      class="text-purple-400/80 font-mono text-xs"
+                      >{{ u.username }}</span
+                    >
+                    {% else %}<span class="text-gray-700 text-xs">—</span>{%
+                    endif %}
+                  </td>
+                  <td class="px-4 py-3">
+                    {% if u.telegram_id %}<span
+                      class="text-acid-400/80 font-mono text-xs"
+                      >{{ u.telegram_id }}</span
+                    >
+                    {% if u.telegram_username %}<br /><span
+                      class="text-gray-600 text-xs"
+                      >@{{ u.telegram_username }}</span
+                    >{% endif %} {% else %}<span class="text-gray-700 text-xs"
+                      >—</span
+                    >{% endif %}
+                  </td>
+                  <td class="px-4 py-3">
+                    {% if row['has_password'] %}<span
+                      class="badge badge-green"
+                      title="Логин+пароль"
+                      >🔑</span
+                    >{% endif %} {% if u.telegram_id %}<span
+                      class="badge badge-cyan"
+                      title="Telegram"
+                      >📱</span
+                    >{% endif %}
+                  </td>
+                  <td class="px-4 py-3">
+                    <span class="text-cyan-400 font-mono text-xs"
+                      >{{ row['keys_count'] }}</span
+                    >
+                    <span class="text-gray-600 text-xs"
+                      >({{ row['active_keys'] }} акт.)</span
+                    >
+                  </td>
+                  <td class="px-4 py-3 text-xs text-gray-400 font-mono">
+                    {{ format_bytes(row['traffic_used']) }}
+                  </td>
+                  <td class="px-4 py-3">
+                    {% if u.is_active %}<span class="badge badge-green"
+                      >Активен</span
+                    >
+                    {% else %}<span class="badge badge-red">Блок</span>{% endif
+                    %}
+                  </td>
+                  <td class="px-4 py-3">
+                    {% if u.is_admin %}<span class="badge badge-amber"
+                      >Админ</span
+                    >
+                    {% else %}<span class="text-gray-600 text-xs">user</span>{%
+                    endif %}
+                  </td>
+                  <td class="px-4 py-3 text-xs text-gray-500">
+                    {{ u.created_at.strftime('%d.%m.%Y') if u.created_at else
+                    '—' }}
+                  </td>
+                  <td class="px-4 py-3 text-xs text-gray-500">
+                    {{ u.last_login.strftime('%d.%m.%Y %H:%M') if u.last_login
+                    else '—' }}
+                  </td>
+                  <td class="px-4 py-3">
+                    <div class="flex items-center justify-end gap-1">
+                      <button
+                        onclick="openEditModal({{ u.id }}, {{ u.display_name|tojson }}, {{ u.is_active|tojson }}, {{ u.is_admin|tojson }}, {{ (u.username or '')|tojson }})"
+                        class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-acid-400 hover:bg-acid-400/10 transition text-xs"
+                        title="Редактировать"
+                      >
+                        &#x270f;&#xfe0f;
+                      </button>
+                      <button
+                        onclick="openKeysModal({{ u.id }}, {{ u.display_name|tojson }}, {{ row['keys']|tojson }})"
+                        class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-cyan-400 hover:bg-cyan-400/10 transition text-xs"
+                        title="Ключи"
+                      >
+                        &#x1f511;
+                      </button>
+                      <button
+                        onclick="openLinksModal({{ u.id }}, {{ u.display_name|tojson }})"
+                        class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-purple-400 hover:bg-purple-400/10 transition text-xs"
+                        title="Ссылки"
+                      >
+                        &#x1f517;
+                      </button>
+                      <button
+                        onclick="toggleUserActive({{ u.id }}, {{ (not u.is_active)|tojson }})"
+                        class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-amber-400 hover:bg-amber-400/10 transition text-xs"
+                        title="{{ 'Разблокировать' if not u.is_active else 'Заблокировать' }}"
+                      >
+                        {{ '&#x25b6;&#xfe0f;' if not u.is_active else
+                        '&#x23f8;&#xfe0f;' }}
+                      </button>
+                      <button
+                        onclick="deleteUser({{ u.id }}, {{ u.display_name|tojson }})"
+                        class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition text-xs"
+                        title="Удалить"
+                      >
+                        &#x1f5d1;&#xfe0f;
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% if not enriched_users %}
+          <p class="text-gray-700 text-xs text-center py-8">
+            Нет пользователей
+          </p>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- TAB: INVITES -->
+      <div class="tab-panel" id="tab-invites">
+        <div class="flex items-center justify-between mb-6">
+          <h3
             class="text-sm font-semibold text-gray-300 uppercase tracking-wider"
           >
-            🎟️ Инвайт-ключи
-          </h2>
-          <button
-            onclick="generateInviteKey()"
-            class="px-3 py-1.5 bg-acid-400/10 text-acid-400 border border-acid-400/20 rounded-lg text-xs font-medium hover:bg-acid-400/20 transition"
+            &#x1f39f;&#xfe0f; Инвайт-ключи
+          </h3>
+          <div class="flex gap-3">
+            <button onclick="generateInviteKey()" class="btn-primary text-xs">
+              + Создать 1
+            </button>
+            <button
+              onclick="generateBulkInvites()"
+              class="btn-secondary text-xs"
+            >
+              + Создать 5
+            </button>
+          </div>
+        </div>
+
+        <div class="card glow-box overflow-hidden mb-6">
+          <div class="overflow-x-auto">
+            <table class="w-full tbl" id="invite-keys-table">
+              <thead>
+                <tr class="text-left">
+                  <th class="px-4 py-3">Ключ</th>
+                  <th class="px-4 py-3">Статус</th>
+                  <th class="px-4 py-3">Создан</th>
+                  <th class="px-4 py-3">Использован</th>
+                  <th class="px-4 py-3 text-right">Действия</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for k in invite_keys %}
+                <tr id="invite-row-{{ k.id }}">
+                  <td class="px-4 py-3">
+                    <code
+                      class="text-acid-400/80 font-mono text-xs bg-black/30 px-2 py-1 rounded select-all cursor-pointer"
+                      onclick="copyText('{{ k.key }}')"
+                      >{{ k.key }}</code
+                    >
+                  </td>
+                  <td class="px-4 py-3">
+                    {% if k.is_used %}<span class="badge badge-gray"
+                      >Использован</span
+                    >
+                    {% else %}<span class="badge badge-green">Свободен</span>{%
+                    endif %}
+                  </td>
+                  <td class="px-4 py-3 text-xs text-gray-500">
+                    {{ k.created_at.strftime('%d.%m.%Y %H:%M') if k.created_at
+                    else '—' }}
+                  </td>
+                  <td class="px-4 py-3 text-xs text-gray-500">
+                    {% if k.used_at %}{{ k.used_at.strftime('%d.%m.%Y %H:%M') }}
+                    (ID: {{ k.used_by }}){% else %}—{% endif %}
+                  </td>
+                  <td class="px-4 py-3">
+                    <div class="flex items-center justify-end gap-1">
+                      {% if not k.is_used %}
+                      <button
+                        onclick="copyInviteLink('{{ k.key }}')"
+                        class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-purple-400 hover:bg-purple-400/10 transition text-xs"
+                        title="Копировать invite-ссылку"
+                      >
+                        &#x1f517;
+                      </button>
+                      <button
+                        onclick="copyText('{{ k.key }}')"
+                        class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-cyan-400 hover:bg-cyan-400/10 transition text-xs"
+                        title="Копировать ключ"
+                      >
+                        &#x1f4cb;
+                      </button>
+                      {% endif %}
+                      <button
+                        onclick="deleteInviteKey({{ k.id }})"
+                        class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition text-xs"
+                        title="Удалить"
+                      >
+                        &#x1f5d1;&#xfe0f;
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% if not invite_keys %}
+          <p class="text-gray-700 text-xs text-center py-8">
+            Нет инвайт-ключей. Нажмите «+ Создать» выше.
+          </p>
+          {% endif %}
+        </div>
+
+        <div class="flex gap-6 text-xs text-gray-600">
+          {% set free_invites = invite_keys|selectattr('is_used', 'equalto',
+          false)|list|length %} {% set used_invites =
+          invite_keys|selectattr('is_used')|list|length %}
+          <span>Всего: {{ invite_keys|length }}</span>
+          <span class="text-emerald-400/60">Свободных: {{ free_invites }}</span>
+          <span class="text-gray-500">Использовано: {{ used_invites }}</span>
+        </div>
+      </div>
+
+      <!-- TAB: AUDIT -->
+      <div class="tab-panel" id="tab-audit">
+        <div class="flex items-center justify-between mb-6">
+          <h3
+            class="text-sm font-semibold text-gray-300 uppercase tracking-wider"
           >
-            + Создать
+            &#x1f4cb; Журнал действий
+          </h3>
+          <button onclick="loadAuditLog()" class="btn-secondary text-xs">
+            &#x1f504; Обновить
           </button>
         </div>
-        <div class="overflow-x-auto">
-          <table class="w-full tbl" id="invite-keys-table">
-            <thead>
-              <tr class="text-left">
-                <th class="px-4 py-3">Ключ</th>
-                <th class="px-4 py-3">Статус</th>
-                <th class="px-4 py-3">Создан</th>
-                <th class="px-4 py-3">Использован</th>
-                <th class="px-4 py-3 text-right">Действия</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for k in invite_keys %}
-              <tr id="invite-row-{{ k.id }}">
-                <td class="px-4 py-3">
-                  <code
-                    class="text-acid-400/80 font-mono text-xs bg-black/30 px-2 py-1 rounded select-all"
-                    >{{ k.key }}</code
+        <div class="card glow-box overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full tbl">
+              <thead>
+                <tr class="text-left">
+                  <th class="px-4 py-3">Время</th>
+                  <th class="px-4 py-3">Админ</th>
+                  <th class="px-4 py-3">Действие</th>
+                  <th class="px-4 py-3">Цель</th>
+                  <th class="px-4 py-3">Детали</th>
+                </tr>
+              </thead>
+              <tbody id="audit-tbody">
+                {% for log in audit_logs %}
+                <tr>
+                  <td
+                    class="px-4 py-3 text-xs text-gray-500 font-mono whitespace-nowrap"
                   >
-                </td>
-                <td class="px-4 py-3">
-                  {% if k.is_used %}
-                  <span
-                    class="px-2 py-0.5 rounded-full bg-gray-500/10 text-gray-500 text-xs"
-                    >Использован</span
+                    {{ log.created_at.strftime('%d.%m.%Y %H:%M') if
+                    log.created_at else '—' }}
+                  </td>
+                  <td class="px-4 py-3 text-xs text-gray-400">
+                    {{ log.admin_name or ('ID:' ~ log.admin_id) }}
+                  </td>
+                  <td class="px-4 py-3">
+                    <span class="badge badge-cyan">{{ log.action }}</span>
+                  </td>
+                  <td class="px-4 py-3 text-xs text-gray-400 font-mono">
+                    {{ log.target or '—' }}
+                  </td>
+                  <td
+                    class="px-4 py-3 text-xs text-gray-600 max-w-xs truncate"
+                    title="{{ log.detail or '' }}"
                   >
-                  {% else %}
-                  <span
-                    class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs"
-                    >Свободен</span
-                  >
-                  {% endif %}
-                </td>
-                <td class="px-4 py-3 text-xs text-gray-500">
-                  {{ k.created_at.strftime('%d.%m.%Y %H:%M') if k.created_at
-                  else '—' }}
-                </td>
-                <td class="px-4 py-3 text-xs text-gray-500">
-                  {% if k.used_at %}{{ k.used_at.strftime('%d.%m.%Y %H:%M') }}
-                  (ID: {{ k.used_by }}){% else %}—{% endif %}
-                </td>
-                <td class="px-4 py-3">
-                  <div class="flex items-center justify-end gap-1">
-                    {% if not k.is_used %}
-                    <button
-                      onclick="copyText('{{ k.key }}')"
-                      class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-cyan-400 hover:bg-cyan-400/10 transition text-xs"
-                      title="Копировать"
-                    >
-                      📋
-                    </button>
-                    {% endif %}
-                    <button
-                      onclick="deleteInviteKey({{ k.id }})"
-                      class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition text-xs"
-                      title="Удалить"
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+                    {{ log.detail or '—' }}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% if not audit_logs %}
+          <p class="text-gray-700 text-xs text-center py-8" id="audit-empty">
+            Нет записей в журнале
+          </p>
+          {% endif %}
         </div>
-        {% if not invite_keys %}
-        <p class="text-gray-700 text-xs text-center py-4">Нет инвайт-ключей.</p>
-        {% endif %}
+      </div>
+
+      <!-- TAB: SYSTEM -->
+      <div class="tab-panel" id="tab-system">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="card p-5 glow-box">
+            <h3
+              class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4"
+            >
+              &#x1f527; Xray
+            </h3>
+            <div class="space-y-3">
+              <button onclick="syncXray()" class="btn-primary text-xs w-full">
+                &#x1f504; Синхронизировать конфиг + перезагрузить
+              </button>
+              <div class="text-xs text-gray-600 space-y-1">
+                <p>
+                  Конфиг:
+                  <code class="text-gray-400">{{ xray_config_path }}</code>
+                </p>
+                <p>
+                  Контейнер:
+                  <code class="text-gray-400">{{ xray_container }}</code>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card p-5 glow-box">
+            <h3
+              class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4"
+            >
+              &#x1f512; Brute-Force защита
+            </h3>
+            <div id="security-stats" class="space-y-2 text-xs text-gray-500">
+              <p>Загрузка...</p>
+            </div>
+            <div class="mt-4 flex gap-2">
+              <button
+                onclick="loadSecurityStats()"
+                class="btn-secondary text-xs"
+              >
+                &#x1f504; Обновить
+              </button>
+              <input
+                type="text"
+                id="unban-ip"
+                placeholder="IP для разбана"
+                class="search-input flex-1"
+              />
+              <button onclick="unbanIP()" class="btn-primary text-xs">
+                Разбанить
+              </button>
+            </div>
+          </div>
+
+          <div class="card p-5 glow-box">
+            <h3
+              class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4"
+            >
+              &#x1f4ca; Статистика
+            </h3>
+            <div class="grid grid-cols-2 gap-3 text-xs">
+              <div class="bg-black/20 rounded-lg p-3">
+                <span class="text-gray-600">Пользователей</span>
+                <p class="text-lg font-bold text-gray-200">{{ total_users }}</p>
+              </div>
+              <div class="bg-black/20 rounded-lg p-3">
+                <span class="text-gray-600">VPN-ключей</span>
+                <p class="text-lg font-bold text-acid-400">{{ total_keys }}</p>
+              </div>
+              <div class="bg-black/20 rounded-lg p-3">
+                <span class="text-gray-600">Общий трафик</span>
+                <p class="text-lg font-bold text-cyan-400">
+                  {{ format_bytes(traffic_total) }}
+                </p>
+              </div>
+              <div class="bg-black/20 rounded-lg p-3">
+                <span class="text-gray-600">Инвайтов свободно</span>
+                <p class="text-lg font-bold text-emerald-400">
+                  {{ invite_keys|selectattr('is_used', 'equalto',
+                  false)|list|length }}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card p-5 glow-box">
+            <h3
+              class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4"
+            >
+              &#x1f310; Конфигурация
+            </h3>
+            <div class="space-y-2 text-xs">
+              <div class="flex justify-between">
+                <span class="text-gray-600">DOMAIN</span
+                ><code class="text-gray-400">{{ domain }}</code>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-600">NL_SERVER_IP</span
+                ><code class="text-gray-400">{{ nl_server_ip or '—' }}</code>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-600">RU_SERVER_IP</span
+                ><code class="text-gray-400">{{ ru_server_ip or '—' }}</code>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-600">REALITY_PORT</span
+                ><code class="text-gray-400">{{ reality_port }}</code>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-600">REALITY активен</span
+                ><code class="text-gray-400"
+                  >{{ '&#x2705;' if reality_active else '&#x274c;' }}</code
+                >
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-600">SUPERADMIN_TG_ID</span
+                ><code class="text-gray-400"
+                  >{{ superadmin_tg_id or '—' }}</code
+                >
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-600">BOT</span
+                ><code class="text-gray-400">@{{ bot_username }}</code>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
 
-    <!-- ═══ МОДАЛЬНОЕ ОКНО: РЕДАКТИРОВАНИЕ ПОЛЬЗОВАТЕЛЯ ═══ -->
+    <!-- MODAL: EDIT USER -->
     <div id="edit-modal" class="fixed inset-0 z-40 hidden">
       <div
         class="modal-backdrop absolute inset-0"
@@ -509,10 +1026,15 @@
           <div class="space-y-4">
             <div>
               <label class="block text-xs text-gray-500 mb-1">Имя</label>
+              <input type="text" id="edit-display-name" class="input-field" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Логин</label>
               <input
                 type="text"
-                id="edit-display-name"
-                class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 focus:border-acid-400/30 focus:outline-none transition"
+                id="edit-username"
+                class="input-field"
+                placeholder="ivan2024"
               />
             </div>
             <div class="grid grid-cols-2 gap-4">
@@ -538,25 +1060,38 @@
               </label>
             </div>
             <div class="flex gap-3 pt-2">
-              <button
-                onclick="saveEdit()"
-                class="flex-1 px-4 py-2 bg-acid-400/10 text-acid-400 border border-acid-400/20 rounded-lg text-sm font-medium hover:bg-acid-400/20 transition"
-              >
+              <button onclick="saveEdit()" class="btn-primary flex-1">
                 Сохранить
               </button>
-              <button
-                onclick="closeEditModal()"
-                class="px-4 py-2 bg-white/5 text-gray-500 border border-white/5 rounded-lg text-sm hover:text-gray-400 transition"
-              >
+              <button onclick="closeEditModal()" class="btn-secondary">
                 Отмена
               </button>
+            </div>
+            <div class="border-t border-white/5 pt-4">
+              <h4 class="text-xs text-gray-500 uppercase tracking-wider mb-3">
+                🔑 Установить / сменить пароль
+              </h4>
+              <div class="flex gap-3">
+                <input
+                  type="text"
+                  id="edit-new-password"
+                  placeholder="Новый пароль (мин. 4 символа)"
+                  class="input-field flex-1"
+                />
+                <button
+                  onclick="setPassword()"
+                  class="btn-primary text-xs whitespace-nowrap"
+                >
+                  Установить
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- ═══ МОДАЛЬНОЕ ОКНО: VPN-КЛЮЧИ ПОЛЬЗОВАТЕЛЯ ═══ -->
+    <!-- MODAL: VPN KEYS -->
     <div id="keys-modal" class="fixed inset-0 z-40 hidden">
       <div
         class="modal-backdrop absolute inset-0"
@@ -572,7 +1107,7 @@
             <h3
               class="text-sm font-semibold text-gray-200 uppercase tracking-wider"
             >
-              🔑 VPN-ключи — <span id="keys-user-name"></span>
+              &#x1f511; VPN-ключи — <span id="keys-user-name"></span>
             </h3>
             <button
               onclick="closeKeysModal()"
@@ -582,11 +1117,8 @@
             </button>
           </div>
           <input type="hidden" id="keys-user-id" />
-
-          <!-- Список ключей -->
           <div id="keys-list" class="space-y-3 mb-5"></div>
 
-          <!-- Форма добавления ключа -->
           <div class="border-t border-white/5 pt-4">
             <h4 class="text-xs text-gray-500 uppercase tracking-wider mb-3">
               Добавить ключ
@@ -598,7 +1130,7 @@
                   type="text"
                   id="new-key-name"
                   value="key"
-                  class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 focus:border-acid-400/30 focus:outline-none transition"
+                  class="input-field"
                 />
               </div>
               <div>
@@ -611,7 +1143,7 @@
                   value="0"
                   min="0"
                   step="0.1"
-                  class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 focus:border-acid-400/30 focus:outline-none transition"
+                  class="input-field"
                 />
               </div>
               <div>
@@ -623,14 +1155,11 @@
                   id="new-key-expire"
                   value="0"
                   min="0"
-                  class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 focus:border-acid-400/30 focus:outline-none transition"
+                  class="input-field"
                 />
               </div>
             </div>
-            <button
-              onclick="addKey()"
-              class="mt-3 w-full px-4 py-2 bg-acid-400/10 text-acid-400 border border-acid-400/20 rounded-lg text-sm font-medium hover:bg-acid-400/20 transition"
-            >
+            <button onclick="addKey()" class="btn-primary w-full mt-3">
               + Добавить ключ
             </button>
           </div>
@@ -638,298 +1167,416 @@
       </div>
     </div>
 
+    <!-- MODAL: USER LINKS -->
+    <div id="links-modal" class="fixed inset-0 z-40 hidden">
+      <div
+        class="modal-backdrop absolute inset-0"
+        onclick="closeLinksModal()"
+      ></div>
+      <div
+        class="relative z-50 flex items-center justify-center min-h-screen p-4"
+      >
+        <div
+          class="modal-content rounded-2xl w-full max-w-2xl p-6 shadow-2xl max-h-[80vh] overflow-y-auto"
+        >
+          <div class="flex items-center justify-between mb-5">
+            <h3
+              class="text-sm font-semibold text-gray-200 uppercase tracking-wider"
+            >
+              &#x1f517; Ссылки — <span id="links-user-name"></span>
+            </h3>
+            <button
+              onclick="closeLinksModal()"
+              class="text-gray-600 hover:text-gray-400 text-lg"
+            >
+              &times;
+            </button>
+          </div>
+          <div id="links-list" class="space-y-3">
+            <p class="text-gray-700 text-xs text-center py-4">Загрузка...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- JAVASCRIPT -->
     <script>
       function showToast(msg, type) {
-        type = type || "info";
-        var c = document.getElementById("toast-container");
+        var c = document.getElementById('toast-container');
         var colors = {
-          success: "bg-emerald-500/10 border-emerald-500/20 text-emerald-400",
-          error: "bg-red-500/10 border-red-500/20 text-red-400",
-          info: "bg-cyan-500/10 border-cyan-500/20 text-cyan-400",
+          success: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400',
+          error: 'bg-red-500/10 border-red-500/20 text-red-400',
+          info: 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400'
         };
-        var el = document.createElement("div");
-        el.className =
-          "toast px-4 py-3 rounded-xl border text-sm " +
-          (colors[type] || colors.info);
+        var el = document.createElement('div');
+        el.className = 'toast px-4 py-3 rounded-xl border text-sm ' + (colors[type] || colors.info);
         el.textContent = msg;
         c.appendChild(el);
-        setTimeout(function () {
-          el.remove();
-        }, 4000);
+        setTimeout(function() { el.remove(); }, 4000);
       }
 
       function copyText(text) {
-        navigator.clipboard.writeText(text).then(function () {
-          showToast("Скопировано", "success");
-        });
+        navigator.clipboard.writeText(text).then(function() { showToast('Скопировано', 'success'); });
       }
 
-      // ── Редактирование пользователя ──
-      function openEditModal(userId, displayName, isActive, isAdmin) {
-        document.getElementById("edit-user-id").value = userId;
-        document.getElementById("edit-display-name").value = displayName || "";
-        document.getElementById("edit-is-active").checked = isActive;
-        document.getElementById("edit-is-admin").checked = isAdmin;
-        document.getElementById("edit-modal").classList.remove("hidden");
+      function copyInviteLink(key) {
+        var botUser = {{ bot_username|tojson }};
+        var link = 'https://t.me/' + botUser + '?start=' + key;
+        copyText(link);
       }
-      function closeEditModal() {
-        document.getElementById("edit-modal").classList.add("hidden");
+
+      // Tabs
+      function switchTab(tabName) {
+        document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); b.classList.add('text-gray-500'); });
+        document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+        var btn = document.querySelector('[data-tab="' + tabName + '"]');
+        if (btn) { btn.classList.add('active'); btn.classList.remove('text-gray-500'); }
+        var panel = document.getElementById('tab-' + tabName);
+        if (panel) panel.classList.add('active');
+        if (tabName === 'system') loadSecurityStats();
       }
+      document.querySelectorAll('.tab-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() { switchTab(btn.dataset.tab); });
+      });
+
+      // Search
+      function filterUsers() {
+        var q = document.getElementById('user-search').value.toLowerCase();
+        var rows = document.querySelectorAll('.user-row');
+        var shown = 0;
+        rows.forEach(function(row) {
+          var match = row.dataset.search.indexOf(q) !== -1;
+          row.style.display = match ? '' : 'none';
+          if (match) shown++;
+        });
+        document.getElementById('user-count').textContent = shown + ' пользователей';
+      }
+
+      // Edit user
+      function openEditModal(userId, displayName, isActive, isAdmin, username) {
+        document.getElementById('edit-user-id').value = userId;
+        document.getElementById('edit-display-name').value = displayName || '';
+        document.getElementById('edit-username').value = username || '';
+        document.getElementById('edit-is-active').checked = isActive;
+        document.getElementById('edit-is-admin').checked = isAdmin;
+        document.getElementById('edit-new-password').value = '';
+        document.getElementById('edit-modal').classList.remove('hidden');
+      }
+      function closeEditModal() { document.getElementById('edit-modal').classList.add('hidden'); }
 
       async function saveEdit() {
-        var userId = document.getElementById("edit-user-id").value;
+        var userId = document.getElementById('edit-user-id').value;
         var body = {
-          display_name: document.getElementById("edit-display-name").value,
-          is_active: document.getElementById("edit-is-active").checked,
-          is_admin: document.getElementById("edit-is-admin").checked,
+          display_name: document.getElementById('edit-display-name').value,
+          username: document.getElementById('edit-username').value || null,
+          is_active: document.getElementById('edit-is-active').checked,
+          is_admin: document.getElementById('edit-is-admin').checked,
         };
         try {
-          var resp = await fetch("/admin/users/" + userId, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          });
+          var resp = await fetch('/admin/users/' + userId, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
           var data = await resp.json();
-          if (data.ok) {
-            showToast("Сохранено", "success");
-            closeEditModal();
-            setTimeout(function () {
-              location.reload();
-            }, 500);
-          } else {
-            showToast(data.error || "Ошибка", "error");
-          }
-        } catch (e) {
-          showToast("Ошибка сети", "error");
-        }
+          if (data.ok) { showToast('Сохранено', 'success'); closeEditModal(); setTimeout(function() { location.reload(); }, 500); }
+          else { showToast(data.detail || data.error || 'Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
       }
 
-      // ── Управление VPN-ключами ──
+      async function setPassword() {
+        var userId = document.getElementById('edit-user-id').value;
+        var password = document.getElementById('edit-new-password').value;
+        if (!password || password.length < 4) return showToast('Пароль минимум 4 символа', 'error');
+        var username = document.getElementById('edit-username').value || '';
+        var body = { password: password };
+        if (username) body.username = username;
+        try {
+          var resp = await fetch('/admin/users/' + userId + '/password', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+          var data = await resp.json();
+          if (data.ok) { showToast('Пароль установлен', 'success'); document.getElementById('edit-new-password').value = ''; }
+          else { showToast(data.detail || data.error || 'Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
+      }
+
+      async function toggleUserActive(userId, newState) {
+        var action = newState ? 'разблокировать' : 'заблокировать';
+        if (!confirm('Точно ' + action + ' пользователя?')) return;
+        try {
+          var resp = await fetch('/admin/users/' + userId, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ is_active: newState }) });
+          var data = await resp.json();
+          if (data.ok) { showToast(newState ? 'Разблокирован' : 'Заблокирован', 'success'); setTimeout(function() { location.reload(); }, 500); }
+          else { showToast(data.detail || 'Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
+      }
+
+      // VPN keys
       function openKeysModal(userId, displayName, keys) {
-        document.getElementById("keys-user-id").value = userId;
-        document.getElementById("keys-user-name").textContent =
-          displayName || "ID " + userId;
+        document.getElementById('keys-user-id').value = userId;
+        document.getElementById('keys-user-name').textContent = displayName || 'ID ' + userId;
         renderKeys(keys || []);
-        document.getElementById("keys-modal").classList.remove("hidden");
+        document.getElementById('keys-modal').classList.remove('hidden');
       }
-      function closeKeysModal() {
-        document.getElementById("keys-modal").classList.add("hidden");
-      }
+      function closeKeysModal() { document.getElementById('keys-modal').classList.add('hidden'); }
 
       function renderKeys(keys) {
-        var container = document.getElementById("keys-list");
+        var container = document.getElementById('keys-list');
         if (!keys.length) {
-          container.innerHTML =
-            '<p class="text-gray-700 text-xs text-center py-4">Нет ключей</p>';
+          container.innerHTML = '<p class="text-gray-700 text-xs text-center py-4">Нет ключей</p>';
           return;
         }
-        var html = "";
-        keys.forEach(function (k) {
-          var statusColor = k.is_active ? "text-emerald-400" : "text-red-400";
-          var statusText = k.is_active ? "Активен" : "Отключён";
-          if (k.expire_at) {
-            var now = new Date();
-            var exp = new Date(k.expire_at);
-            if (exp < now) {
-              statusColor = "text-red-400";
-              statusText = "Истёк";
-            }
-          }
-          html +=
-            '<div class="card p-4">' +
+        var html = '';
+        keys.forEach(function(k) {
+          var statusText = k.status;
+          if (k.status === 'active') statusText = 'Активен';
+          else if (k.status === 'expired') statusText = 'Истёк';
+          else if (k.status === 'disabled') statusText = 'Отключён';
+          else if (k.status === 'limited') statusText = 'Лимит';
+
+          var badgeCls = k.status === 'active' ? 'badge-green' : k.status === 'expired' ? 'badge-red' : k.status === 'limited' ? 'badge-amber' : 'badge-gray';
+
+          html += '<div class="key-card">' +
             '<div class="flex items-center justify-between mb-2">' +
-            "<div>" +
-            '<span class="text-gray-200 text-sm font-medium">' +
-            (k.name || "key") +
-            "</span>" +
-            '<span class="ml-2 px-2 py-0.5 rounded-full text-xs ' +
-            statusColor +
-            ' bg-white/5">' +
-            statusText +
-            "</span>" +
-            "</div>" +
-            '<div class="flex gap-1">' +
-            '<button onclick="toggleKey(' +
-            k.id +
-            ", " +
-            !k.is_active +
-            ')" class="p-1 rounded bg-white/5 text-xs text-gray-500 hover:text-amber-400 transition" title="Вкл/Выкл">' +
-            (k.is_active ? "⏸️" : "▶️") +
-            "</button>" +
-            '<button onclick="deleteVPNKey(' +
-            k.id +
-            ')" class="p-1 rounded bg-white/5 text-xs text-gray-500 hover:text-red-400 transition" title="Удалить">🗑️</button>' +
-            "</div>" +
-            "</div>" +
-            '<code class="text-xs text-acid-400/60 font-mono break-all select-all block bg-black/20 rounded p-2 cursor-pointer" onclick="copyText(\'' +
-            k.uuid +
-            "')\">" +
-            k.uuid +
-            "</code>" +
-            '<div class="flex gap-4 mt-2 text-xs text-gray-600">' +
-            "<span>Протокол: " +
-            (k.protocol || "vless") +
-            "</span>" +
-            "<span>Трафик: " +
-            formatBytes(k.data_used || 0) +
-            (k.data_limit ? " / " + formatBytes(k.data_limit) : " / ∞") +
-            "</span>" +
-            "<span>Срок: " +
-            (k.expire_at
-              ? new Date(k.expire_at).toLocaleDateString("ru")
-              : "∞") +
-            "</span>" +
-            "</div>" +
-            "</div>";
+              '<div class="flex items-center gap-2">' +
+                '<span class="text-gray-200 text-sm font-medium">' + (k.name || 'key') + '</span>' +
+                '<span class="badge ' + badgeCls + '">' + statusText + '</span>' +
+              '</div>' +
+              '<div class="flex gap-1">' +
+                '<button onclick="toggleKey(' + k.id + ', ' + (!k.is_active) + ')" class="p-1 rounded bg-white/5 text-xs text-gray-500 hover:text-amber-400 transition" title="Вкл/Выкл">' + (k.is_active ? '\u23f8\ufe0f' : '\u25b6\ufe0f') + '</button>' +
+                '<button onclick="resetKeyTraffic(' + k.id + ')" class="p-1 rounded bg-white/5 text-xs text-gray-500 hover:text-cyan-400 transition" title="Сбросить трафик">\ud83d\udd04</button>' +
+                '<button onclick="deleteVPNKey(' + k.id + ')" class="p-1 rounded bg-white/5 text-xs text-gray-500 hover:text-red-400 transition" title="Удалить">\ud83d\uddd1\ufe0f</button>' +
+              '</div>' +
+            '</div>' +
+            '<code class="text-xs text-acid-400/60 font-mono break-all select-all block bg-black/20 rounded p-2 cursor-pointer" onclick="copyText(\'' + k.uuid + '\')">' + k.uuid + '</code>' +
+            '<div class="flex flex-wrap gap-4 mt-2 text-xs text-gray-600">' +
+              '<span>Протокол: ' + (k.protocol || 'vless') + '</span>' +
+              '<span>Трафик: ' + formatBytes(k.data_used || 0) + (k.data_limit ? ' / ' + formatBytes(k.data_limit) : ' / \u221e') + '</span>' +
+              '<span>Срок: ' + (k.expire_at ? new Date(k.expire_at).toLocaleDateString('ru') : '\u221e') + '</span>' +
+            '</div>';
+
+          if (k.data_limit && k.data_limit > 0) {
+            var pct = Math.min(100, (k.data_used || 0) / k.data_limit * 100);
+            var barColor = pct > 90 ? 'bg-red-400' : pct > 70 ? 'bg-amber-400' : 'bg-emerald-400';
+            html += '<div class="mt-2"><div class="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">' +
+              '<div class="h-full rounded-full transition-all ' + barColor + '" style="width:' + pct + '%"></div>' +
+            '</div></div>';
+          }
+
+          html += '</div>';
         });
         container.innerHTML = html;
       }
 
       function formatBytes(b) {
-        if (b === 0) return "0 Б";
-        var units = ["Б", "КБ", "МБ", "ГБ", "ТБ"];
+        if (!b || b === 0) return '0 Б';
+        var units = ['\u0411', '\u041a\u0411', '\u041c\u0411', '\u0413\u0411', '\u0422\u0411'];
         var i = Math.floor(Math.log(b) / Math.log(1024));
-        return (b / Math.pow(1024, i)).toFixed(1) + " " + units[i];
+        if (i >= units.length) i = units.length - 1;
+        return (b / Math.pow(1024, i)).toFixed(1) + ' ' + units[i];
       }
 
       async function addKey() {
-        var userId = document.getElementById("keys-user-id").value;
+        var userId = document.getElementById('keys-user-id').value;
         var body = {
-          name: document.getElementById("new-key-name").value,
-          data_limit_gb:
-            parseFloat(document.getElementById("new-key-limit").value) || 0,
-          expire_days:
-            parseInt(document.getElementById("new-key-expire").value) || 0,
+          name: document.getElementById('new-key-name').value,
+          data_limit_gb: parseFloat(document.getElementById('new-key-limit').value) || 0,
+          expire_days: parseInt(document.getElementById('new-key-expire').value) || 0,
         };
         try {
-          var resp = await fetch("/admin/users/" + userId + "/keys", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          });
+          var resp = await fetch('/admin/users/' + userId + '/keys', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
           var data = await resp.json();
-          if (data.ok) {
-            showToast("Ключ создан: " + data.uuid, "success");
-            setTimeout(function () {
-              location.reload();
-            }, 500);
-          } else {
-            showToast(data.error || "Ошибка", "error");
-          }
-        } catch (e) {
-          showToast("Ошибка сети", "error");
-        }
+          if (data.ok) { showToast('Ключ создан: ' + data.uuid, 'success'); setTimeout(function() { location.reload(); }, 500); }
+          else { showToast(data.detail || 'Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
       }
 
       async function toggleKey(keyId, newState) {
         try {
-          var resp = await fetch("/admin/keys/" + keyId, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ is_active: newState }),
-          });
+          var resp = await fetch('/admin/keys/' + keyId, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ is_active: newState }) });
           var data = await resp.json();
-          if (data.ok) {
-            showToast("Ключ обновлён", "success");
-            setTimeout(function () {
-              location.reload();
-            }, 500);
-          } else {
-            showToast(data.error || "Ошибка", "error");
-          }
-        } catch (e) {
-          showToast("Ошибка сети", "error");
-        }
+          if (data.ok) { showToast('Ключ обновлён', 'success'); setTimeout(function() { location.reload(); }, 500); }
+          else { showToast(data.detail || 'Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
+      }
+
+      async function resetKeyTraffic(keyId) {
+        if (!confirm('Сбросить трафик ключа?')) return;
+        try {
+          var resp = await fetch('/admin/keys/' + keyId, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ reset_traffic: true }) });
+          var data = await resp.json();
+          if (data.ok) { showToast('Трафик сброшен', 'success'); setTimeout(function() { location.reload(); }, 500); }
+          else { showToast(data.detail || 'Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
       }
 
       async function deleteVPNKey(keyId) {
-        if (!confirm("Удалить VPN-ключ?")) return;
+        if (!confirm('Удалить VPN-ключ?')) return;
         try {
-          var resp = await fetch("/admin/vpnkeys/" + keyId, {
-            method: "DELETE",
-          });
+          var resp = await fetch('/admin/vpnkeys/' + keyId, { method: 'DELETE' });
           var data = await resp.json();
-          if (data.ok) {
-            showToast("Ключ удалён", "success");
-            setTimeout(function () {
-              location.reload();
-            }, 500);
-          } else {
-            showToast(data.error || "Ошибка", "error");
-          }
-        } catch (e) {
-          showToast("Ошибка сети", "error");
-        }
+          if (data.ok) { showToast('Ключ удалён', 'success'); setTimeout(function() { location.reload(); }, 500); }
+          else { showToast(data.detail || 'Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
       }
 
       async function deleteUser(userId, name) {
-        if (!confirm("Удалить пользователя " + name + " и все его ключи?"))
-          return;
+        if (!confirm('Удалить пользователя ' + (name || userId) + ' и все его ключи?')) return;
         try {
-          var resp = await fetch("/admin/users/" + userId, {
-            method: "DELETE",
-          });
+          var resp = await fetch('/admin/users/' + userId, { method: 'DELETE' });
           var data = await resp.json();
           if (data.ok) {
-            showToast("Удалено", "success");
-            document.getElementById("user-row-" + userId)?.remove();
-          } else {
-            showToast(data.error || "Ошибка", "error");
+            showToast('Удалено', 'success');
+            var row = document.getElementById('user-row-' + userId);
+            if (row) row.remove();
+          } else { showToast(data.detail || 'Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
+      }
+
+      // User links
+      function openLinksModal(userId, displayName) {
+        document.getElementById('links-user-name').textContent = displayName || 'ID ' + userId;
+        document.getElementById('links-list').innerHTML = '<p class="text-gray-700 text-xs text-center py-4">Загрузка...</p>';
+        document.getElementById('links-modal').classList.remove('hidden');
+        loadUserLinks(userId);
+      }
+      function closeLinksModal() { document.getElementById('links-modal').classList.add('hidden'); }
+
+      async function loadUserLinks(userId) {
+        try {
+          var resp = await fetch('/admin/users/' + userId + '/links');
+          var data = await resp.json();
+          var container = document.getElementById('links-list');
+          if (!data.links || !data.links.length) {
+            container.innerHTML = '<p class="text-gray-700 text-xs text-center py-4">Нет активных ссылок</p>';
+            return;
           }
-        } catch (e) {
-          showToast("Ошибка сети", "error");
+          var html = '';
+          if (data.subscription_url) {
+            html += '<div class="key-card">' +
+              '<div class="flex items-center justify-between mb-2">' +
+                '<span class="text-gray-200 text-sm font-medium">\ud83d\udce1 Подписка (все ключи)</span>' +
+                '<button onclick="copyText(\x27' + escapeStr(data.subscription_url) + '\x27)" class="btn-primary text-xs py-1">Копировать</button>' +
+              '</div>' +
+              '<code class="text-xs text-acid-400/60 font-mono break-all select-all block bg-black/20 rounded p-2">' + escapeHtml(data.subscription_url) + '</code>' +
+            '</div>';
+          }
+          data.links.forEach(function(item) {
+            html += '<div class="key-card">' +
+              '<div class="flex items-center justify-between mb-1">' +
+                '<span class="text-gray-300 text-sm">' + escapeHtml(item.key_name) + ' \u2014 ' + escapeHtml(item.link_name) + '</span>' +
+                '<button onclick="copyText(\x27' + escapeStr(item.link) + '\x27)" class="p-1.5 rounded bg-white/5 text-gray-500 hover:text-acid-400 transition text-xs">\ud83d\udccb</button>' +
+              '</div>' +
+              '<code class="text-xs text-gray-500 font-mono break-all block bg-black/20 rounded p-2 cursor-pointer" onclick="copyText(\x27' + escapeStr(item.link) + '\x27)">' + escapeHtml(item.link.substring(0, 120)) + (item.link.length > 120 ? '...' : '') + '</code>' +
+            '</div>';
+          });
+          container.innerHTML = html;
+        } catch(e) {
+          document.getElementById('links-list').innerHTML = '<p class="text-red-400 text-xs text-center py-4">Ошибка загрузки</p>';
         }
       }
 
-      // ── Инвайт-ключи ──
+      function escapeHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+      function escapeStr(s) { return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+
+      // Invite keys
       async function generateInviteKey() {
         try {
-          var resp = await fetch("/admin/invite-keys", { method: "POST" });
+          var resp = await fetch('/admin/invite-keys', { method: 'POST' });
           var data = await resp.json();
-          if (data.ok) {
-            showToast("Ключ: " + data.key, "success");
-            setTimeout(function () {
-              location.reload();
-            }, 500);
-          } else {
-            showToast("Ошибка", "error");
-          }
-        } catch (e) {
-          showToast("Ошибка сети", "error");
-        }
+          if (data.ok) { showToast('Ключ: ' + data.key, 'success'); setTimeout(function() { location.reload(); }, 500); }
+          else { showToast('Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
+      }
+
+      async function generateBulkInvites() {
+        try {
+          var resp = await fetch('/admin/invite-keys/bulk', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ count: 5 }) });
+          var data = await resp.json();
+          if (data.ok) { showToast('Создано ' + data.count + ' ключей', 'success'); setTimeout(function() { location.reload(); }, 500); }
+          else { showToast('Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
       }
 
       async function deleteInviteKey(keyId) {
-        if (!confirm("Удалить инвайт-ключ?")) return;
+        if (!confirm('Удалить инвайт-ключ?')) return;
         try {
-          var resp = await fetch("/admin/invite-keys/" + keyId, {
-            method: "DELETE",
-          });
+          var resp = await fetch('/admin/invite-keys/' + keyId, { method: 'DELETE' });
           var data = await resp.json();
           if (data.ok) {
-            showToast("Удалено", "success");
-            document.getElementById("invite-row-" + keyId)?.remove();
-          } else {
-            showToast("Ошибка", "error");
-          }
-        } catch (e) {
-          showToast("Ошибка сети", "error");
-        }
+            showToast('Удалено', 'success');
+            var row = document.getElementById('invite-row-' + keyId);
+            if (row) row.remove();
+          } else { showToast('Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
       }
 
-      // ── Синхронизация Xray ──
-      async function syncXray() {
+      // Audit log
+      async function loadAuditLog() {
         try {
-          var resp = await fetch("/admin/sync-xray", { method: "POST" });
+          var resp = await fetch('/admin/audit-log');
           var data = await resp.json();
-          if (data.ok) {
-            showToast("Xray синхронизирован", "success");
-          } else {
-            showToast("Ошибка: " + (data.error || "unknown"), "error");
+          var tbody = document.getElementById('audit-tbody');
+          var empty = document.getElementById('audit-empty');
+          if (empty) empty.style.display = 'none';
+          if (!data.length) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-gray-700 text-xs text-center py-8">Нет записей</td></tr>';
+            return;
           }
-        } catch (e) {
-          showToast("Ошибка сети", "error");
-        }
+          var html = '';
+          data.forEach(function(log) {
+            html += '<tr>' +
+              '<td class="px-4 py-3 text-xs text-gray-500 font-mono whitespace-nowrap">' + escapeHtml(log.created_at || '\u2014') + '</td>' +
+              '<td class="px-4 py-3 text-xs text-gray-400">' + escapeHtml(log.admin_name || 'ID:' + log.admin_id) + '</td>' +
+              '<td class="px-4 py-3"><span class="badge badge-cyan">' + escapeHtml(log.action) + '</span></td>' +
+              '<td class="px-4 py-3 text-xs text-gray-400 font-mono">' + escapeHtml(log.target || '\u2014') + '</td>' +
+              '<td class="px-4 py-3 text-xs text-gray-600 max-w-xs truncate">' + escapeHtml(log.detail || '\u2014') + '</td>' +
+            '</tr>';
+          });
+          tbody.innerHTML = html;
+        } catch(e) { showToast('Ошибка загрузки аудита', 'error'); }
+      }
+
+      // Xray sync
+      async function syncXray() {
+        showToast('Синхронизация...', 'info');
+        try {
+          var resp = await fetch('/admin/sync-xray', { method: 'POST' });
+          var data = await resp.json();
+          if (data.ok) { showToast('Xray синхронизирован', 'success'); }
+          else { showToast('Ошибка: ' + (data.error || 'unknown'), 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
+      }
+
+      // Security
+      async function loadSecurityStats() {
+        try {
+          var resp = await fetch('/admin/security');
+          var data = await resp.json();
+          var html = '';
+          ['login_guard', 'admin_guard', 'api_guard'].forEach(function(name) {
+            var g = data[name] || {};
+            var label = name.replace('_guard', '');
+            html += '<div class="bg-black/20 rounded-lg p-3 mb-2">' +
+              '<div class="flex justify-between"><span class="text-gray-400 font-medium capitalize">' + label + '</span>' +
+              '<span class="text-gray-600">' + (g.banned_count || 0) + ' бан(ов)</span></div>';
+            if (g.banned_ips && g.banned_ips.length) {
+              html += '<div class="mt-1">';
+              g.banned_ips.forEach(function(ip) {
+                html += '<span class="inline-block mr-2 mt-1 px-2 py-0.5 bg-red-500/10 text-red-400 rounded text-xs font-mono">' + escapeHtml(ip) + '</span>';
+              });
+              html += '</div>';
+            }
+            html += '</div>';
+          });
+          document.getElementById('security-stats').innerHTML = html || '<p class="text-gray-600 text-xs">Всё чисто</p>';
+        } catch(e) { document.getElementById('security-stats').innerHTML = '<p class="text-red-400 text-xs">Ошибка загрузки</p>'; }
+      }
+
+      async function unbanIP() {
+        var ip = document.getElementById('unban-ip').value.trim();
+        if (!ip) return showToast('Введите IP', 'error');
+        try {
+          var resp = await fetch('/admin/unban', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ ip: ip }) });
+          var data = await resp.json();
+          if (data.ok) { showToast('IP ' + ip + ' разбанен', 'success'); document.getElementById('unban-ip').value = ''; loadSecurityStats(); }
+          else { showToast('Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
       }
     </script>
   </body>

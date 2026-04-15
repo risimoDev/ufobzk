@@ -31,16 +31,24 @@ from app.auth import (
     delete_invite_key,
     generate_csrf_token,
     generate_invite_key,
+    hash_password,
     list_invite_keys,
     load_session_token,
     validate_csrf_token,
     verify_admin_password,
     verify_code_and_get_user,
+    verify_user_credentials,
 )
 from app.bot import TELEGRAM_BOT_USERNAME, start_bot
 from app.bruteforce import admin_guard, api_guard, login_guard
 from app.models import SUPERADMIN_TELEGRAM_ID, AuditLog, User, VPNKey, get_db, init_db
 from app.xray import (
+    DOMAIN,
+    NL_SERVER_IP,
+    RU_SERVER_IP,
+    REALITY_PORT,
+    REALITY_PUBLIC_KEY,
+    XRAY_CONFIG_PATH,
     generate_uuid,
     get_subscription_content,
     get_user_links,
@@ -339,7 +347,9 @@ async def login_page(request: Request):
 @limiter.limit("5/minute")
 async def login_submit(
     request: Request,
-    code: str = Form(...),
+    username: str = Form(""),
+    password: str = Form(""),
+    code: str = Form(""),
     csrf_token: str = Form(""),
     db: Session = Depends(get_db),
 ):
@@ -361,14 +371,17 @@ async def login_submit(
 
     user = None
 
-    # ── Сначала пробуем пароль администратора ──
-    if verify_admin_password(code.strip()):
+    # ── 1. Логин + пароль пользователя ──
+    if username.strip() and password.strip():
+        user = verify_user_credentials(db, username.strip(), password.strip())
+
+    # ── 2. Пароль администратора (env ADMIN_PASSWORD) ──
+    if user is None and code.strip() and verify_admin_password(code.strip()):
         user = db.query(User).filter(
             User.telegram_id == SUPERADMIN_TELEGRAM_ID,
             User.is_active == True,  # noqa: E712
         ).first() if SUPERADMIN_TELEGRAM_ID else None
         if user is None:
-            # fallback: любой активный admin
             user = db.query(User).filter(
                 User.is_admin == True,  # noqa: E712
                 User.is_active == True,  # noqa: E712
@@ -376,8 +389,8 @@ async def login_submit(
         if user is None:
             logger.warning("Верный ADMIN_PASSWORD, но admin-пользователь не найден в БД (IP=%s)", ip)
 
-    # ── Затем пробуем одноразовый Telegram-код ──
-    if user is None:
+    # ── 3. Одноразовый Telegram-код ──
+    if user is None and code.strip():
         user = verify_code_and_get_user(db, code.strip())
 
     if user is None:
@@ -387,7 +400,7 @@ async def login_submit(
             "login.html",
             {
                 "request": request,
-                "error": "Неверный код или пароль.",
+                "error": "Неверный логин/пароль или код.",
                 "bot_username": TELEGRAM_BOT_USERNAME,
                 "csrf_token": generate_csrf_token(),
             },
@@ -504,7 +517,23 @@ async def admin_dashboard(request: Request, admin: User = Depends(_require_admin
             } for k in user_keys],
             "keys_count": len(user_keys),
             "active_keys": sum(1 for k in user_keys if k.status == "active"),
+            "traffic_used": sum(k.data_used or 0 for k in user_keys),
+            "has_password": bool(u.password_hash),
         })
+
+    # Audit logs (последние 50)
+    audit_logs_raw = db.query(AuditLog).order_by(AuditLog.id.desc()).limit(50).all()
+    # Подтягиваем имена админов
+    admin_ids = {log.admin_id for log in audit_logs_raw}
+    admin_map = {}
+    if admin_ids:
+        for a in db.query(User).filter(User.id.in_(admin_ids)).all():
+            admin_map[a.id] = a.display_name or f"tg:{a.telegram_id}"
+    for log in audit_logs_raw:
+        log.admin_name = admin_map.get(log.admin_id, f"ID:{log.admin_id}")
+
+    xray_container = os.getenv("XRAY_CONTAINER_NAME", "ufobzk-xray")
+    webapp_url = os.getenv("WEBAPP_URL", f"https://{DOMAIN}")
 
     return templates.TemplateResponse(
         "admin.html",
@@ -522,6 +551,16 @@ async def admin_dashboard(request: Request, admin: User = Depends(_require_admin
             "traffic_total": traffic_total,
             "invite_keys": list_invite_keys(db),
             "csrf_token": generate_csrf_token(),
+            "audit_logs": audit_logs_raw,
+            "xray_config_path": XRAY_CONFIG_PATH,
+            "xray_container": xray_container,
+            "domain": DOMAIN,
+            "nl_server_ip": NL_SERVER_IP,
+            "ru_server_ip": RU_SERVER_IP,
+            "reality_port": REALITY_PORT,
+            "reality_active": bool(REALITY_PUBLIC_KEY),
+            "superadmin_tg_id": SUPERADMIN_TELEGRAM_ID,
+            "bot_username": TELEGRAM_BOT_USERNAME,
         },
     )
 
@@ -534,7 +573,9 @@ async def admin_dashboard(request: Request, admin: User = Depends(_require_admin
 async def admin_create_user(
     request: Request,
     display_name: str = Form(""),
-    telegram_id: int = Form(...),
+    telegram_id: int = Form(0),
+    username: str = Form(""),
+    password: str = Form(""),
     data_limit_gb: float = Form(0),
     expire_days: int = Form(0),
     key_name: str = Form("default"),
@@ -544,8 +585,19 @@ async def admin_create_user(
 ):
     _verify_csrf(request, csrf_token)
 
-    if telegram_id < 1 or telegram_id > 9_999_999_999:
+    username = username.strip()[:64]
+    password = password.strip()
+
+    if telegram_id and (telegram_id < 0 or telegram_id > 9_999_999_999):
         raise HTTPException(status_code=400, detail="Некорректный Telegram ID")
+    if not telegram_id and not username:
+        raise HTTPException(status_code=400, detail="Укажите Telegram ID или логин")
+    if username and len(username) < 3:
+        raise HTTPException(status_code=400, detail="Логин должен быть не менее 3 символов")
+    if username and not password:
+        raise HTTPException(status_code=400, detail="Укажите пароль для учётной записи с логином")
+    if password and len(password) < 4:
+        raise HTTPException(status_code=400, detail="Пароль должен быть не менее 4 символов")
     if data_limit_gb < 0 or data_limit_gb > 10_000:
         raise HTTPException(status_code=400, detail="Некорректный лимит трафика")
     if expire_days < 0 or expire_days > 3650:
@@ -553,13 +605,20 @@ async def admin_create_user(
     display_name = display_name.strip()[:100]
     key_name = key_name.strip()[:64] or "default"
 
-    exists = db.query(User).filter(User.telegram_id == telegram_id).first()
-    if exists:
-        raise HTTPException(status_code=409, detail="Пользователь с таким Telegram ID уже существует")
+    if telegram_id:
+        exists = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if exists:
+            raise HTTPException(status_code=409, detail="Пользователь с таким Telegram ID уже существует")
+    if username:
+        exists = db.query(User).filter(User.username == username).first()
+        if exists:
+            raise HTTPException(status_code=409, detail="Пользователь с таким логином уже существует")
 
     new_user = User(
-        telegram_id=telegram_id,
-        display_name=display_name or None,
+        telegram_id=telegram_id if telegram_id else None,
+        display_name=display_name or username or None,
+        username=username or None,
+        password_hash=hash_password(password) if password else None,
         is_active=True,
     )
     db.add(new_user)
@@ -649,9 +708,49 @@ async def admin_edit_user(
         target.is_active = bool(body["is_active"])
     if "is_admin" in body:
         target.is_admin = bool(body["is_admin"])
+    if "username" in body:
+        new_username = str(body["username"]).strip()[:64] or None
+        if new_username and new_username != target.username:
+            exists = db.query(User).filter(User.username == new_username, User.id != target.id).first()
+            if exists:
+                raise HTTPException(status_code=409, detail="Логин уже занят")
+        target.username = new_username
     db.commit()
 
-    _log_action(db, admin.id, "edit_user", str(target.telegram_id), str(body))
+    _log_action(db, admin.id, "edit_user", str(target.telegram_id or target.username), str(body))
+    return JSONResponse({"ok": True})
+
+
+# ── Установка/смена пароля пользователя ──
+
+
+@app.post("/admin/users/{user_id}/password")
+async def admin_set_password(
+    user_id: int,
+    request: Request,
+    admin: User = Depends(_require_admin),
+    db: Session = Depends(get_db),
+):
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    body = await request.json()
+    new_password = str(body.get("password", "")).strip()
+    if len(new_password) < 4:
+        raise HTTPException(status_code=400, detail="Пароль должен быть не менее 4 символов")
+
+    target.password_hash = hash_password(new_password)
+    if not target.username:
+        new_username = str(body.get("username", "")).strip()[:64]
+        if new_username:
+            exists = db.query(User).filter(User.username == new_username, User.id != target.id).first()
+            if exists:
+                raise HTTPException(status_code=409, detail="Логин уже занят")
+            target.username = new_username
+    db.commit()
+
+    _log_action(db, admin.id, "set_password", str(target.telegram_id or target.username), f"user_id={target.id}")
     return JSONResponse({"ok": True})
 
 
@@ -845,3 +944,82 @@ async def admin_unban_ip(
     }
     _log_action(db, admin.id, "unban_ip", ip, str(results))
     return JSONResponse({"ok": True, "unbanned": results})
+
+
+# ── Журнал аудита (JSON) ──
+
+
+@app.get("/admin/audit-log")
+async def admin_audit_log(
+    request: Request,
+    _: User = Depends(_require_admin),
+    db: Session = Depends(get_db),
+):
+    logs = db.query(AuditLog).order_by(AuditLog.id.desc()).limit(200).all()
+    admin_ids = {log.admin_id for log in logs}
+    admin_map: dict[int, str] = {}
+    if admin_ids:
+        for a in db.query(User).filter(User.id.in_(admin_ids)).all():
+            admin_map[a.id] = a.display_name or f"tg:{a.telegram_id}"
+    return JSONResponse([
+        {
+            "id": log.id,
+            "admin_id": log.admin_id,
+            "admin_name": admin_map.get(log.admin_id, f"ID:{log.admin_id}"),
+            "action": log.action,
+            "target": log.target,
+            "detail": log.detail,
+            "created_at": log.created_at.strftime("%d.%m.%Y %H:%M") if log.created_at else None,
+        }
+        for log in logs
+    ])
+
+
+# ── VPN-ссылки пользователя (для админки) ──
+
+
+@app.get("/admin/users/{user_id}/links")
+async def admin_user_links(
+    user_id: int,
+    request: Request,
+    _: User = Depends(_require_admin),
+    db: Session = Depends(get_db),
+):
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    active_keys = [k for k in target.vpn_keys if k.status == "active"]
+    links = []
+    for key in active_keys:
+        key_links = get_user_links(key)
+        for link_info in key_links:
+            links.append({
+                "key_name": key.name,
+                "link_name": link_info["name"],
+                "link": link_info["link"],
+            })
+
+    webapp_url = os.getenv("WEBAPP_URL", f"https://{DOMAIN}")
+    subscription_url = f"{webapp_url}/sub/{target.id}" if active_keys else ""
+
+    return JSONResponse({"links": links, "subscription_url": subscription_url})
+
+
+# ── Массовое создание инвайт-ключей ──
+
+
+@app.post("/admin/invite-keys/bulk")
+async def admin_create_bulk_invites(
+    request: Request,
+    admin: User = Depends(_require_admin),
+    db: Session = Depends(get_db),
+):
+    body = await request.json()
+    count = min(int(body.get("count", 5)), 50)
+    created = []
+    for _ in range(count):
+        invite = generate_invite_key(db, admin.id)
+        created.append(invite.key)
+    _log_action(db, admin.id, "create_bulk_invites", "", f"count={count}")
+    return JSONResponse({"ok": True, "count": len(created), "keys": created})

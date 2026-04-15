@@ -1,4 +1,4 @@
-"""Аутентификация: in-memory одноразовые коды + подписанные cookie-сессии + инвайт-ключи + CSRF."""
+"""Аутентификация: логин/пароль + Telegram-коды + подписанные cookie-сессии + инвайт-ключи + CSRF."""
 
 import logging
 import os
@@ -7,6 +7,7 @@ import threading
 import time
 from datetime import datetime
 
+import bcrypt
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from sqlalchemy.orm import Session
 
@@ -178,3 +179,37 @@ def verify_admin_password(password: str) -> bool:
     if not ADMIN_PASSWORD:
         return False
     return secrets.compare_digest(password.strip(), ADMIN_PASSWORD)
+
+
+# ── Хеширование паролей пользователей (bcrypt) ──
+
+
+def hash_password(plain: str) -> str:
+    """Хеширует пароль через bcrypt."""
+    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    """Проверяет пароль против bcrypt-хеша."""
+    try:
+        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    except Exception:
+        return False
+
+
+def verify_user_credentials(db: Session, username: str, password: str) -> User | None:
+    """Проверяет логин/пароль пользователя. Возвращает User или None."""
+    if not username or not password:
+        return None
+    user = db.query(User).filter(
+        User.username == username,
+        User.is_active == True,  # noqa: E712
+    ).first()
+    if not user or not user.password_hash:
+        return None
+    if not verify_password(password, user.password_hash):
+        return None
+    user.last_login = datetime.utcnow()
+    db.commit()
+    db.refresh(user)
+    return user

@@ -7,3 +7,4 @@ aiogram==3.16.*
 python-multipart==0.0.*
 itsdangerous==2.2.*
 slowapi==0.1.*
+bcrypt==4.2.*
