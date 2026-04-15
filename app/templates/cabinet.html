@@ -153,6 +153,7 @@
             <span class="text-xs text-gray-400 w-40 shrink-0">{{ link.name }}</span>
             <code class="flex-1 text-xs text-gray-500 font-mono break-all leading-relaxed">{{ link.link[:80] }}{% if link.link|length > 80 %}…{% endif %}</code>
             <button onclick="copyText({{ link.link | tojson }})" class="px-2.5 py-1 bg-white/5 rounded-md text-gray-500 text-xs hover:text-acid-400 hover:bg-acid-400/10 transition shrink-0">📋</button>
+            <button onclick="openQr({{ link.link | tojson }}, {{ link.name | tojson }})" class="px-2.5 py-1 bg-white/5 rounded-md text-gray-500 text-xs hover:text-acid-400 hover:bg-acid-400/10 transition shrink-0">QR</button>
           </div>
           {% endfor %}
         </div>
@@ -246,7 +247,28 @@
         });
       }
 
-      // QR-код
+      // Per-link QR modal
+      function openQr(link, name) {
+        document.getElementById('qr-modal-title').textContent = name;
+        var container = document.getElementById('qr-modal-canvas');
+        container.innerHTML = '';
+        var canvas = document.createElement('canvas');
+        container.appendChild(canvas);
+        QRCode.toCanvas(canvas, link, { width: 200, margin: 1, color: { dark: '#000000', light: '#ffffff' } }, function(err) {
+          if (err) { container.innerHTML = '<p class="text-red-400 text-xs p-4">Ошибка генерации QR</p>'; }
+        });
+        var modal = document.getElementById('qr-modal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      }
+      function closeQr() {
+        var modal = document.getElementById('qr-modal');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+      document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeQr(); });
+
+      // QR-код подписки
       document.addEventListener('DOMContentLoaded', function() {
         var qrEl = document.getElementById('qrcode');
         if (!qrEl) return;
@@ -256,14 +278,28 @@
         var subUrl = null;
         {% endif %}
         if (subUrl) {
-          QRCode.toCanvas(document.createElement('canvas'), subUrl, {
+          var canvas = document.createElement('canvas');
+          qrEl.appendChild(canvas);
+          QRCode.toCanvas(canvas, subUrl, {
             width: 220, margin: 1,
             color: { dark: '#0a0a1a', light: '#ffffff' }
-          }, function(err, canvas) {
-            if (!err) qrEl.appendChild(canvas);
+          }, function(err) {
+            if (err) { qrEl.removeChild(canvas); console.error('QR error:', err); }
           });
         }
       });
     </script>
+
+    <!-- QR modal -->
+    <div id="qr-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/80 backdrop-blur-sm" onclick="closeQr()">
+      <div class="bg-space-800 border border-white/10 rounded-2xl p-6 text-center max-w-xs mx-4" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between mb-4">
+          <h3 id="qr-modal-title" class="text-sm font-semibold text-gray-200 truncate pr-2"></h3>
+          <button onclick="closeQr()" class="text-gray-500 hover:text-gray-300 transition text-lg leading-none shrink-0">✕</button>
+        </div>
+        <div id="qr-modal-canvas" class="bg-white rounded-xl p-3 inline-block mb-3"></div>
+        <p class="text-gray-600 text-xs">Отсканируйте код в приложении</p>
+      </div>
+    </div>
   </body>
 </html>
