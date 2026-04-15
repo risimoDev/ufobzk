@@ -448,6 +448,24 @@ async def subscription(user_id: int, request: Request, db: Session = Depends(get
     })
 
 
+@app.get("/sub/key/{key_uuid}")
+async def subscription_key(key_uuid: str, request: Request, db: Session = Depends(get_db)):
+    """Подписка для одного ключа — для шаринга с конкретным человеком."""
+    key = db.query(VPNKey).filter(VPNKey.uuid == key_uuid).first()
+    if not key:
+        raise HTTPException(status_code=404)
+    user = db.query(User).filter(User.id == key.user_id, User.is_active == True).first()  # noqa: E712
+    if not user or key.status != "active":
+        raise HTTPException(status_code=404)
+    content = get_subscription_content([key])
+    return PlainTextResponse(content, headers={
+        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Disposition": "inline",
+        "Profile-Update-Interval": "12",
+        "Subscription-Userinfo": f"upload=0; download={key.data_used}; total={key.data_limit or 0}",
+    })
+
+
 # ── Личный кабинет ──
 
 
@@ -458,6 +476,7 @@ async def cabinet(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse(url="/login", status_code=303)
 
     # Загружаем ключи пользователя с ссылками
+    webapp_url = os.getenv("WEBAPP_URL", "https://vpn.example.com")
     keys_data = []
     for key in user.vpn_keys:
         links = get_user_links(key)
@@ -465,9 +484,9 @@ async def cabinet(request: Request, db: Session = Depends(get_db)):
             "key": key,
             "links": links,
             "status": key.status,
+            "key_sub_url": f"{webapp_url}/sub/key/{key.uuid}",
         })
 
-    webapp_url = os.getenv("WEBAPP_URL", "https://vpn.example.com")
     subscription_url = f"{webapp_url}/sub/{user.id}" if user.vpn_keys else ""
 
     return templates.TemplateResponse(
@@ -561,6 +580,7 @@ async def admin_dashboard(request: Request, admin: User = Depends(_require_admin
             "reality_active": bool(REALITY_PUBLIC_KEY),
             "superadmin_tg_id": SUPERADMIN_TELEGRAM_ID,
             "bot_username": TELEGRAM_BOT_USERNAME,
+            "webapp_url": webapp_url,
         },
     )
 
@@ -590,8 +610,8 @@ async def admin_create_user(
 
     if telegram_id and (telegram_id < 0 or telegram_id > 9_999_999_999):
         raise HTTPException(status_code=400, detail="Некорректный Telegram ID")
-    if not telegram_id and not username:
-        raise HTTPException(status_code=400, detail="Укажите Telegram ID или логин")
+    if not display_name and not telegram_id and not username:
+        raise HTTPException(status_code=400, detail="Укажите хотя бы имя пользователя")
     if username and len(username) < 3:
         raise HTTPException(status_code=400, detail="Логин должен быть не менее 3 символов")
     if username and not password:
@@ -702,10 +722,12 @@ async def admin_edit_user(
 
     body = await request.json()
 
+    need_reload = False
     if "display_name" in body:
         target.display_name = str(body["display_name"]).strip()[:100] or None
     if "is_active" in body:
         target.is_active = bool(body["is_active"])
+        need_reload = True
     if "is_admin" in body:
         target.is_admin = bool(body["is_admin"])
     if "username" in body:
@@ -716,6 +738,12 @@ async def admin_edit_user(
                 raise HTTPException(status_code=409, detail="Логин уже занят")
         target.username = new_username
     db.commit()
+
+    if need_reload:
+        try:
+            sync_and_reload(db)
+        except Exception as e:
+            logger.error("Ошибка синхронизации Xray: %s", e)
 
     _log_action(db, admin.id, "edit_user", str(target.telegram_id or target.username), str(body))
     return JSONResponse({"ok": True})
@@ -769,17 +797,15 @@ async def admin_edit_key(
         raise HTTPException(status_code=404, detail="Ключ не найден")
 
     body = await request.json()
-    need_reload = False
 
-    if "name" in body:
+    if "name" in body and body["name"]:
         key.name = str(body["name"]).strip()[:64]
     if "is_active" in body:
         key.is_active = bool(body["is_active"])
-        need_reload = True
-    if "data_limit_gb" in body:
+    if "data_limit_gb" in body and body["data_limit_gb"] is not None:
         gb = float(body["data_limit_gb"])
         key.data_limit = int(gb * GB) if gb > 0 else None
-    if "expire_days" in body:
+    if "expire_days" in body and body["expire_days"] is not None:
         days = int(body["expire_days"])
         key.expire_at = datetime.utcnow() + timedelta(days=days) if days > 0 else None
     if "reset_traffic" in body and body["reset_traffic"]:
@@ -787,11 +813,10 @@ async def admin_edit_key(
 
     db.commit()
 
-    if need_reload:
-        try:
-            sync_and_reload(db)
-        except Exception as e:
-            logger.error("Ошибка синхронизации Xray: %s", e)
+    try:
+        sync_and_reload(db)
+    except Exception as e:
+        logger.error("Ошибка синхронизации Xray: %s", e)
 
     _log_action(db, admin.id, "edit_key", str(key.uuid), str(body))
     return JSONResponse({"ok": True})
