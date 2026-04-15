@@ -20,8 +20,7 @@ services:
       - nginx-logs:/var/log/nginx
     environment:
       - DOMAIN=${DOMAIN}
-      - ADMIN_WHITELIST_IPS=${ADMIN_IPS:-127.0.0.1}
-    entrypoint: "/bin/sh -c 'echo \"$$ADMIN_WHITELIST_IPS\" | tr \",\" \"\\n\" | while read -r ip; do ip=$$(echo $$ip | tr -d \" \"); [ -n \"$$ip\" ] && echo \"allow $$ip;\"; done > /etc/nginx/whitelist.conf && cat /etc/nginx/whitelist.conf && envsubst \"\\$$DOMAIN\" < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && nginx -g \"daemon off;\"'"
+    entrypoint: "/bin/sh -c 'envsubst \"\\$$DOMAIN\" < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && nginx -g \"daemon off;\"'"
     depends_on:
       ufo-app:
         condition: service_healthy
