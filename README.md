@@ -248,3 +248,5 @@ cp data/vpnbzk.db data/vpnbzk.db.bak
 | `REALITY_PRIVATE_KEY`   | Приватный ключ REALITY    |
 | `REALITY_SHORT_ID`      | Short ID для REALITY      |
 | `ADMIN_IPS`             | IP для доступа к админке  |
+
+

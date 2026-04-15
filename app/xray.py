@@ -24,6 +24,13 @@ NL_SERVER_IP = os.getenv("NL_SERVER_IP", "")
 RU_SERVER_DOMAIN = os.getenv("RU_SERVER_DOMAIN", DOMAIN)
 NL_SERVER_DOMAIN = os.getenv("NL_SERVER_DOMAIN", "")
 
+# Транзит NL → RU (сервер-сервер через REALITY)
+RU_TRANSIT_UUID = os.getenv("RU_TRANSIT_UUID", "")
+RU_TRANSIT_PORT = int(os.getenv("RU_TRANSIT_PORT", "8443"))
+RU_TRANSIT_PUBLIC_KEY = os.getenv("RU_TRANSIT_PUBLIC_KEY", "")
+RU_TRANSIT_SHORT_ID = os.getenv("RU_TRANSIT_SHORT_ID", "aabbccdd")
+RU_TRANSIT_SN = os.getenv("RU_TRANSIT_SN", "www.google.com")
+
 # Порты
 VLESS_WS_PORT = int(os.getenv("VLESS_WS_PORT", "443"))
 REALITY_PORT = int(os.getenv("REALITY_PORT", "2053"))
@@ -184,6 +191,70 @@ def build_xray_config(db: Session) -> dict[str, Any]:
                 "destOverride": ["http", "tls", "quic"]
             }
         })
+
+    # Каскад: NL → RU для российского трафика
+    if RU_SERVER_IP and RU_TRANSIT_UUID and RU_TRANSIT_PUBLIC_KEY:
+        config["outbounds"].append({
+            "tag": "RU-PROXY",
+            "protocol": "vless",
+            "settings": {
+                "vnext": [{
+                    "address": RU_SERVER_IP,
+                    "port": RU_TRANSIT_PORT,
+                    "users": [{
+                        "id": RU_TRANSIT_UUID,
+                        "encryption": "none",
+                        "flow": "xtls-rprx-vision"
+                    }]
+                }]
+            },
+            "streamSettings": {
+                "network": "tcp",
+                "security": "reality",
+                "realitySettings": {
+                    "show": False,
+                    "fingerprint": "chrome",
+                    "serverName": RU_TRANSIT_SN,
+                    "publicKey": RU_TRANSIT_PUBLIC_KEY,
+                    "shortId": RU_TRANSIT_SHORT_ID
+                }
+            }
+        })
+
+        # Вставляем RU-правила перед catch-all DIRECT правилом
+        rules = config["routing"]["rules"]
+        catchall = rules.pop()  # убираем catch-all (tcp,udp → DIRECT)
+        rules.extend([
+            {
+                "type": "field",
+                "outboundTag": "RU-PROXY",
+                "domain": [
+                    "regexp:\\.ru$",
+                    "regexp:\\.su$",
+                    "domain:yandex.com",
+                    "domain:yandex.ru",
+                    "domain:mail.ru",
+                    "domain:vk.com",
+                    "domain:ok.ru",
+                    "domain:sberbank.ru",
+                    "domain:gosuslugi.ru",
+                    "domain:nalog.gov.ru",
+                    "domain:mos.ru",
+                    "domain:rt.ru",
+                    "domain:tinkoff.ru",
+                    "domain:wildberries.ru",
+                    "domain:ozon.ru",
+                    "domain:avito.ru",
+                    "domain:1c.ru"
+                ]
+            },
+            {
+                "type": "field",
+                "outboundTag": "RU-PROXY",
+                "ip": ["geoip:ru"]
+            }
+        ])
+        rules.append(catchall)
 
     return config
 
