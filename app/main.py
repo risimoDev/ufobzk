@@ -211,6 +211,25 @@ app.add_middleware(SecurityMiddleware)
 async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
     return JSONResponse({"detail": "Слишком много запросов. Попробуйте позже."}, status_code=429)
 
+
+@app.exception_handler(HTTPException)
+async def _http_exception_handler(request: Request, exc: HTTPException):
+    """Явный обработчик HTTPException — гарантирует 302-редиректы."""
+    if exc.status_code in (301, 302, 303, 307, 308):
+        location = (exc.headers or {}).get("Location", "/")
+        return RedirectResponse(url=location, status_code=exc.status_code)
+    if exc.status_code == 403:
+        return JSONResponse({"detail": exc.detail or "Forbidden"}, status_code=403)
+    if exc.status_code == 429:
+        return JSONResponse({"detail": exc.detail or "Too Many Requests"}, status_code=429)
+    return JSONResponse({"detail": exc.detail or "Error"}, status_code=exc.status_code)
+
+
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request: Request, exc: Exception):
+    logger.error("Необработанная ошибка на %s: %s", request.url.path, exc, exc_info=True)
+    return JSONResponse({"detail": "Internal Server Error", "error": str(exc)}, status_code=500)
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
