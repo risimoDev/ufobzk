@@ -10,7 +10,12 @@
         theme: {
           extend: {
             colors: {
-              space: { 900: "#0a0a1a", 800: "#0f0f2e", 700: "#1a1a3e", 600: "#252554" },
+              space: {
+                900: "#0a0a1a",
+                800: "#0f0f2e",
+                700: "#1a1a3e",
+                600: "#252554",
+              },
               acid: { 400: "#00ffc8", 500: "#00e6b4", 600: "#00cc9f" },
             },
           },
@@ -18,36 +23,131 @@
       };
     </script>
     <style>
-      body { background: #0a0a1a; min-height: 100vh; }
-      .stars { position: fixed; inset: 0; z-index: 0; pointer-events: none; background-image: radial-gradient(1px 1px at 10% 20%,rgba(255,255,255,.7),transparent), radial-gradient(1px 1px at 55% 15%,rgba(255,255,255,.5),transparent), radial-gradient(1px 1px at 88% 40%,rgba(255,255,255,.6),transparent), radial-gradient(1px 1px at 30% 65%,rgba(0,255,200,.2),transparent); background-size: 300px 300px; animation: twinkle 6s ease-in-out infinite alternate; }
-      @keyframes twinkle { from { opacity: .4; } to { opacity: 1; } }
-      .glow-green { text-shadow: 0 0 15px rgba(0,255,200,.4); }
-      .glow-box { box-shadow: 0 0 25px rgba(0,255,200,.05), inset 0 1px 0 rgba(255,255,255,.03); }
-      .card { background: rgba(255,255,255,.02); border: 1px solid rgba(255,255,255,.05); border-radius: 1rem; }
-      .card:hover { border-color: rgba(0,255,200,.1); }
-      .modal-backdrop { background: rgba(0,0,0,.7); backdrop-filter: blur(4px); }
-      .modal-content { background: #0f0f2e; border: 1px solid rgba(255,255,255,.08); }
-      .tbl th { font-size: .65rem; text-transform: uppercase; letter-spacing: .08em; color: #6b7280; font-weight: 600; }
-      .tbl td { font-size: .8rem; }
-      .tbl tr { border-bottom: 1px solid rgba(255,255,255,.03); }
-      .tbl tr:hover { background: rgba(255,255,255,.02); }
-      .toast { animation: slideIn .3s ease-out; }
-      @keyframes slideIn { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+      body {
+        background: #0a0a1a;
+        min-height: 100vh;
+      }
+      .stars {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        background-image:
+          radial-gradient(
+            1px 1px at 10% 20%,
+            rgba(255, 255, 255, 0.7),
+            transparent
+          ),
+          radial-gradient(
+            1px 1px at 55% 15%,
+            rgba(255, 255, 255, 0.5),
+            transparent
+          ),
+          radial-gradient(
+            1px 1px at 88% 40%,
+            rgba(255, 255, 255, 0.6),
+            transparent
+          ),
+          radial-gradient(
+            1px 1px at 30% 65%,
+            rgba(0, 255, 200, 0.2),
+            transparent
+          );
+        background-size: 300px 300px;
+        animation: twinkle 6s ease-in-out infinite alternate;
+      }
+      @keyframes twinkle {
+        from {
+          opacity: 0.4;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      .glow-green {
+        text-shadow: 0 0 15px rgba(0, 255, 200, 0.4);
+      }
+      .glow-box {
+        box-shadow:
+          0 0 25px rgba(0, 255, 200, 0.05),
+          inset 0 1px 0 rgba(255, 255, 255, 0.03);
+      }
+      .card {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 1rem;
+      }
+      .card:hover {
+        border-color: rgba(0, 255, 200, 0.1);
+      }
+      .modal-backdrop {
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(4px);
+      }
+      .modal-content {
+        background: #0f0f2e;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .tbl th {
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #6b7280;
+        font-weight: 600;
+      }
+      .tbl td {
+        font-size: 0.8rem;
+      }
+      .tbl tr {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      }
+      .tbl tr:hover {
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .toast {
+        animation: slideIn 0.3s ease-out;
+      }
+      @keyframes slideIn {
+        from {
+          transform: translateY(-20px);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
     </style>
   </head>
   <body class="text-gray-300 font-sans relative">
     <div class="stars"></div>
 
     <nav class="relative z-10 border-b border-white/5">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+      <div
+        class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between"
+      >
         <a href="/" class="flex items-center gap-2">
           <span class="text-xl">🛡️</span>
-          <span class="text-lg font-bold text-acid-400 glow-green tracking-wider">Каскадный VPN</span>
-          <span class="text-xs text-amber-400/60 border border-amber-400/20 rounded px-1.5 py-0.5 ml-2">ADMIN</span>
+          <span
+            class="text-lg font-bold text-acid-400 glow-green tracking-wider"
+            >Каскадный VPN</span
+          >
+          <span
+            class="text-xs text-amber-400/60 border border-amber-400/20 rounded px-1.5 py-0.5 ml-2"
+            >ADMIN</span
+          >
         </a>
         <div class="flex items-center gap-3">
-          <a href="/cabinet" class="px-3 py-1.5 rounded-lg border border-white/5 text-gray-500 text-xs hover:text-acid-400 hover:border-acid-400/20 transition">Кабинет</a>
-          <a href="/logout" class="px-3 py-1.5 rounded-lg border border-white/5 text-gray-600 text-xs hover:text-gray-400 transition">Выход</a>
+          <a
+            href="/cabinet"
+            class="px-3 py-1.5 rounded-lg border border-white/5 text-gray-500 text-xs hover:text-acid-400 hover:border-acid-400/20 transition"
+            >Кабинет</a
+          >
+          <a
+            href="/logout"
+            class="px-3 py-1.5 rounded-lg border border-white/5 text-gray-600 text-xs hover:text-gray-400 transition"
+            >Выход</a
+          >
         </div>
       </div>
     </nav>
@@ -55,80 +155,153 @@
     <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
 
     <main class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-8">
-
       <!-- ═══ ДАШБОРД ═══ -->
       <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
         <div class="card p-5 glow-box">
-          <p class="text-gray-600 text-xs uppercase tracking-wider mb-1">Пользователи</p>
+          <p class="text-gray-600 text-xs uppercase tracking-wider mb-1">
+            Пользователи
+          </p>
           <p class="text-2xl font-bold text-gray-200">{{ total_users }}</p>
           <p class="text-gray-700 text-xs mt-1">{{ active_users }} активных</p>
         </div>
         <div class="card p-5 glow-box">
-          <p class="text-gray-600 text-xs uppercase tracking-wider mb-1">VPN-ключей</p>
+          <p class="text-gray-600 text-xs uppercase tracking-wider mb-1">
+            VPN-ключей
+          </p>
           <p class="text-2xl font-bold text-acid-400">{{ total_keys }}</p>
         </div>
         <div class="card p-5 glow-box">
-          <p class="text-gray-600 text-xs uppercase tracking-wider mb-1">Активных</p>
+          <p class="text-gray-600 text-xs uppercase tracking-wider mb-1">
+            Активных
+          </p>
           <p class="text-2xl font-bold text-emerald-400">{{ active_keys }}</p>
         </div>
         <div class="card p-5 glow-box">
-          <p class="text-gray-600 text-xs uppercase tracking-wider mb-1">Истекших</p>
+          <p class="text-gray-600 text-xs uppercase tracking-wider mb-1">
+            Истекших
+          </p>
           <p class="text-2xl font-bold text-red-400">{{ expired_keys }}</p>
         </div>
         <div class="card p-5 glow-box">
-          <p class="text-gray-600 text-xs uppercase tracking-wider mb-1">Откл. / Лимит</p>
-          <p class="text-2xl font-bold text-gray-500">{{ disabled_keys + limited_keys }}</p>
+          <p class="text-gray-600 text-xs uppercase tracking-wider mb-1">
+            Откл. / Лимит
+          </p>
+          <p class="text-2xl font-bold text-gray-500">
+            {{ disabled_keys + limited_keys }}
+          </p>
         </div>
         <div class="card p-5 glow-box">
-          <p class="text-gray-600 text-xs uppercase tracking-wider mb-1">Трафик</p>
-          <p class="text-2xl font-bold text-cyan-400">{{ format_bytes(traffic_total) }}</p>
+          <p class="text-gray-600 text-xs uppercase tracking-wider mb-1">
+            Трафик
+          </p>
+          <p class="text-2xl font-bold text-cyan-400">
+            {{ format_bytes(traffic_total) }}
+          </p>
         </div>
       </div>
 
       <!-- Кнопка синхронизации Xray -->
       <div class="flex gap-3 mb-6">
-        <button onclick="syncXray()" class="px-4 py-2 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-lg text-xs font-medium hover:bg-cyan-500/20 transition">
+        <button
+          onclick="syncXray()"
+          class="px-4 py-2 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-lg text-xs font-medium hover:bg-cyan-500/20 transition"
+        >
           🔄 Синхронизировать Xray
         </button>
       </div>
 
       <!-- ═══ СОЗДАТЬ ПОЛЬЗОВАТЕЛЯ ═══ -->
       <div class="card p-5 mb-8 glow-box">
-        <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">➕ Создать пользователя</h2>
-        <form method="POST" action="/admin/users" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
+        <h2
+          class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4"
+        >
+          ➕ Создать пользователя
+        </h2>
+        <form
+          method="POST"
+          action="/admin/users"
+          class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 items-end"
+        >
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
           <div>
             <label class="block text-xs text-gray-500 mb-1">Имя</label>
-            <input type="text" name="display_name" placeholder="Иван" class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 placeholder-gray-700 focus:border-acid-400/30 focus:outline-none transition" />
+            <input
+              type="text"
+              name="display_name"
+              placeholder="Иван"
+              class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 placeholder-gray-700 focus:border-acid-400/30 focus:outline-none transition"
+            />
           </div>
           <div>
-            <label class="block text-xs text-gray-500 mb-1">Telegram ID <span class="text-red-400">*</span></label>
-            <input type="number" name="telegram_id" required placeholder="123456789" class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 placeholder-gray-700 focus:border-acid-400/30 focus:outline-none transition" />
+            <label class="block text-xs text-gray-500 mb-1"
+              >Telegram ID <span class="text-red-400">*</span></label
+            >
+            <input
+              type="number"
+              name="telegram_id"
+              required
+              placeholder="123456789"
+              class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 placeholder-gray-700 focus:border-acid-400/30 focus:outline-none transition"
+            />
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-1">Имя ключа</label>
-            <input type="text" name="key_name" value="default" class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 focus:border-acid-400/30 focus:outline-none transition" />
+            <input
+              type="text"
+              name="key_name"
+              value="default"
+              class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 focus:border-acid-400/30 focus:outline-none transition"
+            />
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-1">Лимит (ГБ)</label>
-            <input type="number" name="data_limit_gb" value="0" step="0.1" min="0" class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 focus:border-acid-400/30 focus:outline-none transition" />
+            <input
+              type="number"
+              name="data_limit_gb"
+              value="0"
+              step="0.1"
+              min="0"
+              class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 focus:border-acid-400/30 focus:outline-none transition"
+            />
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-1">Срок (дни)</label>
-            <input type="number" name="expire_days" value="0" min="0" class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 focus:border-acid-400/30 focus:outline-none transition" />
+            <input
+              type="number"
+              name="expire_days"
+              value="0"
+              min="0"
+              class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 focus:border-acid-400/30 focus:outline-none transition"
+            />
           </div>
           <div>
-            <button type="submit" class="w-full px-4 py-2 bg-acid-400/10 text-acid-400 border border-acid-400/20 rounded-lg text-sm font-medium hover:bg-acid-400/20 transition">Создать</button>
+            <button
+              type="submit"
+              class="w-full px-4 py-2 bg-acid-400/10 text-acid-400 border border-acid-400/20 rounded-lg text-sm font-medium hover:bg-acid-400/20 transition"
+            >
+              Создать
+            </button>
           </div>
         </form>
-        <p class="text-gray-700 text-xs mt-2">0 ГБ / 0 дней = безлимит / бессрочно. VPN-ключ создаётся автоматически.</p>
+        <p class="text-gray-700 text-xs mt-2">
+          0 ГБ / 0 дней = безлимит / бессрочно. VPN-ключ создаётся
+          автоматически.
+        </p>
       </div>
 
       <!-- ═══ ТАБЛИЦА ПОЛЬЗОВАТЕЛЕЙ ═══ -->
       <div class="card glow-box overflow-hidden mb-8">
-        <div class="px-5 py-4 border-b border-white/5 flex items-center justify-between">
-          <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wider">👥 Пользователи</h2>
-          <span class="text-xs text-gray-600">{{ enriched_users | length }} записей</span>
+        <div
+          class="px-5 py-4 border-b border-white/5 flex items-center justify-between"
+        >
+          <h2
+            class="text-sm font-semibold text-gray-300 uppercase tracking-wider"
+          >
+            👥 Пользователи
+          </h2>
+          <span class="text-xs text-gray-600"
+            >{{ enriched_users | length }} записей</span
+          >
         </div>
         <div class="overflow-x-auto">
           <table class="w-full tbl">
@@ -143,37 +316,74 @@
               </tr>
             </thead>
             <tbody>
-              {% for row in enriched_users %}
-              {% set u = row.user %}
+              {% for row in enriched_users %} {% set u = row.user %}
               <tr id="user-row-{{ u.id }}">
-                <td class="px-4 py-3"><span class="text-gray-200">{{ u.display_name or '—' }}</span></td>
                 <td class="px-4 py-3">
-                  <span class="text-acid-400/80 font-mono text-xs">{{ u.telegram_id }}</span>
-                  {% if u.telegram_username %}<br/><span class="text-gray-600 text-xs">@{{ u.telegram_username }}</span>{% endif %}
+                  <span class="text-gray-200">{{ u.display_name or '—' }}</span>
                 </td>
                 <td class="px-4 py-3">
-                  <span class="text-cyan-400 font-mono text-xs">{{ row.keys_count }}</span>
-                  <span class="text-gray-600 text-xs">({{ row.active_keys }} акт.)</span>
+                  <span class="text-acid-400/80 font-mono text-xs"
+                    >{{ u.telegram_id }}</span
+                  >
+                  {% if u.telegram_username %}<br /><span
+                    class="text-gray-600 text-xs"
+                    >@{{ u.telegram_username }}</span
+                  >{% endif %}
+                </td>
+                <td class="px-4 py-3">
+                  <span class="text-cyan-400 font-mono text-xs"
+                    >{{ row.keys_count }}</span
+                  >
+                  <span class="text-gray-600 text-xs"
+                    >({{ row.active_keys }} акт.)</span
+                  >
                 </td>
                 <td class="px-4 py-3">
                   {% if u.is_active %}
-                  <span class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs">Активен</span>
+                  <span
+                    class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs"
+                    >Активен</span
+                  >
                   {% else %}
-                  <span class="px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 text-xs">Блок</span>
+                  <span
+                    class="px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 text-xs"
+                    >Блок</span
+                  >
                   {% endif %}
                 </td>
                 <td class="px-4 py-3">
                   {% if u.is_admin %}
-                  <span class="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-xs">Админ</span>
+                  <span
+                    class="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-xs"
+                    >Админ</span
+                  >
                   {% else %}
                   <span class="text-gray-600 text-xs">user</span>
                   {% endif %}
                 </td>
                 <td class="px-4 py-3">
                   <div class="flex items-center justify-end gap-1">
-                    <button onclick="openEditModal({{ u.id }}, {{ u.display_name | tojson }}, {{ u.is_active | tojson }}, {{ u.is_admin | tojson }})" class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-acid-400 hover:bg-acid-400/10 transition text-xs" title="Редактировать">✏️</button>
-                    <button onclick="openKeysModal({{ u.id }}, {{ u.display_name | tojson }}, {{ u.keys | tojson }})" class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-cyan-400 hover:bg-cyan-400/10 transition text-xs" title="Ключи">🔑</button>
-                    <button onclick="deleteUser({{ u.id }}, {{ u.display_name | tojson or u.telegram_id }})" class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition text-xs" title="Удалить">🗑️</button>
+                    <button
+                      onclick="openEditModal({{ u.id }}, {{ u.display_name | tojson }}, {{ u.is_active | tojson }}, {{ u.is_admin | tojson }})"
+                      class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-acid-400 hover:bg-acid-400/10 transition text-xs"
+                      title="Редактировать"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      onclick="openKeysModal({{ u.id }}, {{ u.display_name | tojson }}, {{ row.keys | tojson }})"
+                      class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-cyan-400 hover:bg-cyan-400/10 transition text-xs"
+                      title="Ключи"
+                    >
+                      🔑
+                    </button>
+                    <button
+                      onclick="deleteUser({{ u.id }}, {{ u.display_name | tojson or u.telegram_id }})"
+                      class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition text-xs"
+                      title="Удалить"
+                    >
+                      🗑️
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -185,9 +395,20 @@
 
       <!-- ═══ ИНВАЙТ-КЛЮЧИ ═══ -->
       <div class="card glow-box overflow-hidden mb-8">
-        <div class="px-5 py-4 border-b border-white/5 flex items-center justify-between">
-          <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wider">🎟️ Инвайт-ключи</h2>
-          <button onclick="generateInviteKey()" class="px-3 py-1.5 bg-acid-400/10 text-acid-400 border border-acid-400/20 rounded-lg text-xs font-medium hover:bg-acid-400/20 transition">+ Создать</button>
+        <div
+          class="px-5 py-4 border-b border-white/5 flex items-center justify-between"
+        >
+          <h2
+            class="text-sm font-semibold text-gray-300 uppercase tracking-wider"
+          >
+            🎟️ Инвайт-ключи
+          </h2>
+          <button
+            onclick="generateInviteKey()"
+            class="px-3 py-1.5 bg-acid-400/10 text-acid-400 border border-acid-400/20 rounded-lg text-xs font-medium hover:bg-acid-400/20 transition"
+          >
+            + Создать
+          </button>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full tbl" id="invite-keys-table">
@@ -203,22 +424,51 @@
             <tbody>
               {% for k in invite_keys %}
               <tr id="invite-row-{{ k.id }}">
-                <td class="px-4 py-3"><code class="text-acid-400/80 font-mono text-xs bg-black/30 px-2 py-1 rounded select-all">{{ k.key }}</code></td>
+                <td class="px-4 py-3">
+                  <code
+                    class="text-acid-400/80 font-mono text-xs bg-black/30 px-2 py-1 rounded select-all"
+                    >{{ k.key }}</code
+                  >
+                </td>
                 <td class="px-4 py-3">
                   {% if k.is_used %}
-                  <span class="px-2 py-0.5 rounded-full bg-gray-500/10 text-gray-500 text-xs">Использован</span>
+                  <span
+                    class="px-2 py-0.5 rounded-full bg-gray-500/10 text-gray-500 text-xs"
+                    >Использован</span
+                  >
                   {% else %}
-                  <span class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs">Свободен</span>
+                  <span
+                    class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs"
+                    >Свободен</span
+                  >
                   {% endif %}
                 </td>
-                <td class="px-4 py-3 text-xs text-gray-500">{{ k.created_at.strftime('%d.%m.%Y %H:%M') if k.created_at else '—' }}</td>
-                <td class="px-4 py-3 text-xs text-gray-500">{% if k.used_at %}{{ k.used_at.strftime('%d.%m.%Y %H:%M') }} (ID: {{ k.used_by }}){% else %}—{% endif %}</td>
+                <td class="px-4 py-3 text-xs text-gray-500">
+                  {{ k.created_at.strftime('%d.%m.%Y %H:%M') if k.created_at
+                  else '—' }}
+                </td>
+                <td class="px-4 py-3 text-xs text-gray-500">
+                  {% if k.used_at %}{{ k.used_at.strftime('%d.%m.%Y %H:%M') }}
+                  (ID: {{ k.used_by }}){% else %}—{% endif %}
+                </td>
                 <td class="px-4 py-3">
                   <div class="flex items-center justify-end gap-1">
                     {% if not k.is_used %}
-                    <button onclick="copyText('{{ k.key }}')" class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-cyan-400 hover:bg-cyan-400/10 transition text-xs" title="Копировать">📋</button>
+                    <button
+                      onclick="copyText('{{ k.key }}')"
+                      class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-cyan-400 hover:bg-cyan-400/10 transition text-xs"
+                      title="Копировать"
+                    >
+                      📋
+                    </button>
                     {% endif %}
-                    <button onclick="deleteInviteKey({{ k.id }})" class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition text-xs" title="Удалить">🗑️</button>
+                    <button
+                      onclick="deleteInviteKey({{ k.id }})"
+                      class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition text-xs"
+                      title="Удалить"
+                    >
+                      🗑️
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -234,32 +484,72 @@
 
     <!-- ═══ МОДАЛЬНОЕ ОКНО: РЕДАКТИРОВАНИЕ ПОЛЬЗОВАТЕЛЯ ═══ -->
     <div id="edit-modal" class="fixed inset-0 z-40 hidden">
-      <div class="modal-backdrop absolute inset-0" onclick="closeEditModal()"></div>
-      <div class="relative z-50 flex items-center justify-center min-h-screen p-4">
+      <div
+        class="modal-backdrop absolute inset-0"
+        onclick="closeEditModal()"
+      ></div>
+      <div
+        class="relative z-50 flex items-center justify-center min-h-screen p-4"
+      >
         <div class="modal-content rounded-2xl w-full max-w-md p-6 shadow-2xl">
           <div class="flex items-center justify-between mb-5">
-            <h3 class="text-sm font-semibold text-gray-200 uppercase tracking-wider">Редактирование пользователя</h3>
-            <button onclick="closeEditModal()" class="text-gray-600 hover:text-gray-400 text-lg">&times;</button>
+            <h3
+              class="text-sm font-semibold text-gray-200 uppercase tracking-wider"
+            >
+              Редактирование пользователя
+            </h3>
+            <button
+              onclick="closeEditModal()"
+              class="text-gray-600 hover:text-gray-400 text-lg"
+            >
+              &times;
+            </button>
           </div>
           <input type="hidden" id="edit-user-id" />
           <div class="space-y-4">
             <div>
               <label class="block text-xs text-gray-500 mb-1">Имя</label>
-              <input type="text" id="edit-display-name" class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 focus:border-acid-400/30 focus:outline-none transition" />
+              <input
+                type="text"
+                id="edit-display-name"
+                class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 focus:border-acid-400/30 focus:outline-none transition"
+              />
             </div>
             <div class="grid grid-cols-2 gap-4">
-              <label class="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
-                <input type="checkbox" id="edit-is-active" class="rounded border-gray-700" />
+              <label
+                class="flex items-center gap-2 text-sm text-gray-400 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  id="edit-is-active"
+                  class="rounded border-gray-700"
+                />
                 <span>Активен</span>
               </label>
-              <label class="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
-                <input type="checkbox" id="edit-is-admin" class="rounded border-gray-700" />
+              <label
+                class="flex items-center gap-2 text-sm text-gray-400 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  id="edit-is-admin"
+                  class="rounded border-gray-700"
+                />
                 <span>Админ</span>
               </label>
             </div>
             <div class="flex gap-3 pt-2">
-              <button onclick="saveEdit()" class="flex-1 px-4 py-2 bg-acid-400/10 text-acid-400 border border-acid-400/20 rounded-lg text-sm font-medium hover:bg-acid-400/20 transition">Сохранить</button>
-              <button onclick="closeEditModal()" class="px-4 py-2 bg-white/5 text-gray-500 border border-white/5 rounded-lg text-sm hover:text-gray-400 transition">Отмена</button>
+              <button
+                onclick="saveEdit()"
+                class="flex-1 px-4 py-2 bg-acid-400/10 text-acid-400 border border-acid-400/20 rounded-lg text-sm font-medium hover:bg-acid-400/20 transition"
+              >
+                Сохранить
+              </button>
+              <button
+                onclick="closeEditModal()"
+                class="px-4 py-2 bg-white/5 text-gray-500 border border-white/5 rounded-lg text-sm hover:text-gray-400 transition"
+              >
+                Отмена
+              </button>
             </div>
           </div>
         </div>
@@ -268,12 +558,28 @@
 
     <!-- ═══ МОДАЛЬНОЕ ОКНО: VPN-КЛЮЧИ ПОЛЬЗОВАТЕЛЯ ═══ -->
     <div id="keys-modal" class="fixed inset-0 z-40 hidden">
-      <div class="modal-backdrop absolute inset-0" onclick="closeKeysModal()"></div>
-      <div class="relative z-50 flex items-center justify-center min-h-screen p-4">
-        <div class="modal-content rounded-2xl w-full max-w-2xl p-6 shadow-2xl max-h-[80vh] overflow-y-auto">
+      <div
+        class="modal-backdrop absolute inset-0"
+        onclick="closeKeysModal()"
+      ></div>
+      <div
+        class="relative z-50 flex items-center justify-center min-h-screen p-4"
+      >
+        <div
+          class="modal-content rounded-2xl w-full max-w-2xl p-6 shadow-2xl max-h-[80vh] overflow-y-auto"
+        >
           <div class="flex items-center justify-between mb-5">
-            <h3 class="text-sm font-semibold text-gray-200 uppercase tracking-wider">🔑 VPN-ключи — <span id="keys-user-name"></span></h3>
-            <button onclick="closeKeysModal()" class="text-gray-600 hover:text-gray-400 text-lg">&times;</button>
+            <h3
+              class="text-sm font-semibold text-gray-200 uppercase tracking-wider"
+            >
+              🔑 VPN-ключи — <span id="keys-user-name"></span>
+            </h3>
+            <button
+              onclick="closeKeysModal()"
+              class="text-gray-600 hover:text-gray-400 text-lg"
+            >
+              &times;
+            </button>
           </div>
           <input type="hidden" id="keys-user-id" />
 
@@ -282,22 +588,49 @@
 
           <!-- Форма добавления ключа -->
           <div class="border-t border-white/5 pt-4">
-            <h4 class="text-xs text-gray-500 uppercase tracking-wider mb-3">Добавить ключ</h4>
+            <h4 class="text-xs text-gray-500 uppercase tracking-wider mb-3">
+              Добавить ключ
+            </h4>
             <div class="grid grid-cols-3 gap-3">
               <div>
                 <label class="block text-xs text-gray-500 mb-1">Имя</label>
-                <input type="text" id="new-key-name" value="key" class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 focus:border-acid-400/30 focus:outline-none transition" />
+                <input
+                  type="text"
+                  id="new-key-name"
+                  value="key"
+                  class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 focus:border-acid-400/30 focus:outline-none transition"
+                />
               </div>
               <div>
-                <label class="block text-xs text-gray-500 mb-1">Лимит (ГБ)</label>
-                <input type="number" id="new-key-limit" value="0" min="0" step="0.1" class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 focus:border-acid-400/30 focus:outline-none transition" />
+                <label class="block text-xs text-gray-500 mb-1"
+                  >Лимит (ГБ)</label
+                >
+                <input
+                  type="number"
+                  id="new-key-limit"
+                  value="0"
+                  min="0"
+                  step="0.1"
+                  class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 focus:border-acid-400/30 focus:outline-none transition"
+                />
               </div>
               <div>
-                <label class="block text-xs text-gray-500 mb-1">Срок (дни)</label>
-                <input type="number" id="new-key-expire" value="0" min="0" class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 focus:border-acid-400/30 focus:outline-none transition" />
+                <label class="block text-xs text-gray-500 mb-1"
+                  >Срок (дни)</label
+                >
+                <input
+                  type="number"
+                  id="new-key-expire"
+                  value="0"
+                  min="0"
+                  class="w-full px-3 py-2 bg-black/30 border border-white/5 rounded-lg text-sm text-gray-300 focus:border-acid-400/30 focus:outline-none transition"
+                />
               </div>
             </div>
-            <button onclick="addKey()" class="mt-3 w-full px-4 py-2 bg-acid-400/10 text-acid-400 border border-acid-400/20 rounded-lg text-sm font-medium hover:bg-acid-400/20 transition">
+            <button
+              onclick="addKey()"
+              class="mt-3 w-full px-4 py-2 bg-acid-400/10 text-acid-400 border border-acid-400/20 rounded-lg text-sm font-medium hover:bg-acid-400/20 transition"
+            >
               + Добавить ключ
             </button>
           </div>
@@ -307,170 +640,296 @@
 
     <script>
       function showToast(msg, type) {
-        type = type || 'info';
-        var c = document.getElementById('toast-container');
-        var colors = { success: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400', error: 'bg-red-500/10 border-red-500/20 text-red-400', info: 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400' };
-        var el = document.createElement('div');
-        el.className = 'toast px-4 py-3 rounded-xl border text-sm ' + (colors[type] || colors.info);
+        type = type || "info";
+        var c = document.getElementById("toast-container");
+        var colors = {
+          success: "bg-emerald-500/10 border-emerald-500/20 text-emerald-400",
+          error: "bg-red-500/10 border-red-500/20 text-red-400",
+          info: "bg-cyan-500/10 border-cyan-500/20 text-cyan-400",
+        };
+        var el = document.createElement("div");
+        el.className =
+          "toast px-4 py-3 rounded-xl border text-sm " +
+          (colors[type] || colors.info);
         el.textContent = msg;
         c.appendChild(el);
-        setTimeout(function() { el.remove(); }, 4000);
+        setTimeout(function () {
+          el.remove();
+        }, 4000);
       }
 
       function copyText(text) {
-        navigator.clipboard.writeText(text).then(function() { showToast('Скопировано', 'success'); });
+        navigator.clipboard.writeText(text).then(function () {
+          showToast("Скопировано", "success");
+        });
       }
 
       // ── Редактирование пользователя ──
       function openEditModal(userId, displayName, isActive, isAdmin) {
-        document.getElementById('edit-user-id').value = userId;
-        document.getElementById('edit-display-name').value = displayName || '';
-        document.getElementById('edit-is-active').checked = isActive;
-        document.getElementById('edit-is-admin').checked = isAdmin;
-        document.getElementById('edit-modal').classList.remove('hidden');
+        document.getElementById("edit-user-id").value = userId;
+        document.getElementById("edit-display-name").value = displayName || "";
+        document.getElementById("edit-is-active").checked = isActive;
+        document.getElementById("edit-is-admin").checked = isAdmin;
+        document.getElementById("edit-modal").classList.remove("hidden");
       }
-      function closeEditModal() { document.getElementById('edit-modal').classList.add('hidden'); }
+      function closeEditModal() {
+        document.getElementById("edit-modal").classList.add("hidden");
+      }
 
       async function saveEdit() {
-        var userId = document.getElementById('edit-user-id').value;
+        var userId = document.getElementById("edit-user-id").value;
         var body = {
-          display_name: document.getElementById('edit-display-name').value,
-          is_active: document.getElementById('edit-is-active').checked,
-          is_admin: document.getElementById('edit-is-admin').checked,
+          display_name: document.getElementById("edit-display-name").value,
+          is_active: document.getElementById("edit-is-active").checked,
+          is_admin: document.getElementById("edit-is-admin").checked,
         };
         try {
-          var resp = await fetch('/admin/users/' + userId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+          var resp = await fetch("/admin/users/" + userId, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
           var data = await resp.json();
-          if (data.ok) { showToast('Сохранено', 'success'); closeEditModal(); setTimeout(function() { location.reload(); }, 500); }
-          else { showToast(data.error || 'Ошибка', 'error'); }
-        } catch (e) { showToast('Ошибка сети', 'error'); }
+          if (data.ok) {
+            showToast("Сохранено", "success");
+            closeEditModal();
+            setTimeout(function () {
+              location.reload();
+            }, 500);
+          } else {
+            showToast(data.error || "Ошибка", "error");
+          }
+        } catch (e) {
+          showToast("Ошибка сети", "error");
+        }
       }
 
       // ── Управление VPN-ключами ──
       function openKeysModal(userId, displayName, keys) {
-        document.getElementById('keys-user-id').value = userId;
-        document.getElementById('keys-user-name').textContent = displayName || 'ID ' + userId;
+        document.getElementById("keys-user-id").value = userId;
+        document.getElementById("keys-user-name").textContent =
+          displayName || "ID " + userId;
         renderKeys(keys || []);
-        document.getElementById('keys-modal').classList.remove('hidden');
+        document.getElementById("keys-modal").classList.remove("hidden");
       }
-      function closeKeysModal() { document.getElementById('keys-modal').classList.add('hidden'); }
+      function closeKeysModal() {
+        document.getElementById("keys-modal").classList.add("hidden");
+      }
 
       function renderKeys(keys) {
-        var container = document.getElementById('keys-list');
+        var container = document.getElementById("keys-list");
         if (!keys.length) {
-          container.innerHTML = '<p class="text-gray-700 text-xs text-center py-4">Нет ключей</p>';
+          container.innerHTML =
+            '<p class="text-gray-700 text-xs text-center py-4">Нет ключей</p>';
           return;
         }
-        var html = '';
-        keys.forEach(function(k) {
-          var statusColor = k.is_active ? 'text-emerald-400' : 'text-red-400';
-          var statusText = k.is_active ? 'Активен' : 'Отключён';
+        var html = "";
+        keys.forEach(function (k) {
+          var statusColor = k.is_active ? "text-emerald-400" : "text-red-400";
+          var statusText = k.is_active ? "Активен" : "Отключён";
           if (k.expire_at) {
             var now = new Date();
             var exp = new Date(k.expire_at);
-            if (exp < now) { statusColor = 'text-red-400'; statusText = 'Истёк'; }
+            if (exp < now) {
+              statusColor = "text-red-400";
+              statusText = "Истёк";
+            }
           }
-          html += '<div class="card p-4">' +
+          html +=
+            '<div class="card p-4">' +
             '<div class="flex items-center justify-between mb-2">' +
-              '<div>' +
-                '<span class="text-gray-200 text-sm font-medium">' + (k.name || 'key') + '</span>' +
-                '<span class="ml-2 px-2 py-0.5 rounded-full text-xs ' + statusColor + ' bg-white/5">' + statusText + '</span>' +
-              '</div>' +
-              '<div class="flex gap-1">' +
-                '<button onclick="toggleKey(' + k.id + ', ' + (!k.is_active) + ')" class="p-1 rounded bg-white/5 text-xs text-gray-500 hover:text-amber-400 transition" title="Вкл/Выкл">' + (k.is_active ? '⏸️' : '▶️') + '</button>' +
-                '<button onclick="deleteVPNKey(' + k.id + ')" class="p-1 rounded bg-white/5 text-xs text-gray-500 hover:text-red-400 transition" title="Удалить">🗑️</button>' +
-              '</div>' +
-            '</div>' +
-            '<code class="text-xs text-acid-400/60 font-mono break-all select-all block bg-black/20 rounded p-2 cursor-pointer" onclick="copyText(\'' + k.uuid + '\')">' + k.uuid + '</code>' +
+            "<div>" +
+            '<span class="text-gray-200 text-sm font-medium">' +
+            (k.name || "key") +
+            "</span>" +
+            '<span class="ml-2 px-2 py-0.5 rounded-full text-xs ' +
+            statusColor +
+            ' bg-white/5">' +
+            statusText +
+            "</span>" +
+            "</div>" +
+            '<div class="flex gap-1">' +
+            '<button onclick="toggleKey(' +
+            k.id +
+            ", " +
+            !k.is_active +
+            ')" class="p-1 rounded bg-white/5 text-xs text-gray-500 hover:text-amber-400 transition" title="Вкл/Выкл">' +
+            (k.is_active ? "⏸️" : "▶️") +
+            "</button>" +
+            '<button onclick="deleteVPNKey(' +
+            k.id +
+            ')" class="p-1 rounded bg-white/5 text-xs text-gray-500 hover:text-red-400 transition" title="Удалить">🗑️</button>' +
+            "</div>" +
+            "</div>" +
+            '<code class="text-xs text-acid-400/60 font-mono break-all select-all block bg-black/20 rounded p-2 cursor-pointer" onclick="copyText(\'' +
+            k.uuid +
+            "')\">" +
+            k.uuid +
+            "</code>" +
             '<div class="flex gap-4 mt-2 text-xs text-gray-600">' +
-              '<span>Протокол: ' + (k.protocol || 'vless') + '</span>' +
-              '<span>Трафик: ' + formatBytes(k.data_used || 0) + (k.data_limit ? ' / ' + formatBytes(k.data_limit) : ' / ∞') + '</span>' +
-              '<span>Срок: ' + (k.expire_at ? new Date(k.expire_at).toLocaleDateString('ru') : '∞') + '</span>' +
-            '</div>' +
-          '</div>';
+            "<span>Протокол: " +
+            (k.protocol || "vless") +
+            "</span>" +
+            "<span>Трафик: " +
+            formatBytes(k.data_used || 0) +
+            (k.data_limit ? " / " + formatBytes(k.data_limit) : " / ∞") +
+            "</span>" +
+            "<span>Срок: " +
+            (k.expire_at
+              ? new Date(k.expire_at).toLocaleDateString("ru")
+              : "∞") +
+            "</span>" +
+            "</div>" +
+            "</div>";
         });
         container.innerHTML = html;
       }
 
       function formatBytes(b) {
-        if (b === 0) return '0 Б';
-        var units = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
+        if (b === 0) return "0 Б";
+        var units = ["Б", "КБ", "МБ", "ГБ", "ТБ"];
         var i = Math.floor(Math.log(b) / Math.log(1024));
-        return (b / Math.pow(1024, i)).toFixed(1) + ' ' + units[i];
+        return (b / Math.pow(1024, i)).toFixed(1) + " " + units[i];
       }
 
       async function addKey() {
-        var userId = document.getElementById('keys-user-id').value;
+        var userId = document.getElementById("keys-user-id").value;
         var body = {
-          name: document.getElementById('new-key-name').value,
-          data_limit_gb: parseFloat(document.getElementById('new-key-limit').value) || 0,
-          expire_days: parseInt(document.getElementById('new-key-expire').value) || 0,
+          name: document.getElementById("new-key-name").value,
+          data_limit_gb:
+            parseFloat(document.getElementById("new-key-limit").value) || 0,
+          expire_days:
+            parseInt(document.getElementById("new-key-expire").value) || 0,
         };
         try {
-          var resp = await fetch('/admin/users/' + userId + '/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+          var resp = await fetch("/admin/users/" + userId + "/keys", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
           var data = await resp.json();
-          if (data.ok) { showToast('Ключ создан: ' + data.uuid, 'success'); setTimeout(function() { location.reload(); }, 500); }
-          else { showToast(data.error || 'Ошибка', 'error'); }
-        } catch (e) { showToast('Ошибка сети', 'error'); }
+          if (data.ok) {
+            showToast("Ключ создан: " + data.uuid, "success");
+            setTimeout(function () {
+              location.reload();
+            }, 500);
+          } else {
+            showToast(data.error || "Ошибка", "error");
+          }
+        } catch (e) {
+          showToast("Ошибка сети", "error");
+        }
       }
 
       async function toggleKey(keyId, newState) {
         try {
-          var resp = await fetch('/admin/keys/' + keyId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: newState }) });
+          var resp = await fetch("/admin/keys/" + keyId, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ is_active: newState }),
+          });
           var data = await resp.json();
-          if (data.ok) { showToast('Ключ обновлён', 'success'); setTimeout(function() { location.reload(); }, 500); }
-          else { showToast(data.error || 'Ошибка', 'error'); }
-        } catch (e) { showToast('Ошибка сети', 'error'); }
+          if (data.ok) {
+            showToast("Ключ обновлён", "success");
+            setTimeout(function () {
+              location.reload();
+            }, 500);
+          } else {
+            showToast(data.error || "Ошибка", "error");
+          }
+        } catch (e) {
+          showToast("Ошибка сети", "error");
+        }
       }
 
       async function deleteVPNKey(keyId) {
-        if (!confirm('Удалить VPN-ключ?')) return;
+        if (!confirm("Удалить VPN-ключ?")) return;
         try {
-          var resp = await fetch('/admin/vpnkeys/' + keyId, { method: 'DELETE' });
+          var resp = await fetch("/admin/vpnkeys/" + keyId, {
+            method: "DELETE",
+          });
           var data = await resp.json();
-          if (data.ok) { showToast('Ключ удалён', 'success'); setTimeout(function() { location.reload(); }, 500); }
-          else { showToast(data.error || 'Ошибка', 'error'); }
-        } catch (e) { showToast('Ошибка сети', 'error'); }
+          if (data.ok) {
+            showToast("Ключ удалён", "success");
+            setTimeout(function () {
+              location.reload();
+            }, 500);
+          } else {
+            showToast(data.error || "Ошибка", "error");
+          }
+        } catch (e) {
+          showToast("Ошибка сети", "error");
+        }
       }
 
       async function deleteUser(userId, name) {
-        if (!confirm('Удалить пользователя ' + name + ' и все его ключи?')) return;
+        if (!confirm("Удалить пользователя " + name + " и все его ключи?"))
+          return;
         try {
-          var resp = await fetch('/admin/users/' + userId, { method: 'DELETE' });
+          var resp = await fetch("/admin/users/" + userId, {
+            method: "DELETE",
+          });
           var data = await resp.json();
-          if (data.ok) { showToast('Удалено', 'success'); document.getElementById('user-row-' + userId)?.remove(); }
-          else { showToast(data.error || 'Ошибка', 'error'); }
-        } catch (e) { showToast('Ошибка сети', 'error'); }
+          if (data.ok) {
+            showToast("Удалено", "success");
+            document.getElementById("user-row-" + userId)?.remove();
+          } else {
+            showToast(data.error || "Ошибка", "error");
+          }
+        } catch (e) {
+          showToast("Ошибка сети", "error");
+        }
       }
 
       // ── Инвайт-ключи ──
       async function generateInviteKey() {
         try {
-          var resp = await fetch('/admin/invite-keys', { method: 'POST' });
+          var resp = await fetch("/admin/invite-keys", { method: "POST" });
           var data = await resp.json();
-          if (data.ok) { showToast('Ключ: ' + data.key, 'success'); setTimeout(function() { location.reload(); }, 500); }
-          else { showToast('Ошибка', 'error'); }
-        } catch (e) { showToast('Ошибка сети', 'error'); }
+          if (data.ok) {
+            showToast("Ключ: " + data.key, "success");
+            setTimeout(function () {
+              location.reload();
+            }, 500);
+          } else {
+            showToast("Ошибка", "error");
+          }
+        } catch (e) {
+          showToast("Ошибка сети", "error");
+        }
       }
 
       async function deleteInviteKey(keyId) {
-        if (!confirm('Удалить инвайт-ключ?')) return;
+        if (!confirm("Удалить инвайт-ключ?")) return;
         try {
-          var resp = await fetch('/admin/invite-keys/' + keyId, { method: 'DELETE' });
+          var resp = await fetch("/admin/invite-keys/" + keyId, {
+            method: "DELETE",
+          });
           var data = await resp.json();
-          if (data.ok) { showToast('Удалено', 'success'); document.getElementById('invite-row-' + keyId)?.remove(); }
-          else { showToast('Ошибка', 'error'); }
-        } catch (e) { showToast('Ошибка сети', 'error'); }
+          if (data.ok) {
+            showToast("Удалено", "success");
+            document.getElementById("invite-row-" + keyId)?.remove();
+          } else {
+            showToast("Ошибка", "error");
+          }
+        } catch (e) {
+          showToast("Ошибка сети", "error");
+        }
       }
 
       // ── Синхронизация Xray ──
       async function syncXray() {
         try {
-          var resp = await fetch('/admin/sync-xray', { method: 'POST' });
+          var resp = await fetch("/admin/sync-xray", { method: "POST" });
           var data = await resp.json();
-          if (data.ok) { showToast('Xray синхронизирован', 'success'); }
-          else { showToast('Ошибка: ' + (data.error || 'unknown'), 'error'); }
-        } catch (e) { showToast('Ошибка сети', 'error'); }
+          if (data.ok) {
+            showToast("Xray синхронизирован", "success");
+          } else {
+            showToast("Ошибка: " + (data.error || "unknown"), "error");
+          }
+        } catch (e) {
+          showToast("Ошибка сети", "error");
+        }
       }
     </script>
   </body>

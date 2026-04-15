@@ -25,8 +25,6 @@ from slowapi.util import get_remote_address
 from sqlalchemy import text as sa_text
 from sqlalchemy.orm import Session
 
-from starlette.middleware.base import BaseHTTPMiddleware
-
 from app.auth import (
     SESSION_COOKIE,
     create_session_token,
@@ -52,8 +50,6 @@ from app.xray import (
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-ADMIN_IPS = [ip.strip() for ip in os.getenv("ADMIN_IPS", "127.0.0.1").split(",") if ip.strip()]
 
 # ── Rate limiter ──
 limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
@@ -108,51 +104,107 @@ app = FastAPI(title="VPNBZK Cascade", lifespan=lifespan)
 app.state.limiter = limiter
 
 
-# ── Security middleware ──
+# ── Security middleware (чистый ASGI — НЕ BaseHTTPMiddleware, который ломает exception handling) ──
+
+BLOCKED_UA_KEYWORDS = ("sqlmap", "nikto", "nmap", "masscan", "zgrab", "dirbuster", "gobuster", "hydra")
+BLOCKED_PATHS = (
+    "/wp-admin", "/wp-login", "/xmlrpc.php", "/.env", "/phpmyadmin",
+    "/admin.php", "/wp-content", "/wp-includes", "/.git", "/config.php",
+    "/shell", "/cmd", "/eval", "/.aws", "/.ssh", "/actuator",
+)
+
+SECURITY_HEADERS = [
+    (b"x-content-type-options", b"nosniff"),
+    (b"x-frame-options", b"DENY"),
+    (b"x-xss-protection", b"1; mode=block"),
+    (b"referrer-policy", b"strict-origin-when-cross-origin"),
+    (b"content-security-policy", (
+        b"default-src 'self'; "
+        b"script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; "
+        b"style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://fonts.googleapis.com; "
+        b"font-src 'self' https://fonts.gstatic.com; "
+        b"img-src 'self' data:; "
+        b"connect-src 'self'; "
+        b"frame-ancestors 'none'"
+    )),
+    (b"cache-control", b"no-store, no-cache, must-revalidate"),
+    (b"pragma", b"no-cache"),
+]
 
 
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    BLOCKED_UA_KEYWORDS = ("sqlmap", "nikto", "nmap", "masscan", "zgrab", "dirbuster", "gobuster", "hydra")
-    BLOCKED_PATHS = (
-        "/wp-admin", "/wp-login", "/xmlrpc.php", "/.env", "/phpmyadmin",
-        "/admin.php", "/wp-content", "/wp-includes", "/.git", "/config.php",
-        "/shell", "/cmd", "/eval", "/.aws", "/.ssh", "/actuator",
-    )
+class SecurityMiddleware:
+    """Чистый ASGI middleware — не ломает обработку исключений FastAPI."""
 
-    async def dispatch(self, request: Request, call_next):
-        ip = _client_ip(request)
-        ua = (request.headers.get("user-agent") or "").lower()
-        if any(kw in ua for kw in self.BLOCKED_UA_KEYWORDS):
-            logger.warning("Блокирован сканер: UA=%s IP=%s", ua[:80], ip)
-            return JSONResponse({"detail": "Forbidden"}, status_code=403)
-        path = request.url.path.lower()
-        if any(path.startswith(bp) for bp in self.BLOCKED_PATHS):
-            logger.warning("Блокирован зонд-путь: %s IP=%s", path, ip)
-            api_guard.record_failure(ip)
-            return JSONResponse({"detail": "Not Found"}, status_code=404)
-        if api_guard.is_blocked(ip):
-            return JSONResponse({"detail": "Доступ временно заблокирован."}, status_code=429)
-        response = await call_next(request)
-        response.headers.setdefault("X-Content-Type-Options", "nosniff")
-        response.headers.setdefault("X-Frame-Options", "DENY")
-        response.headers.setdefault("X-XSS-Protection", "1; mode=block")
-        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-        response.headers.setdefault(
-            "Content-Security-Policy",
-            "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; "
-            "style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://fonts.googleapis.com; "
-            "font-src 'self' https://fonts.gstatic.com; "
-            "img-src 'self' data:; "
-            "connect-src 'self'; "
-            "frame-ancestors 'none'"
-        )
-        response.headers.setdefault("Cache-Control", "no-store, no-cache, must-revalidate")
-        response.headers.setdefault("Pragma", "no-cache")
-        return response
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        # Извлекаем заголовки запроса
+        request_headers = dict(scope.get("headers", []))
+        ua = request_headers.get(b"user-agent", b"").decode("latin-1", errors="replace").lower()
+        path = scope.get("path", "/").lower()
+
+        # Определяем IP клиента
+        xff = request_headers.get(b"x-forwarded-for", b"").decode("latin-1", errors="replace")
+        if xff:
+            client_ip = xff.split(",")[0].strip()
+        else:
+            client_ip = (scope.get("client") or ("0.0.0.0", 0))[0]
+
+        # Блок сканеров по User-Agent
+        if any(kw in ua for kw in BLOCKED_UA_KEYWORDS):
+            logger.warning("Блокирован сканер: UA=%s IP=%s", ua[:80], client_ip)
+            await self._send_json(send, 403, {"detail": "Forbidden"})
+            return
+
+        # Блок зонд-путей
+        if any(path.startswith(bp) for bp in BLOCKED_PATHS):
+            logger.warning("Блокирован зонд-путь: %s IP=%s", path, client_ip)
+            api_guard.record_failure(client_ip)
+            await self._send_json(send, 404, {"detail": "Not Found"})
+            return
+
+        # IP заблокирован brute-force guard
+        if api_guard.is_blocked(client_ip):
+            await self._send_json(send, 429, {"detail": "Доступ временно заблокирован."})
+            return
+
+        # Оборачиваем send для добавления security-заголовков
+        async def send_with_headers(message):
+            if message["type"] == "http.response.start":
+                existing_headers = list(message.get("headers", []))
+                existing_names = {h[0].lower() for h in existing_headers}
+                for name, value in SECURITY_HEADERS:
+                    if name not in existing_names:
+                        existing_headers.append((name, value))
+                message = {**message, "headers": existing_headers}
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
+
+    @staticmethod
+    async def _send_json(send, status_code: int, body: dict):
+        import json as _json
+        payload = _json.dumps(body).encode()
+        await send({
+            "type": "http.response.start",
+            "status": status_code,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(payload)).encode()),
+            ],
+        })
+        await send({
+            "type": "http.response.body",
+            "body": payload,
+        })
 
 
-app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(SecurityMiddleware)
 
 
 @app.exception_handler(RateLimitExceeded)
