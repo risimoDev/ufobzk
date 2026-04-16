@@ -189,6 +189,27 @@ def init_db():
                 _conn.commit()
             except Exception:
                 pass  # column already exists
+
+        # Make telegram_id nullable if it isn't already (recreate table approach via pragma)
+        # SQLite doesn't support ALTER COLUMN — we use a safe workaround:
+        # copy data to temp table, recreate without NOT NULL, copy back.
+        try:
+            row = _conn.execute(text("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'")).fetchone()
+            if row and "telegram_id INTEGER NOT NULL" in row[0]:
+                _conn.execute(text("PRAGMA foreign_keys=OFF"))
+                _conn.execute(text("ALTER TABLE users RENAME TO _users_old"))
+                # Recreate with nullable telegram_id
+                new_ddl = row[0].replace(
+                    "telegram_id INTEGER NOT NULL",
+                    "telegram_id INTEGER"
+                ).replace("CREATE TABLE _users_old", "CREATE TABLE users")
+                _conn.execute(text(new_ddl))
+                _conn.execute(text("INSERT INTO users SELECT * FROM _users_old"))
+                _conn.execute(text("DROP TABLE _users_old"))
+                _conn.execute(text("PRAGMA foreign_keys=ON"))
+                _conn.commit()
+        except Exception:
+            pass
     _db = SessionLocal()
     try:
         # Seed default settings if not present
