@@ -410,14 +410,17 @@ def get_user_links(key: VPNKey) -> list[dict[str, str]]:
 
 
 def get_subscription_content(keys: list[VPNKey]) -> str:
-    """Собрать base64-подписку из всех ключей пользователя."""
+    """Собрать base64-подписку из всех ключей пользователя.
+    Подписка содержит только WS+TLS ссылки (безопасно для клиентов).
+    """
     import base64
     all_links = []
     for key in keys:
         if key.status != "active":
             continue
         for link_info in get_user_links(key):
-            all_links.append(link_info["link"])
+            if link_info["type"] == "vless-ws":  # только WS+TLS
+                all_links.append(link_info["link"])
     return base64.b64encode("\n".join(all_links).encode()).decode()
 
 

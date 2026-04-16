@@ -85,11 +85,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     sa.is_admin = True
                     _db.commit()
             else:
+                from app.models import _gen_uuid as _gen_sub_token
                 sa = User(
                     telegram_id=SUPERADMIN_TELEGRAM_ID,
                     display_name="Суперадмин",
                     is_admin=True,
                     is_active=True,
+                    sub_token=_gen_sub_token(),
                 )
                 _db.add(sa)
                 _db.commit()
@@ -433,10 +435,10 @@ async def logout():
 # ── Подписка (для VPN-клиентов) ──
 
 
-@app.get("/sub/{user_id}")
-async def subscription(user_id: int, request: Request, db: Session = Depends(get_db)):
+@app.get("/sub/{token}")
+async def subscription(token: str, request: Request, db: Session = Depends(get_db)):
     """Эндпоинт подписки — возвращает base64 список ссылок."""
-    user = db.query(User).filter(User.id == user_id, User.is_active == True).first()  # noqa: E712
+    user = db.query(User).filter(User.sub_token == token, User.is_active == True).first()  # noqa: E712
     if not user:
         raise HTTPException(status_code=404)
     keys = [k for k in user.vpn_keys if k.status == "active"]
@@ -478,19 +480,21 @@ async def cabinet(request: Request, db: Session = Depends(get_db)):
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    # Загружаем ключи пользователя с ссылками
+    # Загружаем ключи пользователя с ссылками (только WS+TLS для кабинета)
     webapp_url = os.getenv("WEBAPP_URL", "https://vpn.example.com")
     keys_data = []
     for key in user.vpn_keys:
-        links = get_user_links(key)
+        all_links = get_user_links(key)
+        ws_links = [l for l in all_links if l["type"] == "vless-ws"]
         keys_data.append({
             "key": key,
-            "links": links,
+            "links": ws_links,
             "status": key.status,
             "key_sub_url": f"{webapp_url}/sub/key/{key.uuid}",
         })
 
-    subscription_url = f"{webapp_url}/sub/{user.id}" if user.vpn_keys else ""
+    sub_token = user.sub_token or ""
+    subscription_url = f"{webapp_url}/sub/{sub_token}" if user.vpn_keys and sub_token else ""
 
     # Load editable settings for cabinet
     from app.models import DEFAULT_SETTINGS
@@ -644,11 +648,13 @@ async def admin_create_user(
         if exists:
             raise HTTPException(status_code=409, detail="Пользователь с таким логином уже существует")
 
+    from app.models import _gen_uuid as _gen_sub_token
     new_user = User(
         telegram_id=telegram_id if telegram_id else None,
         display_name=display_name or username or None,
         username=username or None,
         password_hash=hash_password(password) if password else None,
+        sub_token=_gen_sub_token(),
         is_active=True,
     )
     db.add(new_user)
@@ -1036,7 +1042,8 @@ async def admin_user_links(
             })
 
     webapp_url = os.getenv("WEBAPP_URL", f"https://{DOMAIN}")
-    subscription_url = f"{webapp_url}/sub/{target.id}" if active_keys else ""
+    sub_token = target.sub_token or ""
+    subscription_url = f"{webapp_url}/sub/{sub_token}" if active_keys and sub_token else ""
 
     return JSONResponse({"links": links, "subscription_url": subscription_url})
 

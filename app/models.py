@@ -1,7 +1,12 @@
 """SQLAlchemy модели для каскадного VPN."""
 
 import os
+import uuid as _uuid
 from datetime import datetime
+
+
+def _gen_uuid() -> str:
+    return str(_uuid.uuid4())
 
 from sqlalchemy import (
     BigInteger,
@@ -42,6 +47,7 @@ class User(Base):
     display_name = Column(String, nullable=True)
     username = Column(String(64), unique=True, nullable=True, index=True)
     password_hash = Column(String(128), nullable=True)
+    sub_token = Column(String(36), unique=True, nullable=True, index=True)
     is_admin = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -172,12 +178,15 @@ class InviteKey(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
-    # Seed default settings if not present
     _db = SessionLocal()
     try:
+        # Seed default settings if not present
         for key, value in DEFAULT_SETTINGS.items():
             if not _db.query(AppSetting).filter(AppSetting.key == key).first():
                 _db.add(AppSetting(key=key, value=value))
+        # Generate sub_tokens for users that don't have one
+        for user in _db.query(User).filter(User.sub_token == None).all():  # noqa: E711
+            user.sub_token = _gen_uuid()
         _db.commit()
     finally:
         _db.close()
