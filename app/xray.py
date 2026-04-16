@@ -96,10 +96,10 @@ def build_xray_config(db: Session) -> dict[str, Any]:
                 "0": {
                     "statsUserUplink": True,
                     "statsUserDownlink": True,
-                    "handshake": 4,
+                    "handshake": 8,
                     "connIdle": 300,
-                    "uplinkOnly": 1,
-                    "downlinkOnly": 1
+                    "uplinkOnly": 10,
+                    "downlinkOnly": 15
                 }
             },
             "system": {
@@ -132,6 +132,29 @@ def build_xray_config(db: Session) -> dict[str, Any]:
                     "wsSettings": {
                         "path": "/vless-ws",
                         "heartbeatPeriod": 30
+                    }
+                },
+                "sniffing": {
+                    "enabled": True,
+                    "destOverride": ["http", "tls", "quic"]
+                }
+            },
+            {
+                "tag": "VLESS-XHTTP",
+                "listen": "0.0.0.0",
+                "port": 8444,
+                "protocol": "vless",
+                "settings": {
+                    "clients": vless_clients,
+                    "decryption": "none"
+                },
+                "streamSettings": {
+                    "network": "xhttp",
+                    "security": "none",
+                    "xhttpSettings": {
+                        "path": "/xhttp",
+                        "mode": "auto",
+                        "xPaddingBytes": "100-1000"
                     }
                 },
                 "sniffing": {
@@ -361,6 +384,18 @@ def build_vless_ws_link(key: VPNKey, server_domain: str, port: int = 443, remark
     return f"vless://{key.uuid}@{server_domain}:{port}?{params}#{quote(remark)}"
 
 
+def build_vless_xhttp_link(key: VPNKey, server_domain: str, port: int = 443, remark: str = "") -> str:
+    """VLESS XHTTP + TLS ссылка (новый транспорт, лучше WS для DPI)."""
+    if not remark:
+        remark = f"{key.name}@{server_domain}-xhttp"
+    params = (
+        f"type=xhttp&security=tls&host={server_domain}"
+        f"&path=%2Fxhttp&sni={server_domain}"
+        f"&fp=chrome&alpn=h2%2Chttp%2F1.1"
+    )
+    return f"vless://{key.uuid}@{server_domain}:{port}?{params}#{quote(remark)}"
+
+
 def build_vless_reality_link(key: VPNKey, server_ip: str, port: int = 443, remark: str = "") -> str:
     """VLESS REALITY ссылка."""
     if not remark:
@@ -389,8 +424,11 @@ def get_user_links(key: VPNKey) -> list[dict[str, str]]:
             "name": f"🇳🇱 Европа (WS+TLS)",
             "link": build_vless_ws_link(key, DOMAIN, VLESS_WS_PORT, f"NL-{key.name}"),
             "type": "vless-ws"
+        })        links.append({
+            "name": f"\U0001f1f3\U0001f1f1 Европа (XHTTP+TLS)",
+            "link": build_vless_xhttp_link(key, DOMAIN, VLESS_WS_PORT, f"NL-XHTTP-{key.name}"),
+            "type": "vless-xhttp"
         })
-
     # NL сервер через REALITY
     if NL_SERVER_IP and REALITY_PUBLIC_KEY:
         links.append({
@@ -428,7 +466,7 @@ def get_subscription_content(keys: list[VPNKey]) -> str:
         if key.status != "active":
             continue
         for link_info in get_user_links(key):
-            if link_info["type"] == "vless-ws":  # только WS+TLS
+            if link_info["type"] in ("vless-ws", "vless-xhttp"):  # WS + XHTTP через CDN
                 all_links.append(link_info["link"])
     return base64.b64encode("\n".join(all_links).encode()).decode()
 

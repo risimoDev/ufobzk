@@ -231,9 +231,25 @@ net.ipv4.tcp_fin_timeout = 15
 net.core.netdev_max_backlog = 4096
 # Файловые дескрипторы
 fs.file-max = 1048576
+# ── BBR TCP Congestion Control ──
+# Hugely improves throughput on high-latency/lossy paths (Russia ↔ Europe)
+# Requires Linux 4.9+ (Ubuntu 22.04/24.04 have 5.15+/6.8+)
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
+# TCP Fast Open — reduces latency on reconnects
+net.ipv4.tcp_fastopen = 3
+# MTU Probing — helps when PMTUD is broken (some RU ISPs)
+net.ipv4.tcp_mtu_probing = 1
 EOF
 sysctl --system -q
 ok "Лимиты применены"
+
+# Проверка BBR
+if sysctl net.ipv4.tcp_congestion_control 2>/dev/null | grep -q bbr; then
+    ok "BBR TCP congestion control активен"
+else
+    warn "BBR не активен — возможно, ядро < 4.9. Текущий алгоритм: $(sysctl -n net.ipv4.tcp_congestion_control)"
+fi
 
 # ══════════════════════════════════════════
 # 10. Итог
