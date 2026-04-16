@@ -91,7 +91,11 @@ def build_xray_config(db: Session) -> dict[str, Any]:
             "levels": {
                 "0": {
                     "statsUserUplink": True,
-                    "statsUserDownlink": True
+                    "statsUserDownlink": True,
+                    "handshake": 4,
+                    "connIdle": 300,
+                    "uplinkOnly": 1,
+                    "downlinkOnly": 1
                 }
             },
             "system": {
@@ -122,7 +126,8 @@ def build_xray_config(db: Session) -> dict[str, Any]:
                     "network": "ws",
                     "security": "none",
                     "wsSettings": {
-                        "path": "/vless-ws"
+                        "path": "/vless-ws",
+                        "heartbeatPeriod": 30
                     }
                 },
                 "sniffing": {
