@@ -19,6 +19,7 @@ from sqlalchemy import (
     String,
     Text,
     create_engine,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, relationship, sessionmaker
 
@@ -178,6 +179,16 @@ class InviteKey(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    # SQLite ALTER TABLE migration: add columns introduced after initial deploy
+    with engine.connect() as _conn:
+        for col_sql in [
+            "ALTER TABLE users ADD COLUMN sub_token VARCHAR(36)",
+        ]:
+            try:
+                _conn.execute(text(col_sql))
+                _conn.commit()
+            except Exception:
+                pass  # column already exists
     _db = SessionLocal()
     try:
         # Seed default settings if not present
