@@ -705,7 +705,13 @@
                         🔗
                       </button>
                       <button
-                        onclick="toggleUserActive({{ u.id }}, {{ (not u.is_active)|tojson }})"
+                        onclick="rotateUserKeys({{ u.id }}, {{ u.display_name|tojson }})"
+                        class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-orange-400 hover:bg-orange-400/10 transition text-xs"
+                        title="Заменить все ключи"
+                      >
+                        🔄
+                      </button>
+                      <button"
                         class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-amber-400 hover:bg-amber-400/10 transition text-xs"
                         title="{{ 'Разблокировать' if not u.is_active else 'Заблокировать' }}"
                       >
@@ -2011,6 +2017,19 @@
             var row = document.getElementById('user-row-' + userId);
             if (row) row.remove();
           } else { showToast(data.detail || 'Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
+      }
+
+      async function rotateUserKeys(userId, name) {
+        if (!confirm('Заменить ВСЕ ключи пользователя «' + (name || userId) + '»?\n\nСтарые ключи перестанут работать. Новые будут выданы мгновенно.')) return;
+        try {
+          var resp = await fetch('/admin/users/' + userId + '/rotate-keys', { method: 'POST' });
+          var data = await resp.json();
+          if (data.ok) {
+            showToast('Заменено ключей: ' + data.rotated, 'success');
+          } else {
+            showToast(data.detail || 'Ошибка', 'error');
+          }
         } catch(e) { showToast('Ошибка сети', 'error'); }
       }
 

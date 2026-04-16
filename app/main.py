@@ -800,6 +800,42 @@ async def admin_add_key(
     return JSONResponse({"ok": True, "key_id": vpn_key.id, "uuid": vpn_key.uuid})
 
 
+# ── Ротация всех ключей пользователя ──
+
+
+@app.post("/admin/users/{user_id}/rotate-keys")
+async def admin_rotate_keys(
+    user_id: int,
+    request: Request,
+    admin: User = Depends(_require_admin),
+    db: Session = Depends(get_db),
+):
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    keys = db.query(VPNKey).filter(VPNKey.user_id == user_id).all()
+    if not keys:
+        raise HTTPException(status_code=400, detail="У пользователя нет ключей")
+
+    old_uuids = [k.uuid for k in keys]
+    for key in keys:
+        key.uuid = generate_uuid()
+    db.commit()
+
+    try:
+        sync_and_reload(db)
+    except Exception as e:
+        logger.error("Ошибка синхронизации Xray: %s", e)
+
+    _log_action(
+        db, admin.id, "rotate_keys",
+        str(target.telegram_id or target.id),
+        f"count={len(keys)} old={','.join(old_uuids)}",
+    )
+    return JSONResponse({"ok": True, "rotated": len(keys)})
+
+
 # ── Редактирование пользователя ──
 
 
