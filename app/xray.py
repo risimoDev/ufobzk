@@ -347,7 +347,7 @@ def build_vless_ws_link(key: VPNKey, server_domain: str, port: int = 443, remark
     params = (
         f"type=ws&security=tls&host={server_domain}"
         f"&path=%2Fvless-ws&sni={server_domain}"
-        f"&fp=chrome&alpn=h2%2Chttp%2F1.1"
+        f"&fp=chrome&alpn=http%2F1.1"
     )
     return f"vless://{key.uuid}@{server_domain}:{port}?{params}#{quote(remark)}"
 
