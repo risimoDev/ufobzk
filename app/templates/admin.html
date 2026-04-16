@@ -462,7 +462,11 @@
           >
             &#x2795; Создать пользователя
           </h3>
-          <form id="create-user-form" class="space-y-4" onsubmit="return false;">
+          <form
+            id="create-user-form"
+            class="space-y-4"
+            onsubmit="return false;"
+          >
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
@@ -544,7 +548,11 @@
                 />
               </div>
               <div>
-                <button type="button" onclick="createUser()" class="btn-primary w-full">
+                <button
+                  type="button"
+                  onclick="createUser()"
+                  class="btn-primary w-full"
+                >
                   Создать
                 </button>
               </div>

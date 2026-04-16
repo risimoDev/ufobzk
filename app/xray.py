@@ -64,7 +64,9 @@ def build_xray_config(db: Session) -> dict[str, Any]:
         if key.protocol == "vless":
             vless_clients.append({
                 "id": key.uuid,
-                "flow": ""
+                "email": key.uuid,
+                "flow": "",
+                "level": 0
             })
 
     # Клиенты для VLESS REALITY
@@ -73,7 +75,9 @@ def build_xray_config(db: Session) -> dict[str, Any]:
         if key.protocol == "vless":
             reality_clients.append({
                 "id": key.uuid,
-                "flow": "xtls-rprx-vision"
+                "email": key.uuid,
+                "flow": "xtls-rprx-vision",
+                "level": 0
             })
 
     config: dict[str, Any] = {
