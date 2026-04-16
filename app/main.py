@@ -1446,3 +1446,183 @@ async def admin_migrate_nl(
 
     _log_action(db, admin.id, "migrate_nl", "", f"changed={list(changes.keys())}")
     return JSONResponse({"ok": True, "changed": list(changes.keys())})
+
+
+# ── Диагностика сервера ──
+
+
+@app.get("/admin/diagnostics")
+async def admin_diagnostics(
+    request: Request,
+    _: User = Depends(_require_admin),
+):
+    import socket
+    import subprocess
+    import platform
+    import time
+
+    results: dict[str, Any] = {}
+
+    # ── 1. Системные ресурсы ──────────────────────────────
+    try:
+        import resource as _resource
+        # CPU load (1/5/15 min averages)
+        load = os.getloadavg()
+        results["load_avg"] = {"1m": round(load[0], 2), "5m": round(load[1], 2), "15m": round(load[2], 2)}
+    except Exception:
+        results["load_avg"] = None
+
+    # Memory from /proc/meminfo
+    try:
+        mem: dict[str, int] = {}
+        with open("/proc/meminfo") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 2:
+                    mem[parts[0].rstrip(":")] = int(parts[1])
+        total_kb = mem.get("MemTotal", 0)
+        avail_kb = mem.get("MemAvailable", 0)
+        used_kb = total_kb - avail_kb
+        results["memory"] = {
+            "total_mb": round(total_kb / 1024),
+            "used_mb": round(used_kb / 1024),
+            "free_mb": round(avail_kb / 1024),
+            "pct": round(used_kb / total_kb * 100) if total_kb else 0,
+        }
+    except Exception:
+        results["memory"] = None
+
+    # Disk usage
+    try:
+        st = os.statvfs("/")
+        total = st.f_blocks * st.f_frsize
+        free = st.f_bavail * st.f_frsize
+        used = total - free
+        results["disk"] = {
+            "total_gb": round(total / 1e9, 1),
+            "used_gb": round(used / 1e9, 1),
+            "free_gb": round(free / 1e9, 1),
+            "pct": round(used / total * 100) if total else 0,
+        }
+    except Exception:
+        results["disk"] = None
+
+    # Uptime
+    try:
+        with open("/proc/uptime") as f:
+            uptime_secs = float(f.read().split()[0])
+        days = int(uptime_secs // 86400)
+        hours = int((uptime_secs % 86400) // 3600)
+        minutes = int((uptime_secs % 3600) // 60)
+        results["uptime"] = f"{days}д {hours}ч {minutes}м"
+    except Exception:
+        results["uptime"] = None
+
+    # ── 2. TCP-connectivity тесты ──────────────────────────
+    def tcp_check(host: str, port: int, timeout: float = 3.0) -> dict:
+        t0 = time.monotonic()
+        try:
+            sock = socket.create_connection((host, port), timeout=timeout)
+            sock.close()
+            ms = round((time.monotonic() - t0) * 1000)
+            return {"ok": True, "ms": ms}
+        except Exception as e:
+            ms = round((time.monotonic() - t0) * 1000)
+            return {"ok": False, "ms": ms, "error": str(e)[:80]}
+
+    # VLESS WS — Xray internal port
+    results["xray_ws"] = tcp_check("xray", 8443)
+    # VLESS XHTTP — Xray internal port
+    results["xray_xhttp"] = tcp_check("xray", 8444)
+    # REALITY — direct external
+    results["reality"] = tcp_check("127.0.0.1", 443, timeout=3.0)
+    # Internal app health
+    results["app_self"] = tcp_check("127.0.0.1", 8000)
+
+    # ── 3. DNS resolution ─────────────────────────────────
+    def dns_check(host: str) -> dict:
+        t0 = time.monotonic()
+        try:
+            ip = socket.gethostbyname(host)
+            ms = round((time.monotonic() - t0) * 1000)
+            return {"ok": True, "ip": ip, "ms": ms}
+        except Exception as e:
+            return {"ok": False, "error": str(e)[:80]}
+
+    domain = os.getenv("DOMAIN", "")
+    results["dns_domain"] = dns_check(domain) if domain else {"ok": False, "error": "DOMAIN not set"}
+    results["dns_cloudflare"] = dns_check("one.one.one.one")
+    results["dns_google"] = dns_check("google.com")
+
+    # ── 4. BBR status ──────────────────────────────────────
+    try:
+        with open("/proc/sys/net/ipv4/tcp_congestion_control") as f:
+            algo = f.read().strip()
+        results["bbr"] = {"active": algo == "bbr", "algorithm": algo}
+    except Exception:
+        results["bbr"] = {"active": False, "algorithm": "unknown"}
+
+    # ── 5. Active TCP connections ──────────────────────────
+    try:
+        res = subprocess.run(
+            ["sh", "-c", "ss -tn state established | wc -l"],
+            capture_output=True, text=True, timeout=3
+        )
+        conn_count = int(res.stdout.strip()) - 1  # subtract header
+        results["connections"] = {"established": max(conn_count, 0)}
+    except Exception:
+        results["connections"] = None
+
+    # ── 6. Xray config file ────────────────────────────────
+    config_path = os.getenv("XRAY_CONFIG_PATH", "/etc/xray/config.json")
+    try:
+        import json as _json
+        stat = os.stat(config_path)
+        with open(config_path) as f:
+            cfg = _json.load(f)
+        inbound_tags = [ib.get("tag", "?") for ib in cfg.get("inbounds", [])]
+        client_count = 0
+        for ib in cfg.get("inbounds", []):
+            clients = ib.get("settings", {}).get("clients", [])
+            client_count = max(client_count, len(clients))
+        results["xray_config"] = {
+            "ok": True,
+            "size_kb": round(stat.st_size / 1024, 1),
+            "inbounds": inbound_tags,
+            "clients": client_count,
+            "modified": datetime.fromtimestamp(stat.st_mtime).strftime("%d.%m.%Y %H:%M"),
+        }
+    except FileNotFoundError:
+        results["xray_config"] = {"ok": False, "error": "Файл не найден (Xray ещё не запущен?)"}
+    except Exception as e:
+        results["xray_config"] = {"ok": False, "error": str(e)[:100]}
+
+    # ── 7. Certificate expiry ──────────────────────────────
+    try:
+        cert_path = f"/etc/letsencrypt/live/{domain}/fullchain.pem"
+        res = subprocess.run(
+            ["openssl", "x509", "-noout", "-enddate", "-in", cert_path],
+            capture_output=True, text=True, timeout=5
+        )
+        if res.returncode == 0:
+            # "notAfter=Apr 30 12:00:00 2026 GMT"
+            date_str = res.stdout.strip().replace("notAfter=", "")
+            from email.utils import parsedate
+            import calendar
+            t = parsedate(date_str)
+            if t:
+                exp_ts = calendar.timegm(t)
+                days_left = int((exp_ts - time.time()) / 86400)
+                results["cert"] = {
+                    "ok": days_left > 7,
+                    "expires": date_str,
+                    "days_left": days_left,
+                }
+            else:
+                results["cert"] = {"ok": True, "expires": date_str, "days_left": None}
+        else:
+            results["cert"] = {"ok": False, "error": res.stderr.strip()[:100]}
+    except Exception as e:
+        results["cert"] = {"ok": False, "error": str(e)[:100]}
+
+    return JSONResponse(results)

@@ -326,6 +326,12 @@
         >
           &#x2699;&#xfe0f; Система
         </button>
+        <button
+          class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500"
+          data-tab="diagnostics"
+        >
+          &#x1f9ea; Тесты
+        </button>
       </div>
 
       <!-- TAB: DASHBOARD -->
@@ -1333,6 +1339,144 @@
           </div>
         </div>
       </div>
+
+    <!-- TAB: DIAGNOSTICS -->
+    <div id="tab-diagnostics" class="tab-panel">
+      <div class="mb-6 flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-white">&#x1f9ea; Диагностика сервера</h2>
+        <button
+          id="btn-run-diag"
+          onclick="runDiagnostics()"
+          class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors flex items-center gap-2"
+        >
+          <span id="diag-spinner" class="hidden">&#x21bb;</span>
+          Запустить все тесты
+        </button>
+      </div>
+
+      <div id="diag-results" class="hidden space-y-6">
+
+        <!-- Resources -->
+        <div class="card p-5">
+          <h3 class="text-sm font-semibold text-gray-300 mb-4">&#x1f4bb; Ресурсы</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-gray-400">CPU (load 1m)</span>
+                <span id="d-cpu-val" class="text-gray-200">—</span>
+              </div>
+              <div class="h-2 rounded bg-white/5 w-full">
+                <div id="d-cpu-bar" class="h-2 rounded bg-indigo-500 transition-all" style="width:0%"></div>
+              </div>
+              <div class="text-xs text-gray-500 mt-1">5m: <span id="d-cpu-5m">—</span> &nbsp;15m: <span id="d-cpu-15m">—</span></div>
+            </div>
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-gray-400">RAM</span>
+                <span id="d-ram-val" class="text-gray-200">—</span>
+              </div>
+              <div class="h-2 rounded bg-white/5 w-full">
+                <div id="d-ram-bar" class="h-2 rounded bg-purple-500 transition-all" style="width:0%"></div>
+              </div>
+            </div>
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-gray-400">Диск (/)</span>
+                <span id="d-disk-val" class="text-gray-200">—</span>
+              </div>
+              <div class="h-2 rounded bg-white/5 w-full">
+                <div id="d-disk-bar" class="h-2 rounded bg-cyan-500 transition-all" style="width:0%"></div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 text-xs">
+              <span class="text-gray-400">Uptime:</span>
+              <span id="d-uptime" class="text-gray-200 font-mono">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Connectivity -->
+        <div class="card p-5">
+          <h3 class="text-sm font-semibold text-gray-300 mb-4">&#x1f310; Связность</h3>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div class="rounded-lg bg-white/5 p-3 text-center">
+              <div id="d-st-xray-ws" class="text-2xl mb-1">&#x23f3;</div>
+              <div class="text-xs text-gray-400">Xray WS :8443</div>
+              <div id="d-ms-xray-ws" class="text-xs text-gray-500 mt-1">—</div>
+            </div>
+            <div class="rounded-lg bg-white/5 p-3 text-center">
+              <div id="d-st-xray-xhttp" class="text-2xl mb-1">&#x23f3;</div>
+              <div class="text-xs text-gray-400">Xray XHTTP :8444</div>
+              <div id="d-ms-xray-xhttp" class="text-xs text-gray-500 mt-1">—</div>
+            </div>
+            <div class="rounded-lg bg-white/5 p-3 text-center">
+              <div id="d-st-reality" class="text-2xl mb-1">&#x23f3;</div>
+              <div class="text-xs text-gray-400">REALITY :443</div>
+              <div id="d-ms-reality" class="text-xs text-gray-500 mt-1">—</div>
+            </div>
+            <div class="rounded-lg bg-white/5 p-3 text-center">
+              <div id="d-st-app" class="text-2xl mb-1">&#x23f3;</div>
+              <div class="text-xs text-gray-400">App :8000</div>
+              <div id="d-ms-app" class="text-xs text-gray-500 mt-1">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- DNS -->
+        <div class="card p-5">
+          <h3 class="text-sm font-semibold text-gray-300 mb-4">&#x1f50d; DNS</h3>
+          <div class="space-y-2">
+            <div class="flex items-center justify-between text-xs py-1.5 border-b border-white/5">
+              <span class="text-gray-400">Домен сервера</span>
+              <span id="d-dns-domain" class="font-mono text-gray-300">—</span>
+            </div>
+            <div class="flex items-center justify-between text-xs py-1.5 border-b border-white/5">
+              <span class="text-gray-400">Cloudflare (1.1.1.1)</span>
+              <span id="d-dns-cloudflare" class="font-mono text-gray-300">—</span>
+            </div>
+            <div class="flex items-center justify-between text-xs py-1.5">
+              <span class="text-gray-400">Google (google.com)</span>
+              <span id="d-dns-google" class="font-mono text-gray-300">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- BBR + Connections + Cert -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="card p-5">
+            <h3 class="text-sm font-semibold text-gray-300 mb-3">&#x1f680; BBR</h3>
+            <div id="d-bbr-badge" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-white/5 text-gray-400">
+              <span id="d-bbr-dot" class="w-2 h-2 rounded-full bg-gray-600 inline-block"></span>
+              <span id="d-bbr-text">—</span>
+            </div>
+          </div>
+          <div class="card p-5">
+            <h3 class="text-sm font-semibold text-gray-300 mb-3">&#x1f517; Соединения</h3>
+            <div class="text-3xl font-bold text-white" id="d-conns">—</div>
+            <div class="text-xs text-gray-500 mt-1">TCP ESTABLISHED</div>
+          </div>
+          <div class="card p-5">
+            <h3 class="text-sm font-semibold text-gray-300 mb-3">&#x1f512; SSL-сертификат</h3>
+            <div class="text-3xl font-bold" id="d-cert-days">—</div>
+            <div class="text-xs text-gray-500 mt-1" id="d-cert-expires">—</div>
+          </div>
+        </div>
+
+        <!-- Xray config -->
+        <div class="card p-5">
+          <h3 class="text-sm font-semibold text-gray-300 mb-4">&#x2699;&#xfe0f; Xray конфиг</h3>
+          <div id="d-xray-config-content" class="space-y-2 text-xs text-gray-400">—</div>
+        </div>
+
+      </div><!-- /diag-results -->
+
+      <div id="diag-empty" class="flex flex-col items-center justify-center py-20 text-gray-600">
+        <div class="text-5xl mb-4">&#x1f9ea;</div>
+        <div class="text-sm">Нажмите «Запустить все тесты» для проверки сервера</div>
+      </div>
+
+    </div>
+    <!-- /TAB: DIAGNOSTICS -->
     </main>
 
     <!-- MODAL: EDIT USER -->
@@ -1609,6 +1753,7 @@
         var panel = document.getElementById('tab-' + tabName);
         if (panel) panel.classList.add('active');
         if (tabName === 'system') loadSecurityStats();
+        if (tabName === 'diagnostics') runDiagnostics();
       }
       document.querySelectorAll('.tab-btn').forEach(function(btn) {
         btn.addEventListener('click', function() { switchTab(btn.dataset.tab); });
@@ -2083,6 +2228,137 @@
           else { showToast('Ошибка', 'error'); }
         } catch(e) { showToast('Ошибка сети', 'error'); }
       }
+
+      // ── Diagnostics ──────────────────────────────────────────────────────────
+      async function runDiagnostics() {
+        var btn = document.getElementById('btn-run-diag');
+        var spinner = document.getElementById('diag-spinner');
+        if (btn) btn.disabled = true;
+        if (spinner) spinner.classList.remove('hidden');
+
+        try {
+          var resp = await fetch('/admin/diagnostics');
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          var d = await resp.json();
+
+          // Show results, hide empty state
+          document.getElementById('diag-results').classList.remove('hidden');
+          document.getElementById('diag-empty').classList.add('hidden');
+
+          // --- Resources ---
+          var cpus = d.load_avg || {};
+          var numCpus = (navigator.hardwareConcurrency || 1);
+          var cpuPct = Math.min(100, ((cpus['1m'] || 0) / numCpus) * 100).toFixed(0);
+          setText('d-cpu-val', (cpus['1m'] || 0).toFixed(2));
+          setWidth('d-cpu-bar', cpuPct);
+          setText('d-cpu-5m', (cpus['5m'] || 0).toFixed(2));
+          setText('d-cpu-15m', (cpus['15m'] || 0).toFixed(2));
+
+          var mem = d.memory || {};
+          setText('d-ram-val', (mem.used_mb || 0).toFixed(0) + ' / ' + (mem.total_mb || 0).toFixed(0) + ' MB (' + (mem.pct || 0).toFixed(0) + '%)');
+          setWidth('d-ram-bar', (mem.pct || 0).toFixed(0));
+
+          var disk = d.disk || {};
+          setText('d-disk-val', (disk.used_gb || 0).toFixed(1) + ' / ' + (disk.total_gb || 0).toFixed(1) + ' GB (' + (disk.pct || 0).toFixed(0) + '%)');
+          setWidth('d-disk-bar', (disk.pct || 0).toFixed(0));
+
+          setText('d-uptime', d.uptime || '—');
+
+          // --- Connectivity ---
+          renderConn('xray-ws',    d.xray_ws);
+          renderConn('xray-xhttp', d.xray_xhttp);
+          renderConn('reality',    d.reality);
+          renderConn('app',        d.app_self);
+
+          // --- DNS ---
+          renderDns('d-dns-domain',     d.dns_domain);
+          renderDns('d-dns-cloudflare', d.dns_cloudflare);
+          renderDns('d-dns-google',     d.dns_google);
+
+          // --- BBR ---
+          var bbr = d.bbr || {};
+          var bbrEl = document.getElementById('d-bbr-badge');
+          var bbrDot = document.getElementById('d-bbr-dot');
+          setText('d-bbr-text', bbr.algorithm || '—');
+          if (bbr.active) {
+            if (bbrEl) { bbrEl.classList.remove('text-gray-400'); bbrEl.classList.add('text-green-400'); }
+            if (bbrDot) { bbrDot.classList.remove('bg-gray-600'); bbrDot.classList.add('bg-green-500'); }
+          } else {
+            if (bbrEl) { bbrEl.classList.remove('text-green-400'); bbrEl.classList.add('text-yellow-400'); }
+            if (bbrDot) { bbrDot.classList.remove('bg-gray-600', 'bg-green-500'); bbrDot.classList.add('bg-yellow-500'); }
+          }
+
+          // --- Connections ---
+          var connInfo = d.connections || {};
+          setText('d-conns', connInfo.established != null ? connInfo.established : '—');
+
+          // --- Cert ---
+          var cert = d.cert || {};
+          var certDaysEl = document.getElementById('d-cert-days');
+          if (cert.days_left != null) {
+            certDaysEl.textContent = cert.days_left + ' дн.';
+            certDaysEl.className = 'text-3xl font-bold ' + (cert.days_left > 7 ? 'text-green-400' : 'text-red-400');
+          } else {
+            certDaysEl.textContent = '—';
+            certDaysEl.className = 'text-3xl font-bold text-gray-500';
+          }
+          setText('d-cert-expires', cert.expires || cert.error || '—');
+
+          // --- Xray config ---
+          var xc = d.xray_config || {};
+          var xcHtml = '';
+          if (!xc.ok && xc.error) {
+            xcHtml = '<span class="text-red-400">' + escapeHtml(xc.error) + '</span>';
+          } else {
+            xcHtml += '<div class="flex justify-between py-1 border-b border-white/5"><span class="text-gray-500">Размер</span><span class="text-gray-300">' + (xc.size_kb || 0).toFixed(1) + ' KB</span></div>';
+            xcHtml += '<div class="flex justify-between py-1 border-b border-white/5"><span class="text-gray-500">Клиентов</span><span class="text-gray-300">' + (xc.clients || 0) + '</span></div>';
+            xcHtml += '<div class="flex justify-between py-1 border-b border-white/5"><span class="text-gray-500">Изменён</span><span class="text-gray-300">' + escapeHtml(xc.modified || '—') + '</span></div>';
+            if (xc.inbounds && xc.inbounds.length) {
+              xcHtml += '<div class="pt-2"><span class="text-gray-500">Inbounds: </span>';
+              xc.inbounds.forEach(function(ib) {
+                xcHtml += '<span class="inline-block mr-2 px-2 py-0.5 bg-indigo-500/15 text-indigo-300 rounded text-xs font-mono">' + escapeHtml(ib) + '</span>';
+              });
+              xcHtml += '</div>';
+            }
+          }
+          document.getElementById('d-xray-config-content').innerHTML = xcHtml;
+
+        } catch(e) {
+          showToast('Ошибка диагностики: ' + e.message, 'error');
+        } finally {
+          if (btn) btn.disabled = false;
+          if (spinner) spinner.classList.add('hidden');
+        }
+      }
+
+      function setText(id, val) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = val;
+      }
+      function setWidth(id, pct) {
+        var el = document.getElementById(id);
+        if (el) el.style.width = Math.min(100, Math.max(0, pct)) + '%';
+      }
+      function renderConn(key, info) {
+        var stEl = document.getElementById('d-st-' + key);
+        var msEl = document.getElementById('d-ms-' + key);
+        if (!info) { if (stEl) stEl.textContent = '❓'; return; }
+        if (stEl) stEl.textContent = info.ok ? '✅' : '❌';
+        if (msEl) msEl.textContent = info.ok ? (info.ms != null ? info.ms + ' ms' : 'OK') : (info.error || 'недоступен');
+      }
+      function renderDns(id, info) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        if (!info) { el.textContent = '—'; return; }
+        if (info.ok) {
+          el.textContent = info.ip || 'OK';
+          el.className = 'font-mono text-green-400';
+        } else {
+          el.textContent = info.error || 'ошибка';
+          el.className = 'font-mono text-red-400';
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────────
 
       function toggleKeyEdit(keyId) {
         var panel = document.getElementById('edit-panel-' + keyId);
