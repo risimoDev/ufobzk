@@ -424,7 +424,8 @@ def get_user_links(key: VPNKey) -> list[dict[str, str]]:
             "name": f"🇳🇱 Европа (WS+TLS)",
             "link": build_vless_ws_link(key, DOMAIN, VLESS_WS_PORT, f"NL-{key.name}"),
             "type": "vless-ws"
-        })        links.append({
+        })
+        links.append({
             "name": f"\U0001f1f3\U0001f1f1 Европа (XHTTP+TLS)",
             "link": build_vless_xhttp_link(key, DOMAIN, VLESS_WS_PORT, f"NL-XHTTP-{key.name}"),
             "type": "vless-xhttp"
