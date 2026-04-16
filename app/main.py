@@ -682,6 +682,84 @@ async def admin_create_user(
     return RedirectResponse(url="/admin", status_code=303)
 
 
+# ── Создание пользователя (JSON API) ──
+
+
+@app.post("/admin/api/create-user")
+@limiter.limit("10/minute")
+async def admin_create_user_json(
+    request: Request,
+    admin: User = Depends(_require_admin),
+    db: Session = Depends(get_db),
+):
+    body = await request.json()
+    csrf_token = str(body.get("csrf_token", ""))
+    _verify_csrf(request, csrf_token)
+
+    display_name = str(body.get("display_name", "")).strip()[:100]
+    username = str(body.get("username", "")).strip()[:64]
+    password = str(body.get("password", "")).strip()
+    telegram_id = int(body.get("telegram_id", 0) or 0)
+    data_limit_gb = float(body.get("data_limit_gb", 0) or 0)
+    expire_days = int(body.get("expire_days", 0) or 0)
+    key_name = str(body.get("key_name", "default")).strip()[:64] or "default"
+
+    if telegram_id and (telegram_id < 0 or telegram_id > 9_999_999_999):
+        raise HTTPException(status_code=400, detail="Некорректный Telegram ID")
+    if not display_name and not telegram_id and not username:
+        raise HTTPException(status_code=400, detail="Укажите хотя бы имя пользователя")
+    if username and len(username) < 3:
+        raise HTTPException(status_code=400, detail="Логин должен быть не менее 3 символов")
+    if username and not password:
+        raise HTTPException(status_code=400, detail="Укажите пароль для учётной записи с логином")
+    if password and len(password) < 4:
+        raise HTTPException(status_code=400, detail="Пароль должен быть не менее 4 символов")
+    if data_limit_gb < 0 or data_limit_gb > 10_000:
+        raise HTTPException(status_code=400, detail="Некорректный лимит трафика")
+    if expire_days < 0 or expire_days > 3650:
+        raise HTTPException(status_code=400, detail="Некорректный срок")
+
+    if telegram_id:
+        exists = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if exists:
+            raise HTTPException(status_code=409, detail="Пользователь с таким Telegram ID уже существует")
+    if username:
+        exists = db.query(User).filter(User.username == username).first()
+        if exists:
+            raise HTTPException(status_code=409, detail="Пользователь с таким логином уже существует")
+
+    from app.models import _gen_uuid as _gen_sub_token
+    new_user = User(
+        telegram_id=telegram_id if telegram_id else None,
+        display_name=display_name or username or None,
+        username=username or None,
+        password_hash=hash_password(password) if password else None,
+        sub_token=_gen_sub_token(),
+        is_active=True,
+    )
+    db.add(new_user)
+    db.flush()
+
+    vpn_key = VPNKey(
+        user_id=new_user.id,
+        name=key_name,
+        uuid=generate_uuid(),
+        protocol="vless",
+        data_limit=int(data_limit_gb * GB) if data_limit_gb > 0 else None,
+        expire_at=datetime.utcnow() + timedelta(days=expire_days) if expire_days > 0 else None,
+    )
+    db.add(vpn_key)
+    db.commit()
+
+    try:
+        sync_and_reload(db)
+    except Exception as e:
+        logger.error("Ошибка синхронизации Xray: %s", e)
+
+    _log_action(db, admin.id, "create_user", str(telegram_id), f"key={vpn_key.uuid}")
+    return JSONResponse({"ok": True, "user_id": new_user.id, "display_name": new_user.display_name, "username": new_user.username, "telegram_id": new_user.telegram_id})
+
+
 # ── Добавить ключ пользователю ──
 
 
@@ -1017,6 +1095,30 @@ async def admin_audit_log(
 
 
 # ── VPN-ссылки пользователя (для админки) ──
+
+
+@app.get("/admin/users/{user_id}/keys")
+async def admin_list_user_keys(
+    user_id: int,
+    request: Request,
+    _: User = Depends(_require_admin),
+    db: Session = Depends(get_db),
+):
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    keys = [{
+        "id": k.id,
+        "name": k.name,
+        "uuid": k.uuid,
+        "protocol": k.protocol,
+        "is_active": k.is_active,
+        "data_used": k.data_used or 0,
+        "data_limit": k.data_limit,
+        "expire_at": k.expire_at.isoformat() if k.expire_at else None,
+        "status": k.status,
+    } for k in target.vpn_keys]
+    return JSONResponse({"keys": keys})
 
 
 @app.get("/admin/users/{user_id}/links")

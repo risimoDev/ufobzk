@@ -238,6 +238,7 @@
         border-color: rgba(0, 255, 200, 0.08);
       }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   </head>
   <body class="text-gray-300 font-sans relative">
     <div class="stars"></div>
@@ -461,7 +462,7 @@
           >
             &#x2795; Создать пользователя
           </h3>
-          <form method="POST" action="/admin/users" class="space-y-4">
+          <form id="create-user-form" class="space-y-4" onsubmit="return false;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
@@ -543,7 +544,7 @@
                 />
               </div>
               <div>
-                <button type="submit" class="btn-primary w-full">
+                <button type="button" onclick="createUser()" class="btn-primary w-full">
                   Создать
                 </button>
               </div>
@@ -1553,6 +1554,44 @@
         copyText(link);
       }
 
+      async function createUser() {
+        var form = document.getElementById('create-user-form');
+        var body = {
+          csrf_token: form.querySelector('[name="csrf_token"]').value,
+          display_name: form.querySelector('[name="display_name"]').value,
+          username: form.querySelector('[name="username"]').value,
+          password: form.querySelector('[name="password"]').value,
+          telegram_id: parseInt(form.querySelector('[name="telegram_id"]').value) || 0,
+          data_limit_gb: parseFloat(form.querySelector('[name="data_limit_gb"]').value) || 0,
+          expire_days: parseInt(form.querySelector('[name="expire_days"]').value) || 0,
+          key_name: form.querySelector('[name="key_name"]').value || 'default',
+        };
+        var btn = form.querySelector('button[onclick="createUser()"]');
+        if (btn) btn.disabled = true;
+        try {
+          var resp = await fetch('/admin/api/create-user', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+          });
+          var data = await resp.json();
+          if (!resp.ok || !data.ok) {
+            showToast(data.detail || 'Ошибка создания', 'error');
+            return;
+          }
+          showToast('Создан: ' + (data.display_name || data.username || 'ID ' + data.user_id), 'success');
+          form.reset();
+          form.querySelector('[name="data_limit_gb"]').value = '0';
+          form.querySelector('[name="expire_days"]').value = '0';
+          form.querySelector('[name="key_name"]').value = 'default';
+          setTimeout(function() { location.reload(); }, 800);
+        } catch(e) {
+          showToast('Ошибка сети', 'error');
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+      }
+
       // Tabs
       function switchTab(tabName) {
         document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); b.classList.add('text-gray-500'); });
@@ -1603,7 +1642,24 @@
         try {
           var resp = await fetch('/admin/users/' + userId, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
           var data = await resp.json();
-          if (data.ok) { showToast('Сохранено', 'success'); closeEditModal(); setTimeout(function() { location.reload(); }, 500); }
+          if (data.ok) {
+            showToast('Сохранено', 'success');
+            closeEditModal();
+            var row = document.getElementById('user-row-' + userId);
+            if (row) {
+              var tds = row.querySelectorAll('td');
+              tds[1].textContent = body.display_name || '—';
+              tds[2].innerHTML = body.username
+                ? '<span class="text-purple-400/80 font-mono text-xs">' + escapeHtml(body.username) + '</span>'
+                : '<span class="text-gray-700 text-xs">—</span>';
+              tds[7].innerHTML = body.is_active
+                ? '<span class="badge badge-green">Активен</span>'
+                : '<span class="badge badge-red">Блок</span>';
+              tds[8].innerHTML = body.is_admin
+                ? '<span class="badge badge-amber">Админ</span>'
+                : '<span class="text-gray-600 text-xs">user</span>';
+            }
+          }
           else { showToast(data.detail || data.error || 'Ошибка', 'error'); }
         } catch(e) { showToast('Ошибка сети', 'error'); }
       }
@@ -1629,8 +1685,22 @@
         try {
           var resp = await fetch('/admin/users/' + userId, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ is_active: newState }) });
           var data = await resp.json();
-          if (data.ok) { showToast(newState ? 'Разблокирован' : 'Заблокирован', 'success'); setTimeout(function() { location.reload(); }, 500); }
-          else { showToast(data.detail || 'Ошибка', 'error'); }
+          if (data.ok) {
+            showToast(newState ? 'Разблокирован' : 'Заблокирован', 'success');
+            var row = document.getElementById('user-row-' + userId);
+            if (row) {
+              var tds = row.querySelectorAll('td');
+              tds[7].innerHTML = newState
+                ? '<span class="badge badge-green">Активен</span>'
+                : '<span class="badge badge-red">Блок</span>';
+              var toggleBtn = row.querySelector('button[title="Заблокировать"], button[title="Разблокировать"]');
+              if (toggleBtn) {
+                toggleBtn.title = newState ? 'Заблокировать' : 'Разблокировать';
+                toggleBtn.textContent = newState ? '\u23f8\ufe0f' : '\u25b6\ufe0f';
+                toggleBtn.setAttribute('onclick', 'toggleUserActive(' + userId + ', ' + (!newState) + ')');
+              }
+            }
+          } else { showToast(data.detail || 'Ошибка', 'error'); }
         } catch(e) { showToast('Ошибка сети', 'error'); }
       }
 
@@ -1642,6 +1712,16 @@
         document.getElementById('keys-modal').classList.remove('hidden');
       }
       function closeKeysModal() { document.getElementById('keys-modal').classList.add('hidden'); }
+
+      async function reloadCurrentUserKeys() {
+        var userId = document.getElementById('keys-user-id').value;
+        if (!userId) return;
+        try {
+          var resp = await fetch('/admin/users/' + userId + '/keys');
+          var data = await resp.json();
+          if (data.keys) renderKeys(data.keys);
+        } catch(e) { showToast('Ошибка обновления ключей', 'error'); }
+      }
 
       function renderKeys(keys) {
         var container = document.getElementById('keys-list');
@@ -1734,7 +1814,7 @@
         try {
           var resp = await fetch('/admin/users/' + userId + '/keys', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
           var data = await resp.json();
-          if (data.ok) { showToast('Ключ создан: ' + data.uuid, 'success'); setTimeout(function() { location.reload(); }, 500); }
+          if (data.ok) { showToast('Ключ создан: ' + data.uuid, 'success'); reloadCurrentUserKeys(); }
           else { showToast(data.detail || 'Ошибка', 'error'); }
         } catch(e) { showToast('Ошибка сети', 'error'); }
       }
@@ -1743,7 +1823,7 @@
         try {
           var resp = await fetch('/admin/keys/' + keyId, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ is_active: newState }) });
           var data = await resp.json();
-          if (data.ok) { showToast('Ключ обновлён', 'success'); setTimeout(function() { location.reload(); }, 500); }
+          if (data.ok) { showToast('Ключ обновлён', 'success'); reloadCurrentUserKeys(); }
           else { showToast(data.detail || 'Ошибка', 'error'); }
         } catch(e) { showToast('Ошибка сети', 'error'); }
       }
@@ -1753,7 +1833,7 @@
         try {
           var resp = await fetch('/admin/keys/' + keyId, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ reset_traffic: true }) });
           var data = await resp.json();
-          if (data.ok) { showToast('Трафик сброшен', 'success'); setTimeout(function() { location.reload(); }, 500); }
+          if (data.ok) { showToast('Трафик сброшен', 'success'); reloadCurrentUserKeys(); }
           else { showToast(data.detail || 'Ошибка', 'error'); }
         } catch(e) { showToast('Ошибка сети', 'error'); }
       }
@@ -1763,7 +1843,7 @@
         try {
           var resp = await fetch('/admin/vpnkeys/' + keyId, { method: 'DELETE' });
           var data = await resp.json();
-          if (data.ok) { showToast('Ключ удалён', 'success'); setTimeout(function() { location.reload(); }, 500); }
+          if (data.ok) { showToast('Ключ удалён', 'success'); reloadCurrentUserKeys(); }
           else { showToast(data.detail || 'Ошибка', 'error'); }
         } catch(e) { showToast('Ошибка сети', 'error'); }
       }
@@ -1800,25 +1880,40 @@
             return;
           }
           var html = '';
+          var qrItems = [];
           if (data.subscription_url) {
             html += '<div class="key-card">' +
               '<div class="flex items-center justify-between mb-2">' +
                 '<span class="text-gray-200 text-sm font-medium">\ud83d\udce1 Подписка (все ключи)</span>' +
                 '<button onclick="copyText(\x27' + escapeStr(data.subscription_url) + '\x27)" class="btn-primary text-xs py-1">Копировать</button>' +
               '</div>' +
-              '<code class="text-xs text-acid-400/60 font-mono break-all select-all block bg-black/20 rounded p-2">' + escapeHtml(data.subscription_url) + '</code>' +
+              '<code class="text-xs text-acid-400/60 font-mono break-all select-all block bg-black/20 rounded p-2 mb-2">' + escapeHtml(data.subscription_url) + '</code>' +
+              '<div class="flex justify-center mt-1"><canvas id="qr-sub" class="rounded" style="border:1px solid rgba(0,255,200,0.15)"></canvas></div>' +
             '</div>';
+            qrItems.push({ id: 'qr-sub', text: data.subscription_url });
           }
-          data.links.forEach(function(item) {
+          data.links.forEach(function(item, idx) {
+            var qid = 'qr-link-' + idx;
             html += '<div class="key-card">' +
               '<div class="flex items-center justify-between mb-1">' +
                 '<span class="text-gray-300 text-sm">' + escapeHtml(item.key_name) + ' \u2014 ' + escapeHtml(item.link_name) + '</span>' +
                 '<button onclick="copyText(\x27' + escapeStr(item.link) + '\x27)" class="p-1.5 rounded bg-white/5 text-gray-500 hover:text-acid-400 transition text-xs">\ud83d\udccb</button>' +
               '</div>' +
-              '<code class="text-xs text-gray-500 font-mono break-all block bg-black/20 rounded p-2 cursor-pointer" onclick="copyText(\x27' + escapeStr(item.link) + '\x27)">' + escapeHtml(item.link.substring(0, 120)) + (item.link.length > 120 ? '...' : '') + '</code>' +
+              '<code class="text-xs text-gray-500 font-mono break-all block bg-black/20 rounded p-2 cursor-pointer mb-2" onclick="copyText(\x27' + escapeStr(item.link) + '\x27)">' + escapeHtml(item.link.substring(0, 120)) + (item.link.length > 120 ? '...' : '') + '</code>' +
+              '<div class="flex justify-center"><canvas id="' + qid + '" class="rounded" style="border:1px solid rgba(255,255,255,0.06)"></canvas></div>' +
             '</div>';
+            qrItems.push({ id: qid, text: item.link });
           });
           container.innerHTML = html;
+          // Generate QR codes after DOM insertion
+          qrItems.forEach(function(q) {
+            var el = document.getElementById(q.id);
+            if (el && typeof QRCode !== 'undefined') {
+              QRCode.toCanvas(el, q.text, { width: 160, margin: 1, color: { dark: '#00ffc8', light: '#0a0a1a' } }, function(err) {
+                if (err) console.warn('QR error:', err);
+              });
+            }
+          });
         } catch(e) {
           document.getElementById('links-list').innerHTML = '<p class="text-red-400 text-xs text-center py-4">Ошибка загрузки</p>';
         }
@@ -1828,12 +1923,34 @@
       function escapeStr(s) { return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
 
       // Invite keys
+      function addInviteRow(id, key, now) {
+        var tbody = document.querySelector('#invite-keys-table tbody');
+        if (!tbody) return;
+        var botUser = {{ bot_username|tojson }};
+        var inviteLink = 'https://t.me/' + botUser + '?start=' + key;
+        var tr = document.createElement('tr');
+        tr.id = 'invite-row-' + id;
+        tr.innerHTML = '<td class="px-4 py-3"><code class="text-acid-400/80 font-mono text-xs bg-black/30 px-2 py-1 rounded select-all cursor-pointer" onclick="copyText(\'' + key + '\')">' + key + '</code></td>' +
+          '<td class="px-4 py-3"><span class="badge badge-green">Свободен</span></td>' +
+          '<td class="px-4 py-3 text-xs text-gray-500">' + now + '</td>' +
+          '<td class="px-4 py-3 text-xs text-gray-500">—</td>' +
+          '<td class="px-4 py-3"><div class="flex items-center justify-end gap-1">' +
+            '<button onclick="copyText(\'' + escapeHtml(inviteLink) + '\')" class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-purple-400 hover:bg-purple-400/10 transition text-xs" title="Копировать invite-ссылку">🔗</button>' +
+            '<button onclick="copyText(\'' + key + '\')" class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-cyan-400 hover:bg-cyan-400/10 transition text-xs" title="Копировать ключ">📋</button>' +
+            '<button onclick="deleteInviteKey(' + id + ')" class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition text-xs" title="Удалить">🗑️</button>' +
+          '</div></td>';
+        tbody.insertBefore(tr, tbody.firstChild);
+      }
+
       async function generateInviteKey() {
         try {
           var resp = await fetch('/admin/invite-keys', { method: 'POST' });
           var data = await resp.json();
-          if (data.ok) { showToast('Ключ: ' + data.key, 'success'); setTimeout(function() { location.reload(); }, 500); }
-          else { showToast('Ошибка', 'error'); }
+          if (data.ok) {
+            showToast('Ключ: ' + data.key, 'success');
+            var now = new Date().toLocaleString('ru', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+            addInviteRow(data.id, data.key, now);
+          } else { showToast('Ошибка', 'error'); }
         } catch(e) { showToast('Ошибка сети', 'error'); }
       }
 
@@ -1841,8 +1958,35 @@
         try {
           var resp = await fetch('/admin/invite-keys/bulk', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ count: 5 }) });
           var data = await resp.json();
-          if (data.ok) { showToast('Создано ' + data.count + ' ключей', 'success'); setTimeout(function() { location.reload(); }, 500); }
-          else { showToast('Ошибка', 'error'); }
+          if (data.ok) {
+            showToast('Создано ' + data.count + ' ключей', 'success');
+            // Reload invite keys list from server
+            var listResp = await fetch('/admin/invite-keys');
+            var listData = await listResp.json();
+            var tbody = document.querySelector('#invite-keys-table tbody');
+            if (tbody && listData.length) {
+              var botUser = {{ bot_username|tojson }};
+              var html = '';
+              listData.forEach(function(k) {
+                var inviteLink = 'https://t.me/' + botUser + '?start=' + k.key;
+                var statusBadge = k.is_used ? '<span class="badge badge-gray">Использован</span>' : '<span class="badge badge-green">Свободен</span>';
+                var actions = '';
+                if (!k.is_used) {
+                  actions += '<button onclick="copyText(\'' + escapeHtml(inviteLink) + '\')" class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-purple-400 hover:bg-purple-400/10 transition text-xs" title="Копировать invite-ссылку">🔗</button>';
+                  actions += '<button onclick="copyText(\'' + k.key + '\')" class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-cyan-400 hover:bg-cyan-400/10 transition text-xs" title="Копировать ключ">📋</button>';
+                }
+                actions += '<button onclick="deleteInviteKey(' + k.id + ')" class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition text-xs" title="Удалить">🗑️</button>';
+                html += '<tr id="invite-row-' + k.id + '">' +
+                  '<td class="px-4 py-3"><code class="text-acid-400/80 font-mono text-xs bg-black/30 px-2 py-1 rounded select-all cursor-pointer" onclick="copyText(\'' + k.key + '\')">' + k.key + '</code></td>' +
+                  '<td class="px-4 py-3">' + statusBadge + '</td>' +
+                  '<td class="px-4 py-3 text-xs text-gray-500">' + (k.created_at || '—') + '</td>' +
+                  '<td class="px-4 py-3 text-xs text-gray-500">' + (k.used_at ? k.used_at + (k.used_by ? ' (ID: ' + k.used_by + ')' : '') : '—') + '</td>' +
+                  '<td class="px-4 py-3"><div class="flex items-center justify-end gap-1">' + actions + '</div></td>' +
+                  '</tr>';
+              });
+              tbody.innerHTML = html;
+            }
+          } else { showToast('Ошибка', 'error'); }
         } catch(e) { showToast('Ошибка сети', 'error'); }
       }
 
@@ -1954,7 +2098,7 @@
             body: JSON.stringify(body)
           });
           var data = await resp.json();
-          if (data.ok) { showToast('Ключ обновлён', 'success'); setTimeout(function() { location.reload(); }, 600); }
+          if (data.ok) { showToast('Ключ обновлён', 'success'); reloadCurrentUserKeys(); }
           else { showToast(data.detail || 'Ошибка', 'error'); }
         } catch(e) { showToast('Ошибка сети', 'error'); }
       }
