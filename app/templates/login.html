@@ -1,528 +1,99 @@
 <!doctype html>
 <html lang="ru">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Вход — Каскадный VPN</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              space: {
-                900: "#0a0a1a",
-                800: "#0f0f2e",
-                700: "#1a1a3e",
-                600: "#252554",
-              },
-              acid: { 400: "#00ffc8", 500: "#00e6b4", 600: "#00cc9f" },
-            },
-          },
-        },
-      };
-    </script>
-    <style>
-      html,
-      body {
-        background: #0a0a1a;
-        color: #d1d5db;
-        min-height: 100vh;
-      }
-      .stars {
-        position: fixed;
-        inset: 0;
-        z-index: 0;
-        pointer-events: none;
-        background-image:
-          radial-gradient(
-            1px 1px at 10% 20%,
-            rgba(255, 255, 255, 0.7),
-            transparent
-          ),
-          radial-gradient(
-            1px 1px at 55% 15%,
-            rgba(255, 255, 255, 0.5),
-            transparent
-          ),
-          radial-gradient(
-            1px 1px at 88% 40%,
-            rgba(255, 255, 255, 0.6),
-            transparent
-          ),
-          radial-gradient(
-            1px 1px at 30% 65%,
-            rgba(0, 255, 200, 0.2),
-            transparent
-          );
-        background-size: 300px 300px;
-        animation: twinkle 6s ease-in-out infinite alternate;
-      }
-      @keyframes twinkle {
-        from {
-          opacity: 0.4;
-        }
-        to {
-          opacity: 1;
-        }
-      }
-      .glow-green {
-        text-shadow: 0 0 15px rgba(0, 255, 200, 0.4);
-      }
-      .glow-box {
-        box-shadow:
-          0 0 25px rgba(0, 255, 200, 0.05),
-          inset 0 1px 0 rgba(255, 255, 255, 0.03);
-      }
-      .input-field {
-        width: 100%;
-        padding: 0.75rem 1rem;
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 0.75rem;
-        font-size: 0.875rem;
-        color: #d1d5db;
-        outline: none;
-        transition: border-color 0.2s;
-      }
-      .input-field:focus {
-        border-color: rgba(0, 255, 200, 0.3);
-        box-shadow: 0 0 0 2px rgba(0, 255, 200, 0.05);
-      }
-      .tab-login {
-        cursor: pointer;
-        transition: all 0.2s;
-      }
-      .tab-login.active {
-        color: #00ffc8;
-        border-bottom: 2px solid #00ffc8;
-      }
-      .tab-login:not(.active) {
-        color: #6b7280;
-        border-bottom: 2px solid transparent;
-      }
-      .auth-panel {
-        display: none;
-      }
-      .auth-panel.active {
-        display: block;
-      }
-    </style>
-  </head>
-  <body
-    class="text-gray-300 font-sans relative flex items-center justify-center"
-  >
-    <div class="stars"></div>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Вход — Каскадный VPN</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html, body { background: #080818; min-height: 100vh; color: #d1d5db; }
+    .stars {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image:
+        radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,.7), transparent),
+        radial-gradient(1px 1px at 55% 15%, rgba(255,255,255,.5), transparent),
+        radial-gradient(1px 1px at 88% 40%, rgba(255,255,255,.6), transparent),
+        radial-gradient(1px 1px at 30% 65%, rgba(0,255,200,.25), transparent),
+        radial-gradient(1px 1px at 72% 80%, rgba(255,255,255,.4), transparent),
+        radial-gradient(1px 1px at 20% 85%, rgba(0,255,200,.15), transparent);
+      background-size: 300px 300px;
+      animation: twinkle 6s ease-in-out infinite alternate;
+    }
+    @keyframes twinkle { from { opacity:.4 } to { opacity:1 } }
+    .glass {
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.09);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-radius: 1.5rem;
+      box-shadow: 0 0 30px rgba(0,255,200,.04), inset 0 1px 0 rgba(255,255,255,.03);
+    }
+    .input-field {
+      width: 100%; padding: .75rem 1rem;
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: .75rem; font-size: .9rem; color: #d1d5db; outline: none;
+      transition: border-color .2s;
+      box-sizing: border-box;
+    }
+    .input-field:focus { border-color: rgba(0,255,200,.35); box-shadow: 0 0 0 2px rgba(0,255,200,.06); }
+    .btn-submit {
+      width: 100%; padding: .875rem;
+      background: rgba(0,255,200,.1); color: #00ffc8;
+      border: 1px solid rgba(0,255,200,.25); border-radius: .875rem;
+      font-size: .95rem; font-weight: 600; cursor: pointer; transition: all .2s;
+    }
+    .btn-submit:hover { background: rgba(0,255,200,.18); box-shadow: 0 0 20px rgba(0,255,200,.12); }
+    .glow-text { text-shadow: 0 0 20px rgba(0,255,200,.45); }
+    body::after {
+      content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image:
+        linear-gradient(rgba(0,255,200,.008) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,255,200,.008) 1px, transparent 1px);
+      background-size: 64px 64px;
+    }
+  </style>
+</head>
+<body class="font-sans flex items-center justify-center px-4 py-8">
+  <div class="stars"></div>
 
-    <div class="relative z-10 w-full max-w-md mx-auto px-6">
-      <!-- Logo -->
-      <div class="text-center mb-8">
-        <a href="/" class="flex items-center justify-center gap-2">
-          <span class="text-3xl">&#x1f6e1;&#xfe0f;</span>
-          <span
-            class="text-2xl font-bold text-acid-400 glow-green tracking-wider"
-            style="color: #00ffc8"
-            >Каскадный VPN</span
-          >
-        </a>
-      </div>
+  <div class="relative z-10 w-full" style="max-width:420px">
 
-      <!-- Auth tabs -->
-      <div class="flex justify-center gap-8 mb-6">
-        <button
-          class="tab-login active pb-2 text-sm font-medium"
-          data-panel="panel-password"
-        >
-          &#x1f511; Логин и пароль
-        </button>
-        <button
-          class="tab-login pb-2 text-sm font-medium"
-          data-panel="panel-telegram"
-        >
-          &#x1f4e8; Telegram-код
-        </button>
-      </div>
-
-      {% if error %}
-      <div
-        class="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4 text-red-300 text-sm text-center"
-        style="
-          color: #fca5a5;
-          background: rgba(239, 68, 68, 0.1);
-          border: 1px solid rgba(239, 68, 68, 0.3);
-        "
-      >
-        {{ error }}
-      </div>
-      {% endif %}
-
-      <!-- Panel 1: Login + Password -->
-      <div class="auth-panel active" id="panel-password">
-        <div
-          class="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10 glow-box"
-          style="
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-          "
-        >
-          <h1
-            class="text-xl font-bold text-center text-acid-400 mb-2"
-            style="color: #00ffc8"
-          >
-            Авторизация
-          </h1>
-          <p class="text-gray-500 text-center text-xs mb-6">
-            Введите логин и пароль, выданные администратором
-          </p>
-
-          <form method="POST" action="/login" class="space-y-4">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <div>
-              <label for="username" class="block text-sm text-gray-400 mb-1"
-                >Логин</label
-              >
-              <input
-                type="text"
-                id="username"
-                name="username"
-                autocomplete="username"
-                placeholder="your_login"
-                class="input-field"
-              />
-            </div>
-            <div>
-              <label for="password" class="block text-sm text-gray-400 mb-1"
-                >Пароль</label
-              >
-              <input
-                type="password"
-                id="password"
-                name="password"
-                autocomplete="current-password"
-                placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;"
-                class="input-field"
-              />
-            </div>
-            <button
-              type="submit"
-              class="w-full py-3 bg-acid-400/10 text-acid-400 border border-acid-400/20 rounded-xl font-semibold hover:bg-acid-400/20 transition"
-              style="
-                background: rgba(0, 255, 200, 0.1);
-                color: #00ffc8;
-                border: 1px solid rgba(0, 255, 200, 0.2);
-              "
-            >
-              &#x1f513; Войти
-            </button>
-          </form>
-        </div>
-      </div>
-
-      <!-- Panel 2: Telegram code -->
-      <div class="auth-panel" id="panel-telegram">
-        <!-- Step 1: Bot link -->
-        <div
-          class="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10 glow-box mb-4"
-          style="
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-          "
-        >
-          <p class="text-gray-400 text-center text-sm mb-4">
-            Шаг 1: Отправьте <b>/start</b> боту, чтобы получить код входа
-          </p>
-          <a
-            href="https://t.me/{{ bot_username }}"
-            target="_blank"
-            class="flex items-center justify-center gap-3 w-full py-3 bg-[#2AABEE] hover:bg-[#229ED9] rounded-xl font-semibold transition-colors shadow-lg shadow-blue-500/20"
-            style="background: #2aabee; color: #fff"
-          >
-            <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
-              <path
-                d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.479.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"
-              />
-            </svg>
-            &#x1f4e8; Открыть Telegram-бота
-          </a>
-        </div>
-
-        <!-- Step 2: Code input -->
-        <div
-          class="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10 glow-box"
-          style="
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-          "
-        >
-          <p class="text-gray-400 text-center text-sm mb-4">
-            Шаг 2: Введите код из Telegram или пароль администратора
-          </p>
-          <form method="POST" action="/login" class="space-y-4">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <div>
-              <label for="code" class="block text-sm text-gray-400 mb-1"
-                >Код / пароль администратора</label
-              >
-              <input
-                type="password"
-                id="code"
-                name="code"
-                required
-                autocomplete="one-time-code"
-                placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;"
-                class="input-field text-center text-xl tracking-[0.3em] font-mono"
-                style="color: #00ffc8"
-              />
-            </div>
-            <button
-              type="submit"
-              class="w-full py-3 bg-acid-400/10 text-acid-400 border border-acid-400/20 rounded-xl font-semibold hover:bg-acid-400/20 transition"
-              style="
-                background: rgba(0, 255, 200, 0.1);
-                color: #00ffc8;
-                border: 1px solid rgba(0, 255, 200, 0.2);
-              "
-            >
-              &#x1f513; Войти
-            </button>
-          </form>
-        </div>
-      </div>
-
-      <div class="text-center mt-6">
-        <a
-          href="/"
-          class="text-gray-500 hover:text-gray-300 text-sm transition"
-          style="color: #6b7280"
-          >&#x2190; На главную</a
-        >
-      </div>
+    <div class="text-center mb-8">
+      <a href="/" class="inline-flex items-center gap-2">
+        <span style="font-size:2rem">&#x1f6e1;&#xfe0f;</span>
+        <span class="glow-text font-bold" style="font-size:1.5rem;color:#00ffc8">Каскадный VPN</span>
+      </a>
     </div>
 
-    <script>
-      document.querySelectorAll(".tab-login").forEach(function (tab) {
-        tab.addEventListener("click", function () {
-          document.querySelectorAll(".tab-login").forEach(function (t) {
-            t.classList.remove("active");
-          });
-          document.querySelectorAll(".auth-panel").forEach(function (p) {
-            p.classList.remove("active");
-          });
-          tab.classList.add("active");
-          var panel = document.getElementById(tab.dataset.panel);
-          if (panel) panel.classList.add("active");
-        });
-      });
-    </script>
-  </body>
-</html>
-<!doctype html>
-<html lang="ru">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>🔑 Вход — НИИ АЯ</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              space: {
-                900: "#0a0a1a",
-                800: "#0f0f2e",
-                700: "#1a1a3e",
-                600: "#252554",
-              },
-              acid: { 400: "#00ffc8", 500: "#00e6b4", 600: "#00cc9f" },
-            },
-          },
-        },
-      };
-    </script>
-    <style>
-      html,
-      body {
-        background: #0a0a1a;
-        color: #d1d5db;
-        min-height: 100vh;
-      }
-      .stars {
-        position: fixed;
-        inset: 0;
-        z-index: 0;
-        pointer-events: none;
-        background-image:
-          radial-gradient(
-            1px 1px at 10% 20%,
-            rgba(255, 255, 255, 0.7),
-            transparent
-          ),
-          radial-gradient(
-            1px 1px at 55% 15%,
-            rgba(255, 255, 255, 0.5),
-            transparent
-          ),
-          radial-gradient(
-            1px 1px at 88% 40%,
-            rgba(255, 255, 255, 0.6),
-            transparent
-          ),
-          radial-gradient(
-            1px 1px at 30% 65%,
-            rgba(0, 255, 200, 0.2),
-            transparent
-          );
-        background-size: 300px 300px;
-        animation: twinkle 6s ease-in-out infinite alternate;
-      }
-      @keyframes twinkle {
-        from {
-          opacity: 0.4;
-        }
-        to {
-          opacity: 1;
-        }
-      }
-      .glow-green {
-        text-shadow: 0 0 15px rgba(0, 255, 200, 0.4);
-      }
-      .glow-box {
-        box-shadow:
-          0 0 25px rgba(0, 255, 200, 0.05),
-          inset 0 1px 0 rgba(255, 255, 255, 0.03);
-      }
-    </style>
-  </head>
-  <body
-    class="text-gray-300 font-sans relative flex items-center justify-center"
-    style="background: #0a0a1a; color: #d1d5db"
-  >
-    <div class="stars"></div>
-
-    <div class="relative z-10 w-full max-w-md mx-auto px-6">
-      <!-- Логотип -->
-      <div class="text-center mb-8">
-        <a href="/" class="flex items-center justify-center gap-2">
-          <span class="text-3xl">👁️</span>
-          <span
-            class="text-2xl font-bold text-acid-400 glow-green tracking-wider"
-            style="color: #00ffc8"
-            >НИИ АЯ</span
-          >
-        </a>
-      </div>
-
-      <!-- Шаг 1: Кнопка Telegram -->
-      <div
-        class="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10 glow-box mb-6"
-        style="
-          background: rgba(255, 255, 255, 0.02);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-        "
-      >
-        <h1
-          class="text-2xl font-bold text-center text-acid-400 mb-2"
-          style="color: #00ffc8"
-        >
-          Авторизация
-        </h1>
-        <p
-          class="text-gray-400 text-center text-sm mb-6"
-          style="color: #9ca3af"
-        >
-          Шаг 1: Отправьте <b>/start</b> боту, чтобы получить код входа
-        </p>
-
-        <a
-          href="https://t.me/{{ bot_username }}"
-          target="_blank"
-          class="flex items-center justify-center gap-3 w-full py-3 bg-[#2AABEE] hover:bg-[#229ED9] rounded-xl font-semibold transition-colors shadow-lg shadow-blue-500/20"
-          style="background: #2aabee; color: #fff"
-        >
-          <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24">
-            <path
-              d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.479.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"
-            />
-          </svg>
-          📨 Открыть Telegram-бота
-        </a>
-      </div>
-
-      <!-- Шаг 2: Ввод кода -->
-      <div
-        class="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10 glow-box"
-        style="
-          background: rgba(255, 255, 255, 0.02);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-        "
-      >
-        <p
-          class="text-gray-400 text-center text-sm mb-6"
-          style="color: #9ca3af"
-        >
-          Шаг 2: Введите код из Telegram&nbsp;— или пароль администратора
-        </p>
-
-        {% if error %}
-        <div
-          class="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4 text-red-300 text-sm text-center"
-          style="
-            color: #fca5a5;
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-          "
-        >
-          {{ error }}
-        </div>
-        {% endif %}
-
-        <form method="POST" action="/login" class="space-y-5">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-          <div>
-            <label
-              for="code"
-              class="block text-sm text-gray-400 mb-2"
-              style="color: #9ca3af"
-              >Код из Telegram или пароль администратора</label
-            >
-            <input
-              type="password"
-              id="code"
-              name="code"
-              required
-              autocomplete="current-password"
-              placeholder="••••••"
-              class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-center text-2xl tracking-[0.3em] font-mono text-acid-400 placeholder-gray-600 focus:outline-none focus:border-acid-400/30 focus:ring-1 focus:ring-acid-400/30 transition"
-              style="
-                background: rgba(255, 255, 255, 0.03);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                color: #00ffc8;
-              "
-            />
-          </div>
-          <button
-            type="submit"
-            class="w-full py-3 bg-acid-400/10 text-acid-400 border border-acid-400/20 rounded-xl font-semibold hover:bg-acid-400/20 transition"
-            style="
-              background: rgba(0, 255, 200, 0.1);
-              color: #00ffc8;
-              border: 1px solid rgba(0, 255, 200, 0.2);
-            "
-          >
-            🔓 Войти
-          </button>
-        </form>
-      </div>
-
-      <div class="text-center mt-6">
-        <a
-          href="/"
-          class="text-gray-500 hover:text-gray-300 text-sm transition"
-          style="color: #6b7280"
-          >← На главную</a
-        >
-      </div>
+    {% if error %}
+    <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:.75rem;padding:.75rem 1rem;margin-bottom:1rem;color:#fca5a5;font-size:.875rem;text-align:center">
+      {{ error }}
     </div>
-  </body>
+    {% endif %}
+
+    <div class="glass p-8">
+      <h1 class="text-xl font-bold text-center mb-1" style="color:#00ffc8">Авторизация</h1>
+      <p class="text-center text-xs mb-7" style="color:#4b5563">Введите логин и пароль, выданные администратором</p>
+
+      <form method="POST" action="/login" style="display:flex;flex-direction:column;gap:1.2rem">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <div>
+          <label for="username" style="display:block;font-size:.8rem;color:#9ca3af;margin-bottom:.4rem">Логин</label>
+          <input type="text" id="username" name="username" autocomplete="username" placeholder="your_login" class="input-field" />
+        </div>
+        <div>
+          <label for="password" style="display:block;font-size:.8rem;color:#9ca3af;margin-bottom:.4rem">Пароль</label>
+          <input type="password" id="password" name="password" autocomplete="current-password" placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;" class="input-field" />
+        </div>
+        <button type="submit" class="btn-submit">&#x1f513; Войти</button>
+      </form>
+    </div>
+
+    <div class="text-center mt-6">
+      <a href="/" style="color:#4b5563;font-size:.875rem;text-decoration:none" onmouseover="this.style.color='#9ca3af'" onmouseout="this.style.color='#4b5563'">&#x2190; На главную</a>
+    </div>
+
+  </div>
+</body>
 </html>
