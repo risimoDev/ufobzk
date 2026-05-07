@@ -225,32 +225,24 @@ fi
 # ── 7. Проверка БД и миграций ──
 log "Проверка БД и миграций..."
 
-# Проверим подключение к БД и наличие таблиц
+# Проверим подключение к БД и наличие таблиц (через sqlite3, без app.database)
 DB_CHECK=$(docker compose exec -T ufo-app python3 -c "
-import sys
-from app.database import SessionLocal
-from app.models import Base
+import sqlite3, os, sys
+db = '/project/data/vpnbzk.db'
+if not os.path.exists(db):
+    print('DB_ERROR:file_not_found'); sys.exit(1)
 try:
-    db = SessionLocal()
-    # Проверим что engine работает
-    result = db.execute('SELECT 1').scalar()
-    if result != 1:
-        print('DB_CONNECT_FAIL')
-        sys.exit(1)
-    # Проверим наличие ключевых таблиц
-    tables = Base.metadata.tables.keys()
-    required = {'users', 'vpn_keys', 'servers', 'payments', 'audit_log', 'app_settings', 'guides', 'invite_keys'}
-    missing = required - set(tables)
-    if missing:
-        print(f'MISSING_TABLES:{\" \".join(missing)}')
-        sys.exit(1)
-    print('DB_OK')
-except Exception as e:
-    print(f'DB_ERROR:{e}')
-    sys.exit(1)
-finally:
-    db.close()
-" 2>/dev/null || echo "DB_CHECK_FAILED")
+    conn = sqlite3.connect(db)
+    tables = {r[0] for r in conn.execute(\"SELECT name FROM sqlite_master WHERE type='table'\").fetchall()}
+    conn.close()
+except Exception as ex:
+    print('DB_ERROR:' + str(ex)); sys.exit(1)
+required = {'users', 'vpn_keys', 'servers', 'payments', 'audit_log', 'app_settings', 'guides', 'invite_keys'}
+missing = required - tables
+if missing:
+    print('MISSING_TABLES:' + ' '.join(missing)); sys.exit(1)
+print('DB_OK')
+" 2>&1 || echo "DB_CHECK_FAILED")
 
 if echo "$DB_CHECK" | grep -q "DB_OK"; then
     ok "БД подключена, все таблицы на месте"
@@ -276,18 +268,21 @@ fi
 
 # Повторная проверка таблиц после миграций
 DB_CHECK2=$(docker compose exec -T ufo-app python3 -c "
-from app.database import SessionLocal
-from app.models import Base
-db = SessionLocal()
-tables = Base.metadata.tables.keys()
-required = {'users', 'vpn_keys', 'servers', 'payments', 'audit_log', 'app_settings', 'guides', 'invite_keys'}
-missing = required - set(tables)
-if missing:
-    print(f'MISSING:{\" \".join(missing)}')
+import sqlite3, os
+db = '/project/data/vpnbzk.db'
+if not os.path.exists(db):
+    print('MISSING:db_not_found')
 else:
-    print('ALL_TABLES_OK')
-db.close()
-" 2>/dev/null || echo "CHECK_FAILED")
+    conn = sqlite3.connect(db)
+    tables = {r[0] for r in conn.execute(\"SELECT name FROM sqlite_master WHERE type='table'\").fetchall()}
+    conn.close()
+    required = {'users', 'vpn_keys', 'servers', 'payments', 'audit_log', 'app_settings', 'guides', 'invite_keys'}
+    missing = required - tables
+    if missing:
+        print('MISSING:' + ' '.join(missing))
+    else:
+        print('ALL_TABLES_OK')
+" 2>&1 || echo "CHECK_FAILED")
 
 if echo "$DB_CHECK2" | grep -q "ALL_TABLES_OK"; then
     ok "Все таблицы присутствуют после миграций"
