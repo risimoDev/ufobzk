@@ -62,6 +62,35 @@ else
     docker compose exec ufo-app sh -c "cat /project/data/vpnbzk.db" > "${BACKUP_DIR}/vpnbzk.db.bak" 2>/dev/null && ok "БД из контейнера сохранена" || warn "БД не найдена"
 fi
 
+# ── 1.5. Проверка системных ресурсов ──
+log "Проверка системных ресурсов..."
+
+# Диск
+DISK_USAGE=$(df -h "$PROJECT_DIR" | awk 'NR==2 {print $5}' | tr -d '%')
+if [ "$DISK_USAGE" -gt 90 ]; then
+    err "Мало места на диске: ${DISK_USAGE}% — освободите место перед деплоем"
+    exit 1
+elif [ "$DISK_USAGE" -gt 80 ]; then
+    warn "Диск заполнен на ${DISK_USAGE}%"
+else
+    ok "Диск: ${DISK_USAGE}% занято"
+fi
+
+# Память
+MEM_AVAIL=$(free -m | awk '/^Mem:/{print $7}')
+if [ "$MEM_AVAIL" -lt 256 ]; then
+    warn "Мало свободной памяти: ${MEM_AVAIL}MB"
+else
+    ok "Память: ${MEM_AVAIL}MB свободно"
+fi
+
+# Docker daemon
+if ! docker info &>/dev/null; then
+    err "Docker daemon не запущен!"
+    exit 1
+fi
+ok "Docker daemon работает"
+
 # ── 2. Git pull ──
 log "Получение обновлений из git..."
 if git pull origin main; then
@@ -98,43 +127,216 @@ docker compose up -d --build
 
 sleep 5
 
-# ── 5. Проверка здоровья ──
-log "Проверка ufo-app..."
-if docker compose exec ufo-app python -c "
-import urllib.request
-try:
-    urllib.request.urlopen('http://127.0.0.1:8000/', timeout=5)
-    print('OK')
-except Exception as e:
-    print('FAIL:', e)
-" 2>/dev/null | grep -q "OK"; then
-    ok "ufo-app отвечает"
+# ── 5. Проверка контейнеров ──
+log "Проверка состояния контейнеров..."
+FAILED_CONTAINERS=$(docker compose ps --format json 2>/dev/null | grep -v '"State":"running"' | grep -v 'running' || true)
+if [ -n "$FAILED_CONTAINERS" ]; then
+    warn "Некоторые контейнеры не запущены:"
+    docker compose ps | grep -v "running" || true
 else
-    warn "ufo-app не ответил — проверьте: docker compose logs ufo-app"
+    ok "Все контейнеры запущены"
 fi
 
-# ── 6. Alembic миграции ──
-log "Проверка миграций Alembic..."
-docker compose exec ufo-app alembic upgrade head 2>/dev/null && ok "Миграции применены" || warn "Миграции не применились (возможно уже актуальны)"
+# Проверка каждого сервиса
+for svc in ufo-app nginx xray certbot; do
+    if docker compose ps -q "$svc" &>/dev/null && [ -n "$(docker compose ps -q "$svc" 2>/dev/null)" ]; then
+        if docker compose ps "$svc" | grep -q "running"; then
+            ok "Контейнер ${svc}: running"
+        else
+            warn "Контейнер ${svc}: не running — проверьте: docker compose logs ${svc}"
+        fi
+    else
+        warn "Контейнер ${svc}: не найден"
+    fi
+done
 
-# ── 7. Синхронизация Xray ──
+# ── 6. Проверка nginx ──
+log "Проверка nginx..."
+NGINX_STATUS=$(docker compose exec nginx nginx -t 2>&1 || true)
+if echo "$NGINX_STATUS" | grep -q "successful"; then
+    ok "Nginx конфиг валиден"
+else
+    warn "Проблема с nginx конфигом:"
+    echo "$NGINX_STATUS" | tail -5
+fi
+
+# Проверка nginx отвечает
+if docker compose exec nginx curl -sf http://127.0.0.1/ &>/dev/null; then
+    ok "Nginx отвечает (HTTP 200)"
+else
+    warn "Nginx не отвечает на localhost"
+fi
+
+# ── 7. Проверка БД и миграций ──
+log "Проверка БД и миграций..."
+
+# Проверим подключение к БД и наличие таблиц
+DB_CHECK=$(docker compose exec -T ufo-app python3 -c "
+import sys
+from app.database import SessionLocal
+from app.models import Base
+try:
+    db = SessionLocal()
+    # Проверим что engine работает
+    result = db.execute('SELECT 1').scalar()
+    if result != 1:
+        print('DB_CONNECT_FAIL')
+        sys.exit(1)
+    # Проверим наличие ключевых таблиц
+    tables = Base.metadata.tables.keys()
+    required = {'users', 'vpn_keys', 'servers', 'payments', 'audit_log', 'app_settings', 'guides', 'invite_keys'}
+    missing = required - set(tables)
+    if missing:
+        print(f'MISSING_TABLES:{\" \".join(missing)}')
+        sys.exit(1)
+    print('DB_OK')
+except Exception as e:
+    print(f'DB_ERROR:{e}')
+    sys.exit(1)
+finally:
+    db.close()
+" 2>/dev/null || echo "DB_CHECK_FAILED")
+
+if echo "$DB_CHECK" | grep -q "DB_OK"; then
+    ok "БД подключена, все таблицы на месте"
+else
+    warn "Проблема с БД: $DB_CHECK"
+fi
+
+# Alembic миграции — проверим версию
+log "Проверка миграций Alembic..."
+MIGRATION_RESULT=$(docker compose exec -T ufo-app alembic current 2>/dev/null || echo "NONE")
+if echo "$MIGRATION_RESULT" | grep -q "head"; then
+    ok "Alembic на актуальной версии (head)"
+else
+    # Пробуем накатить миграции
+    MIGRATE_OUTPUT=$(docker compose exec -T ufo-app alembic upgrade head 2>&1 || true)
+    if echo "$MIGRATE_OUTPUT" | grep -qi "error\|fail\|traceback"; then
+        warn "Ошибка при миграции:"
+        echo "$MIGRATE_OUTPUT" | tail -10
+    else
+        ok "Миграции применены"
+    fi
+fi
+
+# Повторная проверка таблиц после миграций
+DB_CHECK2=$(docker compose exec -T ufo-app python3 -c "
+from app.database import SessionLocal
+from app.models import Base
+db = SessionLocal()
+tables = Base.metadata.tables.keys()
+required = {'users', 'vpn_keys', 'servers', 'payments', 'audit_log', 'app_settings', 'guides', 'invite_keys'}
+missing = required - set(tables)
+if missing:
+    print(f'MISSING:{\" \".join(missing)}')
+else:
+    print('ALL_TABLES_OK')
+db.close()
+" 2>/dev/null || echo "CHECK_FAILED")
+
+if echo "$DB_CHECK2" | grep -q "ALL_TABLES_OK"; then
+    ok "Все таблицы присутствуют после миграций"
+else
+    warn "Всё ещё отсутствуют таблицы: $DB_CHECK2"
+fi
+
+# ── 8. Проверка API /health ──
+log "Проверка API (health endpoint)..."
+sleep 2
+HEALTH_STATUS=$(docker compose exec -T ufo-app curl -sf http://127.0.0.1:8000/api/health -o /dev/null -w "%{http_code}" 2>/dev/null || echo "000")
+if [ "$HEALTH_STATUS" = "200" ]; then
+    ok "API /api/health отвечает 200"
+elif [ "$HEALTH_STATUS" = "000" ]; then
+    # Пробуем через python
+    HEALTH_PY=$(docker compose exec -T ufo-app python3 -c "
+import urllib.request
+try:
+    r = urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5)
+    print(r.status)
+except Exception as e:
+    print(f'ERROR:{e}')
+" 2>/dev/null || echo "PY_FAIL")
+    if echo "$HEALTH_PY" | grep -q "200"; then
+        ok "API /api/health отвечает 200 (Python check)"
+    else
+        warn "API /api/health не отвечает: $HEALTH_PY"
+    fi
+else
+    warn "API /api/health вернул ${HEALTH_STATUS}"
+fi
+
+# ── 9. Проверка Xray контейнера ──
+log "Проверка Xray контейнера..."
+XRAY_PS=$(docker compose ps xray --format '{{.Status}}' 2>/dev/null || echo "unknown")
+if echo "$XRAY_PS" | grep -qi "running\|up"; then
+    ok "Xray контейнер запущен"
+else
+    warn "Xray контейнер не running: $XRAY_PS"
+fi
+
+# Проверим что Xray слушает порт 2053 (REALITY)
+if docker compose exec -T xray sh -c "nc -z 127.0.0.1 2053" 2>/dev/null || \
+   docker run --rm --network container:ufobzk-xray busybox nc -z 127.0.0.1 2053 2>/dev/null; then
+    ok "Xray слушает порт 2053"
+else
+    warn "Xray не отвечает на порту 2053 — возможно конфиг ещё не загружен"
+fi
+
+# ── 10. Проверка SSL сертификатов ──
+log "Проверка SSL сертификатов..."
+DOMAIN=$(grep "^DOMAIN=" "$ENV_FILE" 2>/dev/null | cut -d= -f2- || echo "")
+if [ -n "$DOMAIN" ] && [ -f "nginx/ssl/live/${DOMAIN}/fullchain.pem" ]; then
+    CERT_EXPIRY=$(openssl x509 -in "nginx/ssl/live/${DOMAIN}/fullchain.pem" -noout -dates 2>/dev/null | grep notAfter | cut -d= -f2)
+    CERT_DAYS=$(openssl x509 -in "nginx/ssl/live/${DOMAIN}/fullchain.pem" -noout -checkend 864000 >/dev/null 2>&1 && echo "10+" || echo "<10")
+    if [ "$CERT_DAYS" = "10+" ]; then
+        ok "SSL сертификат ${DOMAIN} действителен (>10 дней)"
+    else
+        warn "SSL сертификат ${DOMAIN} истекает через <10 дней — проверьте certbot"
+    fi
+else
+    warn "SSL сертификат не найден для ${DOMAIN} — certbot должен его создать"
+fi
+
+# ── 11. Проверка внешнего доступа (опционально) ──
+log "Проверка внешнего доступа..."
+DOMAIN=$(grep "^DOMAIN=" "$ENV_FILE" 2>/dev/null | cut -d= -f2- || echo "")
+if [ -n "$DOMAIN" ]; then
+    EXT_STATUS=$(curl -sfI "https://${DOMAIN}/api/health" -o /dev/null -w "%{http_code}" --max-time 10 2>/dev/null || echo "000")
+    if [ "$EXT_STATUS" = "200" ]; then
+        ok "Внешний доступ к https://${DOMAIN}/api/health работает (200)"
+    elif [ "$EXT_STATUS" = "000" ]; then
+        warn "Не удалось проверить внешний доступ (возможно DNS/фаервол)"
+    else
+        warn "Внешний доступ вернул ${EXT_STATUS}"
+    fi
+fi
+
+# ── 12. Синхронизация Xray ──
 log "Синхронизация Xray конфига..."
-docker compose exec ufo-app python -c "
+SYNC_RESULT=$(docker compose exec -T ufo-app python3 -c "
 from app.database import SessionLocal
 from app.xray import sync_and_reload
 db = SessionLocal()
 try:
     result = sync_and_reload(db)
-    print('Xray sync:', 'OK' if result else 'FAIL')
+    print('XRAY_SYNC_OK' if result else 'XRAY_SYNC_FAIL')
 finally:
     db.close()
-" 2>/dev/null || warn "Автоматическая синхронизация Xray не удалась — сделайте через /admin → Система → Синх. Xray"
+" 2>/dev/null || echo "SYNC_FAILED")
 
-# ── 8. Очистка ──
-log "Очистка старых Docker-образов..."
+if echo "$SYNC_RESULT" | grep -q "XRAY_SYNC_OK"; then
+    ok "Xray конфиг синхронизирован"
+else
+    warn "Синхронизация Xray не удалась: $SYNC_RESULT"
+    warn "Сделайте вручную: /admin → Система → Синх. Xray"
+fi
+
+# ── 13. Очистка ──
+log "Очистка старых Docker-образов и dangling volume..."
 docker image prune -f
+docker volume prune -f &>/dev/null || true
 
-# ── 9. Итог ──
+# ── 14. Итог ──
 echo ""
 sep
 echo ""
