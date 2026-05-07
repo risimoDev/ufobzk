@@ -144,15 +144,18 @@ if not os.path.exists(db):
 try:
     conn = sqlite3.connect(db)
     tables = {r[0] for r in conn.execute(\"SELECT name FROM sqlite_master WHERE type='table'\").fetchall()}
+    av_rows = 0
+    if 'alembic_version' in tables:
+        av_rows = conn.execute('SELECT COUNT(*) FROM alembic_version').fetchone()[0]
     conn.close()
 except Exception as ex:
     print('ERR:' + str(ex)); sys.exit(1)
-if 'alembic_version' in tables:
-    print('HAS_TRACKING')
-elif 'users' in tables:
+if 'users' not in tables:
+    print('FRESH')
+elif 'alembic_version' not in tables or av_rows == 0:
     print('STAMP_NEEDED')
 else:
-    print('FRESH')
+    print('HAS_TRACKING')
 " 2>&1 || echo "EXEC_FAILED")
 
 if [ "$STAMP_RESULT" = "STAMP_NEEDED" ]; then

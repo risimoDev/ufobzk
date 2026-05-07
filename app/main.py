@@ -51,7 +51,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         if os.path.exists(_db_path):
             with _sqlite3.connect(_db_path) as _sc:
                 _tables = {r[0] for r in _sc.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
-            if "alembic_version" not in _tables and "users" in _tables:
+                _av_rows = 0
+                if "alembic_version" in _tables:
+                    _av_rows = _sc.execute("SELECT COUNT(*) FROM alembic_version").fetchone()[0]
+            # Stamp needed if: tables exist but alembic_version missing or empty
+            if "users" in _tables and ("alembic_version" not in _tables or _av_rows == 0):
                 # Get head revision ID from migration scripts (no DB connection needed)
                 from alembic.config import Config as _ACfg
                 from alembic.script import ScriptDirectory as _SD
