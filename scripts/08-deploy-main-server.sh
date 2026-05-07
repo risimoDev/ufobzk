@@ -178,6 +178,51 @@ else
     ok "Alembic миграции применены"
 fi
 
+# ── Создание admin-пользователя если в БД нет ни одного ──
+log "Проверка наличия admin-пользователя..."
+ADMIN_USERNAME_ENV=$(grep -s "^ADMIN_USERNAME=" "$ENV_FILE" | cut -d= -f2- | tr -d '\r' || true)
+ADMIN_PASSWORD_ENV=$(grep -s "^ADMIN_PASSWORD=" "$ENV_FILE" | cut -d= -f2- | tr -d '\r' || true)
+
+if [ -n "$ADMIN_USERNAME_ENV" ] && [ -n "$ADMIN_PASSWORD_ENV" ]; then
+    CREATE_RESULT=$(docker compose exec -T ufo-app python3 -c "
+import sys
+sys.path.insert(0, '/project')
+from app.models import SessionLocal, User
+from app.auth import hash_password
+from app.models import _gen_uuid
+db = SessionLocal()
+try:
+    admin_count = db.query(User).filter(User.is_admin == True).count()
+    if admin_count > 0:
+        print('ADMIN_EXISTS')
+        sys.exit(0)
+    u = User(
+        username='${ADMIN_USERNAME_ENV}',
+        password_hash=hash_password('${ADMIN_PASSWORD_ENV}'),
+        display_name='Admin',
+        is_admin=True,
+        is_active=True,
+        sub_token=_gen_uuid(),
+    )
+    db.add(u)
+    db.commit()
+    print('ADMIN_CREATED')
+except Exception as e:
+    print('ERR:' + str(e))
+finally:
+    db.close()
+" 2>&1 || echo "CREATE_FAILED")
+    if echo "$CREATE_RESULT" | grep -q "ADMIN_CREATED"; then
+        ok "Admin-пользователь создан: $ADMIN_USERNAME_ENV"
+    elif echo "$CREATE_RESULT" | grep -q "ADMIN_EXISTS"; then
+        ok "Admin уже существует в БД"
+    else
+        warn "Создание admin не удалось: $CREATE_RESULT"
+    fi
+else
+    warn "ADMIN_USERNAME или ADMIN_PASSWORD не задан в .env — admin-пользователь не создан автоматически"
+fi
+
 log "Перезапуск ufo-app для загрузки актуальной схемы..."
 docker compose restart ufo-app
 sleep 3

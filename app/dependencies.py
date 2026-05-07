@@ -13,7 +13,8 @@ from app.models import User, get_db
 
 logger = logging.getLogger(__name__)
 
-ADMIN_IPS = [ip.strip() for ip in os.getenv("ADMIN_IPS", "127.0.0.1").split(",") if ip.strip()]
+# Если ADMIN_IPS не задан — ограничений по IP нет (пустой список = доступ с любого IP)
+ADMIN_IPS = [ip.strip() for ip in os.getenv("ADMIN_IPS", "").split(",") if ip.strip()]
 
 # Общий экземпляр шаблонов для всех роутеров
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
