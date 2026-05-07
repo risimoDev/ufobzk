@@ -507,12 +507,16 @@
               </div>
               <div>
                 <label class="block text-xs text-gray-500 mb-1">Пароль</label>
-                <input
-                  type="text"
-                  name="password"
-                  placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;"
-                  class="input-field"
-                />
+                <div class="flex gap-1">
+                  <input
+                    type="text"
+                    name="password"
+                    id="create-password-field"
+                    placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;"
+                    class="input-field flex-1"
+                  />
+                  <button type="button" onclick="generatePassword()" title="Сгенерировать" style="padding:.5rem .6rem;background:rgba(0,255,200,.08);border:1px solid rgba(0,255,200,.2);border-radius:.5rem;color:#00ffc8;font-size:.8rem;cursor:pointer;white-space:nowrap" title="Автогенерация">⚄</button>
+                </div>
               </div>
               <div>
                 <label class="block text-xs text-gray-500 mb-1"
@@ -580,6 +584,39 @@
             Минимум: имя или логин. Telegram ID и настройки ключа — опционально.
             0 ГБ / 0 дней = безлимит / бессрочно
           </p>
+        </div>
+
+        <!-- Credentials modal after create user -->
+        <div id="credentials-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-backdrop">
+          <div class="modal-content rounded-2xl p-6 w-full max-w-sm mx-4">
+            <h3 class="text-base font-bold text-acid-400 mb-4">✅ Пользователь создан</h3>
+            <p class="text-xs text-gray-500 mb-3">Скопируйте данные — после закрытия пароль больше нельзя будет узнать.</p>
+            <div class="space-y-2 mb-4">
+              <div class="flex items-center justify-between bg-black/30 rounded-lg px-3 py-2">
+                <div>
+                  <div class="text-xs text-gray-500">Имя</div>
+                  <div id="cred-name" class="text-sm text-gray-200 font-medium"></div>
+                </div>
+                <button onclick="copyText(document.getElementById('cred-name').textContent)" class="text-xs text-acid-400 hover:text-acid-500">Скоп.</button>
+              </div>
+              <div class="flex items-center justify-between bg-black/30 rounded-lg px-3 py-2">
+                <div>
+                  <div class="text-xs text-gray-500">Логин</div>
+                  <div id="cred-username" class="text-sm font-mono text-purple-300"></div>
+                </div>
+                <button onclick="copyText(document.getElementById('cred-username').textContent)" class="text-xs text-acid-400 hover:text-acid-500">Скоп.</button>
+              </div>
+              <div class="flex items-center justify-between bg-black/30 rounded-lg px-3 py-2">
+                <div>
+                  <div class="text-xs text-gray-500">Пароль</div>
+                  <div id="cred-password" class="text-sm font-mono text-yellow-300"></div>
+                </div>
+                <button onclick="copyText(document.getElementById('cred-password').textContent)" class="text-xs text-acid-400 hover:text-acid-500">Скоп.</button>
+              </div>
+            </div>
+            <button onclick="copyAllCreds()" class="btn-primary w-full mb-2">📋 Скопировать всё</button>
+            <button onclick="closeCredsModal()" class="w-full py-2 text-sm text-gray-500 hover:text-gray-300">Закрыть</button>
+          </div>
         </div>
 
         <!-- Search -->
@@ -2022,11 +2059,14 @@
 
       async function createUser() {
         var form = document.getElementById('create-user-form');
+        var passwordVal = form.querySelector('[name="password"]').value.trim();
+        // автогенерация пароля если поле пусто
+        if (!passwordVal) { generatePassword(); passwordVal = form.querySelector('[name="password"]').value.trim(); }
         var body = {
           csrf_token: form.querySelector('[name="csrf_token"]').value,
           display_name: form.querySelector('[name="display_name"]').value,
           username: form.querySelector('[name="username"]').value,
-          password: form.querySelector('[name="password"]').value,
+          password: passwordVal,
           telegram_id: parseInt(form.querySelector('[name="telegram_id"]').value) || 0,
           data_limit_gb: parseFloat(form.querySelector('[name="data_limit_gb"]').value) || 0,
           expire_days: parseInt(form.querySelector('[name="expire_days"]').value) || 0,
@@ -2045,17 +2085,43 @@
             showToast(data.detail || 'Ошибка создания', 'error');
             return;
           }
-          showToast('Создан: ' + (data.display_name || data.username || 'ID ' + data.user_id), 'success');
+          // Показываем модалку с данными
+          document.getElementById('cred-name').textContent = data.display_name || '—';
+          document.getElementById('cred-username').textContent = data.username || '—';
+          document.getElementById('cred-password').textContent = body.password;
+          document.getElementById('credentials-modal').classList.remove('hidden');
           form.reset();
           form.querySelector('[name="data_limit_gb"]').value = '0';
           form.querySelector('[name="expire_days"]').value = '0';
           form.querySelector('[name="key_name"]').value = 'default';
-          setTimeout(function() { location.reload(); }, 800);
+          setTimeout(function() { location.reload(); }, 8000);
         } catch(e) {
           showToast('Ошибка сети', 'error');
         } finally {
           if (btn) btn.disabled = false;
         }
+      }
+
+      function generatePassword() {
+        var chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789!@#$%';
+        var pw = '';
+        var arr = new Uint8Array(12);
+        crypto.getRandomValues(arr);
+        arr.forEach(function(b) { pw += chars[b % chars.length]; });
+        var field = document.getElementById('create-password-field');
+        if (field) { field.value = pw; field.type = 'text'; }
+      }
+
+      function closeCredsModal() {
+        document.getElementById('credentials-modal').classList.add('hidden');
+        location.reload();
+      }
+
+      function copyAllCreds() {
+        var name = document.getElementById('cred-name').textContent;
+        var user = document.getElementById('cred-username').textContent;
+        var pw = document.getElementById('cred-password').textContent;
+        copyText('Имя: ' + name + '\nЛогин: ' + user + '\nПароль: ' + pw);
       }
 
       // Tabs

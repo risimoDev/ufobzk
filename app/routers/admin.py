@@ -202,9 +202,6 @@ async def admin_create_user_json(
     return JSONResponse({"ok": True, "user_id": new_user.id, "display_name": new_user.display_name, "username": new_user.username, "telegram_id": new_user.telegram_id})
 
 
-# ── Добавить ключ пользователю ──
-
-
 @router.post("/admin/users/{user_id}/keys")
 async def admin_add_key(
     user_id: int,
