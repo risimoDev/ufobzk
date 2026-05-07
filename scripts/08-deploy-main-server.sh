@@ -57,9 +57,11 @@ DB_PATH="${PROJECT_DIR}/data/vpnbzk.db"
 if [ -f "$DB_PATH" ]; then
     cp "$DB_PATH" "${BACKUP_DIR}/vpnbzk.db.bak"
     ok "БД сохранена"
+elif docker compose ps -q ufo-app &>/dev/null && [ -n "$(docker compose ps -q ufo-app 2>/dev/null)" ]; then
+    # Попробуем из Docker volume если контейнер запущен
+    docker compose exec -T ufo-app sh -c "cat /project/data/vpnbzk.db" > "${BACKUP_DIR}/vpnbzk.db.bak" 2>/dev/null && ok "БД из контейнера сохранена" || warn "БД не найдена в контейнере"
 else
-    # Попробуем из Docker volume
-    docker compose exec ufo-app sh -c "cat /project/data/vpnbzk.db" > "${BACKUP_DIR}/vpnbzk.db.bak" 2>/dev/null && ok "БД из контейнера сохранена" || warn "БД не найдена"
+    warn "БД не найдена локально и контейнер не запущен — backup пропущен"
 fi
 
 # ── 1.5. Проверка системных ресурсов ──
@@ -126,6 +128,21 @@ docker compose down
 docker compose up -d --build
 
 sleep 5
+
+# Применяем миграции Alembic явно и перезапускаем ufo-app
+# (чтобы lifespan подхватил актуальную схему при старте)
+log "Применение миграций Alembic..."
+MIGRATE_UP=$(docker compose exec -T ufo-app alembic upgrade head 2>&1 || true)
+if echo "$MIGRATE_UP" | grep -qi "error\|fail\|traceback"; then
+    warn "Alembic upgrade не удался:"
+    echo "$MIGRATE_UP" | tail -10
+else
+    ok "Alembic миграции применены"
+fi
+
+log "Перезапуск ufo-app для загрузки актуальной схемы..."
+docker compose restart ufo-app
+sleep 3
 
 # ── 5. Проверка контейнеров ──
 log "Проверка состояния контейнеров..."
