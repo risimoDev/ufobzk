@@ -34,6 +34,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     os.makedirs("data", exist_ok=True)
     from app.env_check import check_env_on_startup
     check_env_on_startup()
+    # Ensure DB schema is current before querying
+    try:
+        from alembic.config import Config
+        from alembic import command
+        alembic_cfg = Config("alembic.ini")
+        command.upgrade(alembic_cfg, "head")
+    except Exception as e:
+        logger.warning("Alembic upgrade skipped: %s", e)
     init_db()
     from app.models import SessionLocal
     _db = SessionLocal()

@@ -553,21 +553,24 @@ DEFAULT_SETTINGS = {
 
 def init_db():
     Base.metadata.create_all(bind=engine)
-    # Миграции теперь управляются через Alembic (alembic upgrade head)
-    # Для существующих установок без Alembic: запустите alembic stamp 001_initial
     _db = SessionLocal()
     try:
-        # Seed default settings if not present
-        for key, value in DEFAULT_SETTINGS.items():
-            if not _db.query(AppSetting).filter(AppSetting.key == key).first():
-                _db.add(AppSetting(key=key, value=value))
-        # Generate sub_tokens for users that don't have one
-        for user in _db.query(User).filter(User.sub_token == None).all():  # noqa: E711
-            user.sub_token = _gen_uuid()
-        # Seed default guides if none exist
-        if not _db.query(Guide).first():
-            _seed_guides(_db)
-        _db.commit()
+        try:
+            # Seed default settings if not present
+            for key, value in DEFAULT_SETTINGS.items():
+                if not _db.query(AppSetting).filter(AppSetting.key == key).first():
+                    _db.add(AppSetting(key=key, value=value))
+            # Generate sub_tokens for users that don't have one
+            for user in _db.query(User).filter(User.sub_token == None).all():  # noqa: E711
+                user.sub_token = _gen_uuid()
+            # Seed default guides if none exist
+            if not _db.query(Guide).first():
+                _seed_guides(_db)
+            _db.commit()
+        except Exception as e:
+            _db.rollback()
+            import logging as _logging
+            _logging.getLogger(__name__).warning("init_db seeding skipped (likely schema mismatch): %s", e)
     finally:
         _db.close()
 
