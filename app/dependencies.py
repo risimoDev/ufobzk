@@ -13,9 +13,6 @@ from app.models import User, get_db
 
 logger = logging.getLogger(__name__)
 
-# Если ADMIN_IPS не задан — ограничений по IP нет (пустой список = доступ с любого IP)
-ADMIN_IPS = [ip.strip() for ip in os.getenv("ADMIN_IPS", "").split(",") if ip.strip()]
-
 # Общий экземпляр шаблонов для всех роутеров
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(_BASE_DIR, "templates"))
@@ -66,10 +63,6 @@ def require_admin(request: Request, db: Session = Depends(get_db)) -> User:
         admin_guard.record_failure(ip)
         logger.warning("Неудачный доступ к админке: IP=%s user=%s", ip, user.telegram_id)
         raise HTTPException(status_code=403, detail="Доступ запрещён")
-    # Проверка IP- whitelist для админки
-    if ADMIN_IPS and ip not in ADMIN_IPS and ip != "127.0.0.1" and ip != "0.0.0.0":
-        logger.warning("Доступ к админке с неразрешённого IP: %s", ip)
-        raise HTTPException(status_code=403, detail="Доступ с данного IP запрещён")
     return user
 
 
