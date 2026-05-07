@@ -86,6 +86,22 @@ class Server(Base):
     last_sync_status = Column(String(16), nullable=True)
 
 
+class InviteKey(Base):
+    """Инвайт-ключ для регистрации новых пользователей."""
+    __tablename__ = "invite_keys"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(64), unique=True, nullable=False, index=True)
+    is_used = Column(Boolean, default=False)
+    used_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    used_by_user = relationship("User", foreign_keys=[used_by], backref="used_invites")
+    creator = relationship("User", foreign_keys=[created_by], backref="created_invites")
+
+
 class Payment(Base):
     """История оплат и долгов пользователя."""
     __tablename__ = "payments"
