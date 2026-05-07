@@ -132,6 +132,26 @@ sleep 5
 # Применяем миграции Alembic явно и перезапускаем ufo-app
 # (чтобы lifespan подхватил актуальную схему при старте)
 log "Применение миграций Alembic..."
+
+# Если таблицы существуют, но alembic_version отсутствует (create_all без tracking),
+# проставим stamp head, чтобы alembic не пытался пересоздать уже существующие таблицы.
+HAS_ALEMBIC_VER=$(docker compose exec -T ufo-app python3 -c "
+import sqlalchemy as sa
+e = sa.create_engine('sqlite:///./data/vpnbzk.db')
+insp = sa.inspect(e)
+if insp.has_table('alembic_version'):
+    print('YES')
+elif insp.has_table('users'):
+    print('STAMP_NEEDED')
+else:
+    print('FRESH')
+" 2>/dev/null || echo "UNKNOWN")
+
+if [ "$HAS_ALEMBIC_VER" = "STAMP_NEEDED" ]; then
+    warn "Таблицы без alembic tracking — проставляем stamp head..."
+    docker compose exec -T ufo-app alembic stamp head && ok "Alembic stamp head выполнен" || warn "Alembic stamp не удался"
+fi
+
 MIGRATE_UP=$(docker compose exec -T ufo-app alembic upgrade head 2>&1 || true)
 if echo "$MIGRATE_UP" | grep -qi "error\|fail\|traceback"; then
     warn "Alembic upgrade не удался:"

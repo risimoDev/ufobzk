@@ -43,6 +43,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as e:
         logger.warning("Alembic upgrade skipped: %s", e)
     init_db()
+    # If alembic_version is missing (tables created via create_all without tracking),
+    # stamp to head so future alembic calls don't attempt to re-create existing tables.
+    try:
+        from alembic.config import Config
+        from alembic import command
+        from sqlalchemy import inspect as sa_inspect
+        from app.models import engine as _engine
+        _insp = sa_inspect(_engine)
+        if not _insp.has_table("alembic_version"):
+            _alembic_cfg = Config("alembic.ini")
+            command.stamp(_alembic_cfg, "head")
+            logger.info("Alembic stamped to head (DB created via create_all).")
+    except Exception as e:
+        logger.warning("Alembic stamp failed: %s", e)
     from app.models import SessionLocal
     _db = SessionLocal()
     try:
