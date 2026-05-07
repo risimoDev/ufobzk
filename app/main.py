@@ -44,17 +44,29 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.warning("Alembic upgrade skipped: %s", e)
     init_db()
     # If alembic_version is missing (tables created via create_all without tracking),
-    # stamp to head so future alembic calls don't attempt to re-create existing tables.
+    # stamp to head via raw SQLite so future alembic calls don't re-create existing tables.
     try:
-        from alembic.config import Config
-        from alembic import command
-        from sqlalchemy import inspect as sa_inspect
-        from app.models import engine as _engine
-        _insp = sa_inspect(_engine)
-        if not _insp.has_table("alembic_version"):
-            _alembic_cfg = Config("alembic.ini")
-            command.stamp(_alembic_cfg, "head")
-            logger.info("Alembic stamped to head (DB created via create_all).")
+        import sqlite3 as _sqlite3
+        _db_path = os.path.join("data", "vpnbzk.db")
+        if os.path.exists(_db_path):
+            with _sqlite3.connect(_db_path) as _sc:
+                _tables = {r[0] for r in _sc.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+            if "alembic_version" not in _tables and "users" in _tables:
+                # Get head revision ID from migration scripts (no DB connection needed)
+                from alembic.config import Config as _ACfg
+                from alembic.script import ScriptDirectory as _SD
+                _head_rev = _SD.from_config(_ACfg("alembic.ini")).get_current_head()
+                if _head_rev:
+                    with _sqlite3.connect(_db_path) as _sc:
+                        _sc.execute(
+                            "CREATE TABLE IF NOT EXISTS alembic_version "
+                            "(version_num VARCHAR(32) NOT NULL, "
+                            "CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num))"
+                        )
+                        _sc.execute("DELETE FROM alembic_version")
+                        _sc.execute("INSERT INTO alembic_version (version_num) VALUES (?)", (_head_rev,))
+                        _sc.commit()
+                    logger.info("Alembic stamped to head (%s) via raw SQLite.", _head_rev)
     except Exception as e:
         logger.warning("Alembic stamp failed: %s", e)
     from app.models import SessionLocal

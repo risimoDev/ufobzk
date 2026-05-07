@@ -133,23 +133,38 @@ sleep 5
 # (чтобы lifespan подхватил актуальную схему при старте)
 log "Применение миграций Alembic..."
 
-# Если таблицы существуют, но alembic_version отсутствует (create_all без tracking),
-# проставим stamp head, чтобы alembic не пытался пересоздать уже существующие таблицы.
-HAS_ALEMBIC_VER=$(docker compose exec -T ufo-app python3 -c "
-import sqlalchemy as sa
-e = sa.create_engine('sqlite:///./data/vpnbzk.db')
-insp = sa.inspect(e)
-if insp.has_table('alembic_version'):
-    print('YES')
-elif insp.has_table('users'):
+# Если alembic_version отсутствует, но таблицы уже существуют (schema создана через create_all),
+# проставляем stamp head — иначе alembic пытается пересоздать существующие таблицы.
+# Используем sqlite3 из stdlib (не SQLAlchemy) для надёжности.
+STAMP_RESULT=$(docker compose exec -T ufo-app python3 -c "
+import sqlite3, os, sys
+db = '/project/data/vpnbzk.db'
+if not os.path.exists(db):
+    print('FRESH'); sys.exit(0)
+try:
+    conn = sqlite3.connect(db)
+    tables = {r[0] for r in conn.execute(\"SELECT name FROM sqlite_master WHERE type='table'\").fetchall()}
+    conn.close()
+except Exception as ex:
+    print('ERR:' + str(ex)); sys.exit(1)
+if 'alembic_version' in tables:
+    print('HAS_TRACKING')
+elif 'users' in tables:
     print('STAMP_NEEDED')
 else:
     print('FRESH')
-" 2>/dev/null || echo "UNKNOWN")
+" 2>&1 || echo "EXEC_FAILED")
 
-if [ "$HAS_ALEMBIC_VER" = "STAMP_NEEDED" ]; then
-    warn "Таблицы без alembic tracking — проставляем stamp head..."
-    docker compose exec -T ufo-app alembic stamp head && ok "Alembic stamp head выполнен" || warn "Alembic stamp не удался"
+if [ "$STAMP_RESULT" = "STAMP_NEEDED" ]; then
+    warn "БД без alembic tracking — проставляем stamp head..."
+    STAMP_OUT=$(docker compose exec -T ufo-app alembic stamp head 2>&1 || true)
+    if echo "$STAMP_OUT" | grep -qi "error\|fail\|traceback"; then
+        warn "alembic stamp не удался: $STAMP_OUT"
+    else
+        ok "Alembic stamped to head"
+    fi
+elif echo "$STAMP_RESULT" | grep -q "ERR:\|EXEC_FAILED"; then
+    warn "Проверка alembic tracking не удалась: $STAMP_RESULT"
 fi
 
 MIGRATE_UP=$(docker compose exec -T ufo-app alembic upgrade head 2>&1 || true)
