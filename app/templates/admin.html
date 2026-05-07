@@ -316,6 +316,18 @@
         </button>
         <button
           class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500"
+          data-tab="servers"
+        >
+          🌍 Серверы
+        </button>
+        <button
+          class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500"
+          data-tab="guides"
+        >
+          📖 Гайды
+        </button>
+        <button
+          class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500"
           data-tab="audit"
         >
           &#x1f4cb; Аудит
@@ -612,9 +624,9 @@
                   data-search="{{ (u.display_name or '')|lower }} {{ u.telegram_id }} {{ (u.telegram_username or '')|lower }} {{ (u.username or '')|lower }}"
                 >
                   <td class="px-4 py-3 text-gray-500 font-mono text-xs">
-                    {{ u.id }}
+                    <button onclick="toggleUserExpand({{ u.id }})" class="mr-1 text-gray-600 hover:text-gray-300 transition" title="Развернуть">&#x25bc;</button>{{ u.id }}
                   </td>
-                  <td class="px-4 py-3 text-gray-200">
+                  <td class="px-4 py-3 text-gray-200 cursor-pointer" onclick="toggleUserExpand({{ u.id }})">
                     {{ u.display_name or '—' }}
                   </td>
                   <td class="px-4 py-3">
@@ -664,7 +676,10 @@
                       >Активен</span
                     >
                     {% else %}<span class="badge badge-red">Блок</span>{% endif
-                    %}
+                    %} {% if u.is_free %}<span
+                      class="badge badge-cyan ml-1 badge-free"
+                      >FREE</span
+                    >{% endif %}
                   </td>
                   <td class="px-4 py-3">
                     {% if u.is_admin %}<span class="badge badge-amber"
@@ -711,11 +726,19 @@
                       >
                         🔄
                       </button>
-                      <button"
+                      <button
+                        onclick="toggleUserActive({{ u.id }}, {{ 'true' if not u.is_active else 'false' }})"
                         class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-amber-400 hover:bg-amber-400/10 transition text-xs"
                         title="{{ 'Разблокировать' if not u.is_active else 'Заблокировать' }}"
                       >
                         {{ '▶️' if not u.is_active else '⏸️' }}
+                      </button>
+                      <button
+                        onclick="toggleUserFree({{ u.id }}, {{ 'true' if u.is_free else 'false' }}, {{ u.display_name|tojson }})"
+                        class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-cyan-400 hover:bg-cyan-400/10 transition text-xs"
+                        title="{{ 'Снять FREE' if u.is_free else 'Сделать FREE' }}"
+                      >
+                        {{ '💰' if u.is_free else '🎁' }}
                       </button>
                       <button
                         onclick="deleteUser({{ u.id }}, {{ u.display_name|tojson }})"
@@ -724,6 +747,64 @@
                       >
                         🗑️
                       </button>
+                    </div>
+                  </td>
+                </tr>
+                <tr id="user-expand-{{ u.id }}" class="hidden" style="background:rgba(0,0,0,0.25)">
+                  <td colspan="12" class="p-4">
+                    <div class="space-y-3">
+                      <!-- Account subscription -->
+                      {% set sub_token = u.sub_token or "" %}
+                      {% if sub_token %}
+                      <div class="rounded-lg bg-white/5 p-3 border border-white/5">
+                        <div class="flex items-center justify-between mb-2">
+                          <span class="text-xs font-semibold text-gray-300 uppercase tracking-wider">🔗 Подписка аккаунта</span>
+                          <div class="flex gap-1.5">
+                            <button onclick="copyText('{{ webapp_url }}/sub/{{ sub_token }}')" class="px-2 py-1 rounded bg-white/5 text-xs text-gray-400 hover:text-emerald-400 transition">Копировать</button>
+                            <button onclick="window.open('/admin/users/{{ u.id }}/links','_blank')" class="px-2 py-1 rounded bg-white/5 text-xs text-gray-400 hover:text-cyan-400 transition">Все ссылки</button>
+                          </div>
+                        </div>
+                        <code class="text-xs text-gray-500 font-mono break-all">{{ webapp_url }}/sub/{{ sub_token }}</code>
+                      </div>
+                      {% endif %}
+
+                      <!-- Keys -->
+                      <div class="grid gap-2" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr))">
+                        {% for k in row["keys"] %}
+                        <div class="rounded-lg bg-white/5 p-3 border border-white/5">
+                          <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center gap-2">
+                              <span class="text-sm font-medium text-gray-200">{{ k["name"] or "default" }}</span>
+                              {% if k["status"] == "active" %}<span class="badge badge-green">Активен</span>
+                              {% elif k["status"] == "expired" %}<span class="badge badge-red">Истёк</span>
+                              {% elif k["status"] == "limited" %}<span class="badge badge-amber">Лимит</span>
+                              {% else %}<span class="badge badge-gray">Отключён</span>{% endif %}
+                            </div>
+                            <button onclick="toggleKey({{ k["id"] }}, {{ 'false' if k["is_active"] else 'true' }})" class="p-1 rounded bg-white/5 text-xs text-gray-500 hover:text-amber-400 transition" title="Вкл/Выкл">{{ '⏸️' if k["is_active"] else '▶️' }}</button>
+                          </div>
+                          <code class="text-xs text-gray-600 font-mono break-all block mb-2 select-all">{{ k["uuid"] }}</code>
+                          <div class="flex flex-wrap gap-3 text-xs text-gray-500 mb-1">
+                            <span>Трафик: {{ format_bytes(k["data_used"] or 0) }}{% if k["data_limit"] %} / {{ format_bytes(k["data_limit"]) }}{% else %} / ∞{% endif %}</span>
+                            <span>Срок: {% if k["expire_at"] %}{{ k["expire_at"][:10] }}{% else %}∞{% endif %}</span>
+                          </div>
+                          {% if k["data_limit"] and k["data_limit"] > 0 %}
+                          {% set pct = ((k["data_used"] or 0) / k["data_limit"] * 100) | round(1) %}
+                          <div class="w-full bg-white/5 rounded-full h-1.5 overflow-hidden mt-1">
+                            <div class="h-full rounded-full transition-all {{ 'bg-red-400' if pct > 90 else 'bg-amber-400' if pct > 70 else 'bg-emerald-400' }}" style="width:{{ [pct,100] | min }}%"></div>
+                          </div>
+                          {% endif %}
+                          <div class="flex gap-2 mt-2">
+                            <button onclick="copyText('{{ webapp_url }}/sub/key/{{ k["uuid"] }}')" class="px-2 py-1 rounded bg-white/5 text-xs text-gray-400 hover:text-emerald-400 transition flex-1">🔗 Копировать подписку</button>
+                          </div>
+                        </div>
+                        {% endfor %}
+                      </div>
+
+                      <!-- Actions -->
+                      <div class="flex gap-2">
+                        <button onclick="openKeysModal({{ u.id }}, {{ u.display_name|tojson }}, {{ row['keys']|tojson }})" class="btn-primary text-xs flex-1">+ Добавить устройство / пользователя</button>
+                        <button onclick="openLinksModal({{ u.id }}, {{ u.display_name|tojson }})" class="btn-secondary text-xs flex-1">🔗 Все ссылки и QR-коды</button>
+                      </div>
                     </div>
                   </td>
                 </tr>
@@ -990,6 +1071,72 @@
         </div>
       </div>
 
+      <!-- TAB: SERVERS -->
+      <div class="tab-panel" id="tab-servers">
+        <div class="card p-5 mb-6 glow-box">
+          <div class="flex items-center justify-between mb-4">
+            <h3
+              class="text-sm font-semibold text-gray-300 uppercase tracking-wider"
+            >
+              🌍 Удалённые серверы (xray-nodes)
+            </h3>
+            <div class="flex gap-2">
+              <button onclick="loadServers()" class="btn-secondary text-xs">
+                🔄 Обновить
+              </button>
+              <button onclick="syncAllServers()" class="btn-primary text-xs">
+                📡 Синхронизировать все
+              </button>
+              <button onclick="openServerModal()" class="btn-primary text-xs">
+                + Добавить сервер
+              </button>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full tbl" id="servers-table">
+              <thead>
+                <tr class="text-left">
+                  <th class="px-4 py-3">Имя</th>
+                  <th class="px-4 py-3">Регион</th>
+                  <th class="px-4 py-3">Хост</th>
+                  <th class="px-4 py-3">Порты</th>
+                  <th class="px-4 py-3">REALITY</th>
+                  <th class="px-4 py-3">Приор.</th>
+                  <th class="px-4 py-3">Посл. синхр.</th>
+                  <th class="px-4 py-3 text-right">Действия</th>
+                </tr>
+              </thead>
+              <tbody id="servers-tbody">
+                <tr>
+                  <td
+                    colspan="8"
+                    class="text-gray-700 text-xs text-center py-6"
+                  >
+                    Загрузка...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card p-5 glow-box">
+          <h3
+            class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-3"
+          >
+            ⚡ REALITY — автогенерация ключей
+          </h3>
+          <p class="text-gray-600 text-xs mb-3">
+            Используйте кнопку «Сгенерировать ключи» при добавлении нового
+            сервера. Работает даже без установленного xray CLI — fallback на
+            Python cryptography.
+          </p>
+          <button onclick="generateRealityKeys()" class="btn-secondary text-xs">
+            🔑 Сгенерировать ключи (pub/priv + shortId)
+          </button>
+        </div>
+      </div>
+
       <!-- TAB: MIGRATE -->
       <div class="tab-panel" id="tab-migrate">
         <div class="card p-5 mb-6 glow-box border border-amber-500/10">
@@ -1152,6 +1299,108 @@
                 >{{ '✅' if reality_active else '❌' }}</code
               >
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: SERVERS -->
+      <div class="tab-panel" id="tab-servers">
+        <div class="flex items-center justify-between mb-6">
+          <h3
+            class="text-sm font-semibold text-gray-300 uppercase tracking-wider"
+          >
+            🌍 Remote Xray серверы
+          </h3>
+          <div class="flex gap-2">
+            <button onclick="loadServers()" class="btn-secondary text-xs">
+              🔄 Обновить
+            </button>
+            <button onclick="openServerModal()" class="btn-primary text-xs">
+              + Добавить сервер
+            </button>
+          </div>
+        </div>
+
+        <div class="card glow-box overflow-hidden mb-6">
+          <div class="overflow-x-auto">
+            <table class="w-full tbl" id="servers-table">
+              <thead>
+                <tr class="text-left">
+                  <th class="px-4 py-3">Имя</th>
+                  <th class="px-4 py-3">Регион</th>
+                  <th class="px-4 py-3">Хост</th>
+                  <th class="px-4 py-3">Порты</th>
+                  <th class="px-4 py-3">REALITY</th>
+                  <th class="px-4 py-3">Приоритет</th>
+                  <th class="px-4 py-3">Последняя синхронизация</th>
+                  <th class="px-4 py-3 text-right">Действия</th>
+                </tr>
+              </thead>
+              <tbody id="servers-tbody">
+                <tr>
+                  <td
+                    colspan="8"
+                    class="text-gray-700 text-xs text-center py-6"
+                  >
+                    Загрузка...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="flex gap-3">
+          <button onclick="syncAllServers()" class="btn-primary text-xs">
+            🔄 Синхронизировать все серверы
+          </button>
+          <button onclick="generateRealityKeys()" class="btn-secondary text-xs">
+            🔑 Сгенерировать REALITY ключи
+          </button>
+        </div>
+      </div>
+
+      <!-- TAB: GUIDES -->
+      <div class="tab-panel" id="tab-guides">
+        <div class="flex items-center justify-between mb-6">
+          <h3
+            class="text-sm font-semibold text-gray-300 uppercase tracking-wider"
+          >
+            📖 Гайды / инструкции
+          </h3>
+          <div class="flex gap-2">
+            <button onclick="loadGuides()" class="btn-secondary text-xs">
+              🔄 Обновить
+            </button>
+            <button onclick="openGuideModal()" class="btn-primary text-xs">
+              + Добавить гайд
+            </button>
+          </div>
+        </div>
+        <div class="card glow-box overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full tbl">
+              <thead>
+                <tr class="text-left">
+                  <th class="px-4 py-3">Заголовок</th>
+                  <th class="px-4 py-3">Приложение</th>
+                  <th class="px-4 py-3">Платформа</th>
+                  <th class="px-4 py-3">Порядок</th>
+                  <th class="px-4 py-3">Статус</th>
+                  <th class="px-4 py-3 text-right">Действия</th>
+                </tr>
+              </thead>
+              <tbody id="guides-tbody">
+                <tr>
+                  <td
+                    colspan="6"
+                    class="text-gray-700 text-xs text-center py-6"
+                  >
+                    Загрузка...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -1346,143 +1595,202 @@
         </div>
       </div>
 
-    <!-- TAB: DIAGNOSTICS -->
-    <div id="tab-diagnostics" class="tab-panel">
-      <div class="mb-6 flex items-center justify-between">
-        <h2 class="text-lg font-semibold text-white">&#x1f9ea; Диагностика сервера</h2>
-        <button
-          id="btn-run-diag"
-          onclick="runDiagnostics()"
-          class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors flex items-center gap-2"
+      <!-- TAB: DIAGNOSTICS -->
+      <div id="tab-diagnostics" class="tab-panel">
+        <div class="mb-6 flex items-center justify-between">
+          <h2 class="text-lg font-semibold text-white">
+            &#x1f9ea; Диагностика сервера
+          </h2>
+          <button
+            id="btn-run-diag"
+            onclick="runDiagnostics()"
+            class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors flex items-center gap-2"
+          >
+            <span id="diag-spinner" class="hidden">&#x21bb;</span>
+            Запустить все тесты
+          </button>
+        </div>
+
+        <div id="diag-results" class="hidden space-y-6">
+          <!-- Resources -->
+          <div class="card p-5">
+            <h3 class="text-sm font-semibold text-gray-300 mb-4">
+              &#x1f4bb; Ресурсы
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-gray-400">CPU (load 1m)</span>
+                  <span id="d-cpu-val" class="text-gray-200">—</span>
+                </div>
+                <div class="h-2 rounded bg-white/5 w-full">
+                  <div
+                    id="d-cpu-bar"
+                    class="h-2 rounded bg-indigo-500 transition-all"
+                    style="width: 0%"
+                  ></div>
+                </div>
+                <div class="text-xs text-gray-500 mt-1">
+                  5m: <span id="d-cpu-5m">—</span> &nbsp;15m:
+                  <span id="d-cpu-15m">—</span>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-gray-400">RAM</span>
+                  <span id="d-ram-val" class="text-gray-200">—</span>
+                </div>
+                <div class="h-2 rounded bg-white/5 w-full">
+                  <div
+                    id="d-ram-bar"
+                    class="h-2 rounded bg-purple-500 transition-all"
+                    style="width: 0%"
+                  ></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-gray-400">Диск (/)</span>
+                  <span id="d-disk-val" class="text-gray-200">—</span>
+                </div>
+                <div class="h-2 rounded bg-white/5 w-full">
+                  <div
+                    id="d-disk-bar"
+                    class="h-2 rounded bg-cyan-500 transition-all"
+                    style="width: 0%"
+                  ></div>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 text-xs">
+                <span class="text-gray-400">Uptime:</span>
+                <span id="d-uptime" class="text-gray-200 font-mono">—</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Connectivity -->
+          <div class="card p-5">
+            <h3 class="text-sm font-semibold text-gray-300 mb-4">
+              &#x1f310; Связность
+            </h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div class="rounded-lg bg-white/5 p-3 text-center">
+                <div id="d-st-xray-ws" class="text-2xl mb-1">&#x23f3;</div>
+                <div class="text-xs text-gray-400">Xray WS :8443</div>
+                <div id="d-ms-xray-ws" class="text-xs text-gray-500 mt-1">
+                  —
+                </div>
+              </div>
+              <div class="rounded-lg bg-white/5 p-3 text-center">
+                <div id="d-st-xray-xhttp" class="text-2xl mb-1">&#x23f3;</div>
+                <div class="text-xs text-gray-400">Xray XHTTP :8444</div>
+                <div id="d-ms-xray-xhttp" class="text-xs text-gray-500 mt-1">
+                  —
+                </div>
+              </div>
+              <div class="rounded-lg bg-white/5 p-3 text-center">
+                <div id="d-st-reality" class="text-2xl mb-1">&#x23f3;</div>
+                <div class="text-xs text-gray-400">REALITY :443</div>
+                <div id="d-ms-reality" class="text-xs text-gray-500 mt-1">
+                  —
+                </div>
+              </div>
+              <div class="rounded-lg bg-white/5 p-3 text-center">
+                <div id="d-st-app" class="text-2xl mb-1">&#x23f3;</div>
+                <div class="text-xs text-gray-400">App :8000</div>
+                <div id="d-ms-app" class="text-xs text-gray-500 mt-1">—</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- DNS -->
+          <div class="card p-5">
+            <h3 class="text-sm font-semibold text-gray-300 mb-4">
+              &#x1f50d; DNS
+            </h3>
+            <div class="space-y-2">
+              <div
+                class="flex items-center justify-between text-xs py-1.5 border-b border-white/5"
+              >
+                <span class="text-gray-400">Домен сервера</span>
+                <span id="d-dns-domain" class="font-mono text-gray-300">—</span>
+              </div>
+              <div
+                class="flex items-center justify-between text-xs py-1.5 border-b border-white/5"
+              >
+                <span class="text-gray-400">Cloudflare (1.1.1.1)</span>
+                <span id="d-dns-cloudflare" class="font-mono text-gray-300"
+                  >—</span
+                >
+              </div>
+              <div class="flex items-center justify-between text-xs py-1.5">
+                <span class="text-gray-400">Google (google.com)</span>
+                <span id="d-dns-google" class="font-mono text-gray-300">—</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- BBR + Connections + Cert -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="card p-5">
+              <h3 class="text-sm font-semibold text-gray-300 mb-3">
+                &#x1f680; BBR
+              </h3>
+              <div
+                id="d-bbr-badge"
+                class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-white/5 text-gray-400"
+              >
+                <span
+                  id="d-bbr-dot"
+                  class="w-2 h-2 rounded-full bg-gray-600 inline-block"
+                ></span>
+                <span id="d-bbr-text">—</span>
+              </div>
+            </div>
+            <div class="card p-5">
+              <h3 class="text-sm font-semibold text-gray-300 mb-3">
+                &#x1f517; Соединения
+              </h3>
+              <div class="text-3xl font-bold text-white" id="d-conns">—</div>
+              <div class="text-xs text-gray-500 mt-1">TCP ESTABLISHED</div>
+            </div>
+            <div class="card p-5">
+              <h3 class="text-sm font-semibold text-gray-300 mb-3">
+                &#x1f512; SSL-сертификат
+              </h3>
+              <div class="text-3xl font-bold" id="d-cert-days">—</div>
+              <div class="text-xs text-gray-500 mt-1" id="d-cert-expires">
+                —
+              </div>
+            </div>
+          </div>
+
+          <!-- Xray config -->
+          <div class="card p-5">
+            <h3 class="text-sm font-semibold text-gray-300 mb-4">
+              &#x2699;&#xfe0f; Xray конфиг
+            </h3>
+            <div
+              id="d-xray-config-content"
+              class="space-y-2 text-xs text-gray-400"
+            >
+              —
+            </div>
+          </div>
+        </div>
+        <!-- /diag-results -->
+
+        <div
+          id="diag-empty"
+          class="flex flex-col items-center justify-center py-20 text-gray-600"
         >
-          <span id="diag-spinner" class="hidden">&#x21bb;</span>
-          Запустить все тесты
-        </button>
+          <div class="text-5xl mb-4">&#x1f9ea;</div>
+          <div class="text-sm">
+            Нажмите «Запустить все тесты» для проверки сервера
+          </div>
+        </div>
       </div>
-
-      <div id="diag-results" class="hidden space-y-6">
-
-        <!-- Resources -->
-        <div class="card p-5">
-          <h3 class="text-sm font-semibold text-gray-300 mb-4">&#x1f4bb; Ресурсы</h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <div class="flex justify-between text-xs mb-1">
-                <span class="text-gray-400">CPU (load 1m)</span>
-                <span id="d-cpu-val" class="text-gray-200">—</span>
-              </div>
-              <div class="h-2 rounded bg-white/5 w-full">
-                <div id="d-cpu-bar" class="h-2 rounded bg-indigo-500 transition-all" style="width:0%"></div>
-              </div>
-              <div class="text-xs text-gray-500 mt-1">5m: <span id="d-cpu-5m">—</span> &nbsp;15m: <span id="d-cpu-15m">—</span></div>
-            </div>
-            <div>
-              <div class="flex justify-between text-xs mb-1">
-                <span class="text-gray-400">RAM</span>
-                <span id="d-ram-val" class="text-gray-200">—</span>
-              </div>
-              <div class="h-2 rounded bg-white/5 w-full">
-                <div id="d-ram-bar" class="h-2 rounded bg-purple-500 transition-all" style="width:0%"></div>
-              </div>
-            </div>
-            <div>
-              <div class="flex justify-between text-xs mb-1">
-                <span class="text-gray-400">Диск (/)</span>
-                <span id="d-disk-val" class="text-gray-200">—</span>
-              </div>
-              <div class="h-2 rounded bg-white/5 w-full">
-                <div id="d-disk-bar" class="h-2 rounded bg-cyan-500 transition-all" style="width:0%"></div>
-              </div>
-            </div>
-            <div class="flex items-center gap-2 text-xs">
-              <span class="text-gray-400">Uptime:</span>
-              <span id="d-uptime" class="text-gray-200 font-mono">—</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Connectivity -->
-        <div class="card p-5">
-          <h3 class="text-sm font-semibold text-gray-300 mb-4">&#x1f310; Связность</h3>
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div class="rounded-lg bg-white/5 p-3 text-center">
-              <div id="d-st-xray-ws" class="text-2xl mb-1">&#x23f3;</div>
-              <div class="text-xs text-gray-400">Xray WS :8443</div>
-              <div id="d-ms-xray-ws" class="text-xs text-gray-500 mt-1">—</div>
-            </div>
-            <div class="rounded-lg bg-white/5 p-3 text-center">
-              <div id="d-st-xray-xhttp" class="text-2xl mb-1">&#x23f3;</div>
-              <div class="text-xs text-gray-400">Xray XHTTP :8444</div>
-              <div id="d-ms-xray-xhttp" class="text-xs text-gray-500 mt-1">—</div>
-            </div>
-            <div class="rounded-lg bg-white/5 p-3 text-center">
-              <div id="d-st-reality" class="text-2xl mb-1">&#x23f3;</div>
-              <div class="text-xs text-gray-400">REALITY :443</div>
-              <div id="d-ms-reality" class="text-xs text-gray-500 mt-1">—</div>
-            </div>
-            <div class="rounded-lg bg-white/5 p-3 text-center">
-              <div id="d-st-app" class="text-2xl mb-1">&#x23f3;</div>
-              <div class="text-xs text-gray-400">App :8000</div>
-              <div id="d-ms-app" class="text-xs text-gray-500 mt-1">—</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- DNS -->
-        <div class="card p-5">
-          <h3 class="text-sm font-semibold text-gray-300 mb-4">&#x1f50d; DNS</h3>
-          <div class="space-y-2">
-            <div class="flex items-center justify-between text-xs py-1.5 border-b border-white/5">
-              <span class="text-gray-400">Домен сервера</span>
-              <span id="d-dns-domain" class="font-mono text-gray-300">—</span>
-            </div>
-            <div class="flex items-center justify-between text-xs py-1.5 border-b border-white/5">
-              <span class="text-gray-400">Cloudflare (1.1.1.1)</span>
-              <span id="d-dns-cloudflare" class="font-mono text-gray-300">—</span>
-            </div>
-            <div class="flex items-center justify-between text-xs py-1.5">
-              <span class="text-gray-400">Google (google.com)</span>
-              <span id="d-dns-google" class="font-mono text-gray-300">—</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- BBR + Connections + Cert -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div class="card p-5">
-            <h3 class="text-sm font-semibold text-gray-300 mb-3">&#x1f680; BBR</h3>
-            <div id="d-bbr-badge" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-white/5 text-gray-400">
-              <span id="d-bbr-dot" class="w-2 h-2 rounded-full bg-gray-600 inline-block"></span>
-              <span id="d-bbr-text">—</span>
-            </div>
-          </div>
-          <div class="card p-5">
-            <h3 class="text-sm font-semibold text-gray-300 mb-3">&#x1f517; Соединения</h3>
-            <div class="text-3xl font-bold text-white" id="d-conns">—</div>
-            <div class="text-xs text-gray-500 mt-1">TCP ESTABLISHED</div>
-          </div>
-          <div class="card p-5">
-            <h3 class="text-sm font-semibold text-gray-300 mb-3">&#x1f512; SSL-сертификат</h3>
-            <div class="text-3xl font-bold" id="d-cert-days">—</div>
-            <div class="text-xs text-gray-500 mt-1" id="d-cert-expires">—</div>
-          </div>
-        </div>
-
-        <!-- Xray config -->
-        <div class="card p-5">
-          <h3 class="text-sm font-semibold text-gray-300 mb-4">&#x2699;&#xfe0f; Xray конфиг</h3>
-          <div id="d-xray-config-content" class="space-y-2 text-xs text-gray-400">—</div>
-        </div>
-
-      </div><!-- /diag-results -->
-
-      <div id="diag-empty" class="flex flex-col items-center justify-center py-20 text-gray-600">
-        <div class="text-5xl mb-4">&#x1f9ea;</div>
-        <div class="text-sm">Нажмите «Запустить все тесты» для проверки сервера</div>
-      </div>
-
-    </div>
-    <!-- /TAB: DIAGNOSTICS -->
+      <!-- /TAB: DIAGNOSTICS -->
     </main>
 
     <!-- MODAL: EDIT USER -->
@@ -1760,10 +2068,23 @@
         if (panel) panel.classList.add('active');
         if (tabName === 'system') loadSecurityStats();
         if (tabName === 'diagnostics') runDiagnostics();
+        if (tabName === 'servers') loadServers();
+        if (tabName === 'guides') loadGuides();
       }
       document.querySelectorAll('.tab-btn').forEach(function(btn) {
         btn.addEventListener('click', function() { switchTab(btn.dataset.tab); });
       });
+
+      function toggleUserExpand(userId) {
+        var row = document.getElementById('user-expand-' + userId);
+        if (!row) return;
+        var isHidden = row.classList.contains('hidden');
+        if (isHidden) {
+          row.classList.remove('hidden');
+        } else {
+          row.classList.add('hidden');
+        }
+      }
 
       // Search
       function filterUsers() {
@@ -1773,6 +2094,9 @@
         rows.forEach(function(row) {
           var match = row.dataset.search.indexOf(q) !== -1;
           row.style.display = match ? '' : 'none';
+          var userId = row.id.replace('user-row-', '');
+          var expandRow = document.getElementById('user-expand-' + userId);
+          if (expandRow) expandRow.style.display = match ? '' : 'none';
           if (match) shown++;
         });
         document.getElementById('user-count').textContent = shown + ' пользователей';
@@ -2425,35 +2749,51 @@
           return;
         }
         var totalDebt = data.reduce(function(s, u) { return s + u.debt_total; }, 0);
-        var debtors = data.filter(function(u) { return u.has_debt; }).length;
-        var html = '<div class="flex gap-4 mb-4 text-xs">' +
+        var debtors = data.filter(function(u) { return u.has_debt && !u.is_free; }).length;
+        var freeUsers = data.filter(function(u) { return u.is_free; }).length;
+        var html = '<div class="flex flex-wrap gap-4 mb-4 text-xs">' +
           '<span class="text-gray-500">Всего: <b class="text-gray-300">' + data.length + '</b></span>' +
+          '<span class="text-cyan-400/80">Бесплатно: <b>' + freeUsers + '</b></span>' +
           '<span class="text-red-400/80">Должников: <b>' + debtors + '</b></span>' +
           '<span class="text-amber-400/80">Общий долг: <b>' + totalDebt.toFixed(0) + ' ₽</b></span>' +
           '</div>';
         html += '<table class="w-full tbl"><thead><tr class="text-left">' +
           '<th class="px-3 py-2">Пользователь</th>' +
           '<th class="px-3 py-2">Ключей</th>' +
-          '<th class="px-3 py-2">Оплачено</th>' +
-          '<th class="px-3 py-2">Долг</th>' +
           '<th class="px-3 py-2">Баланс</th>' +
-          '<th class="px-3 py-2">Посл. оплата</th>' +
-          '<th class="px-3 py-2 text-right">Действия</th>' +
+          '<th class="px-3 py-2">Месяцы</th>' +
+          '<th class="px-3 py-2 text-right">Быстрые действия</th>' +
           '</tr></thead><tbody>';
         data.forEach(function(u) {
-          var rowCls = u.has_debt ? 'bg-red-500/5' : '';
+          var rowCls = u.has_debt && !u.is_free ? 'bg-red-500/5' : u.is_free ? 'bg-cyan-500/5' : '';
+          var statusBadge = '';
+          if (u.is_free) statusBadge = '<span class="ml-1 badge badge-cyan text-xs">FREE</span>';
+          else if (u.current_month_paid) statusBadge = '<span class="ml-1 badge badge-green text-xs">OK</span>';
+          else if (u.has_debt) statusBadge = '<span class="ml-1 badge badge-red text-xs">ДОЛГ</span>';
+          else statusBadge = '<span class="ml-1 badge badge-amber text-xs">?</span>';
+
+          var monthsHtml = '';
+          if (u.paid_months && u.paid_months.length) {
+            monthsHtml = u.paid_months.map(function(m) { return '<span class="text-emerald-400/60 text-xs">' + m + '</span>'; }).join(' ');
+          } else {
+            monthsHtml = '<span class="text-gray-600 text-xs">—</span>';
+          }
+
           html += '<tr class="' + rowCls + '">' +
             '<td class="px-3 py-2">' +
               '<span class="text-gray-200 text-sm">' + escapeHtml(u.user_name) + '</span>' +
-              (u.has_debt ? '<span class="ml-2 badge badge-red text-xs">ДОЛГ</span>' : '') +
+              statusBadge +
             '</td>' +
             '<td class="px-3 py-2 text-cyan-400 font-mono text-xs">' + u.keys_count + '</td>' +
-            '<td class="px-3 py-2 text-emerald-400 font-mono text-xs">' + u.paid_total.toFixed(0) + ' ₽</td>' +
-            '<td class="px-3 py-2 ' + (u.debt_total > 0 ? 'text-red-400' : 'text-gray-600') + ' font-mono text-xs">' + u.debt_total.toFixed(0) + ' ₽</td>' +
             '<td class="px-3 py-2 ' + (u.balance >= 0 ? 'text-emerald-400' : 'text-red-400') + ' font-mono text-xs font-bold">' + (u.balance >= 0 ? '+' : '') + u.balance.toFixed(0) + ' ₽</td>' +
-            '<td class="px-3 py-2 text-xs text-gray-500">' + (u.last_paid || '—') + '</td>' +
+            '<td class="px-3 py-2">' + monthsHtml + '</td>' +
             '<td class="px-3 py-2 text-right">' +
-              '<button onclick="openAddPaymentModal(' + u.user_id + ')" class="p-1.5 rounded bg-white/5 text-xs text-gray-500 hover:text-emerald-400 hover:bg-emerald-400/10 transition" title="Добавить запись">+</button>' +
+              '<div class="flex items-center justify-end gap-1">' +
+              '<button onclick="quickMonthPay(' + u.user_id + ', 500, 0)" class="p-1.5 rounded bg-white/5 text-xs text-gray-500 hover:text-emerald-400 hover:bg-emerald-400/10 transition" title="Оплатить текущий месяц (500₽)">✅</button>' +
+              '<button onclick="quickMonthPay(' + u.user_id + ', 500, -1)" class="p-1.5 rounded bg-white/5 text-xs text-gray-500 hover:text-emerald-400 hover:bg-emerald-400/10 transition" title="Оплатить прошлый месяц (500₽)">⏮️</button>' +
+              '<button onclick="toggleUserFree(' + u.user_id + ', ' + (u.is_free ? 'true' : 'false') + ', \'' + escapeStr(u.user_name) + '\')" class="p-1.5 rounded bg-white/5 text-xs text-gray-500 hover:text-cyan-400 hover:bg-cyan-400/10 transition" title="' + (u.is_free ? 'Снять FREE' : 'Сделать FREE') + '">' + (u.is_free ? '💰' : '🎁') + '</button>' +
+              '<button onclick="openAddPaymentModal(' + u.user_id + ')" class="p-1.5 rounded bg-white/5 text-xs text-gray-500 hover:text-gray-300 hover:bg-white/10 transition" title="Ручная запись">+</button>' +
+              '</div>' +
             '</td>' +
           '</tr>';
         });
@@ -2612,9 +2952,312 @@
         }
       }
 
+      // ── SERVERS ──
+      async function loadServers() {
+        try {
+          var r = await fetch('/admin/api/servers');
+          var data = await r.json();
+          var tbody = document.getElementById('servers-tbody');
+          if (!data.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-gray-700 text-xs text-center py-6">Нет серверов. Нажмите «+ Добавить сервер»</td></tr>';
+            return;
+          }
+          var html = '';
+          data.forEach(function(s) {
+            var syncCls = s.last_sync_status === 'ok' ? 'text-emerald-400' : s.last_sync_status ? 'text-red-400' : 'text-gray-600';
+            var syncText = s.last_sync ? new Date(s.last_sync).toLocaleString('ru', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+            html += '<tr>' +
+              '<td class="px-4 py-3 text-gray-200 text-sm font-medium">' + escapeHtml(s.name) + '</td>' +
+              '<td class="px-4 py-3"><span class="badge badge-cyan">' + escapeHtml(s.region.toUpperCase()) + '</span></td>' +
+              '<td class="px-4 py-3 text-xs text-gray-400 font-mono">' + escapeHtml(s.host) + '</td>' +
+              '<td class="px-4 py-3 text-xs text-gray-500">WS:' + s.ws_port + ' R:' + s.reality_port + ' G:' + s.grpc_port + '</td>' +
+              '<td class="px-4 py-3 text-xs">' + (s.reality_public_key ? '<span class="text-emerald-400">✅</span>' : '<span class="text-gray-600">—</span>') + '</td>' +
+              '<td class="px-4 py-3 text-xs text-gray-500">' + s.priority + '</td>' +
+              '<td class="px-4 py-3 text-xs ' + syncCls + '">' + syncText + '</td>' +
+              '<td class="px-4 py-3 text-right">' +
+                '<button onclick="syncServer(' + s.id + ')" class="p-1 rounded bg-white/5 text-gray-500 hover:text-emerald-400 transition text-xs" title="Синхронизировать">🔄</button>' +
+                '<button onclick="deleteServer(' + s.id + ', \'' + escapeStr(s.name) + '\')" class="p-1 rounded bg-white/5 text-gray-500 hover:text-red-400 transition text-xs ml-1" title="Удалить">🗑️</button>' +
+              '</td>' +
+            '</tr>';
+          });
+          tbody.innerHTML = html;
+        } catch(e) { showToast('Ошибка загрузки серверов', 'error'); }
+      }
+
+      async function syncServer(serverId) {
+        showToast('Синхронизация сервера...', 'info');
+        try {
+          var r = await fetch('/admin/api/servers/' + serverId + '/sync', { method: 'POST' });
+          var d = await r.json();
+          if (d.ok) { showToast('Сервер синхронизирован', 'success'); loadServers(); }
+          else { showToast(d.detail || 'Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
+      }
+
+      async function syncAllServers() {
+        showToast('Синхронизация всех серверов...', 'info');
+        try {
+          var r = await fetch('/admin/api/servers/sync-all', { method: 'POST' });
+          var d = await r.json();
+          if (d.ok) {
+            var okCount = Object.values(d.results || {}).filter(Boolean).length;
+            showToast('Синхронизировано ' + okCount + '/' + Object.keys(d.results || {}).length, 'success');
+            loadServers();
+          } else { showToast(d.detail || 'Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
+      }
+
+      async function deleteServer(serverId, name) {
+        if (!confirm('Удалить сервер «' + (name || serverId) + '»?')) return;
+        try {
+          var r = await fetch('/admin/api/servers/' + serverId + '/delete', { method: 'POST' });
+          var d = await r.json();
+          if (d.ok) { showToast('Сервер удалён', 'success'); loadServers(); }
+          else { showToast(d.detail || 'Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
+      }
+
+      function openServerModal() {
+        document.getElementById('server-modal').classList.remove('hidden');
+        document.getElementById('server-form').reset();
+        document.getElementById('srv-reality-pub').value = '';
+        document.getElementById('srv-reality-priv').value = '';
+        document.getElementById('srv-reality-sid').value = '';
+      }
+      function closeServerModal() { document.getElementById('server-modal').classList.add('hidden'); }
+
+      async function submitServer() {
+        var body = {
+          name: document.getElementById('srv-name').value.trim(),
+          host: document.getElementById('srv-host').value.trim(),
+          api_url: document.getElementById('srv-api').value.trim(),
+          api_token: document.getElementById('srv-token').value.trim(),
+          region: document.getElementById('srv-region').value,
+          role: document.getElementById('srv-role').value,
+          ws_port: parseInt(document.getElementById('srv-ws').value) || 443,
+          reality_port: parseInt(document.getElementById('srv-reality').value) || 2053,
+          grpc_port: parseInt(document.getElementById('srv-grpc').value) || 8445,
+          xhttp_port: parseInt(document.getElementById('srv-xhttp').value) || 8444,
+          priority: parseInt(document.getElementById('srv-priority').value) || 100,
+        };
+        var pk = document.getElementById('srv-reality-pub').value.trim();
+        if (pk) {
+          body.reality_public_key = pk;
+          body.reality_private_key = document.getElementById('srv-reality-priv').value.trim();
+          body.reality_short_id = document.getElementById('srv-reality-sid').value.trim();
+          body.reality_dest = document.getElementById('srv-reality-dest').value.trim() || 'www.samsung.com:443';
+          body.reality_server_names = document.getElementById('srv-reality-sn').value.trim() || 'www.samsung.com';
+        }
+        if (!body.name || !body.host || !body.api_url || !body.api_token) {
+          return showToast('Заполните имя, хост, API URL и токен', 'error');
+        }
+        try {
+          var r = await fetch('/admin/api/servers', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+          var d = await r.json();
+          if (d.ok) { showToast('Сервер добавлен', 'success'); closeServerModal(); loadServers(); }
+          else { showToast(d.detail || 'Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
+      }
+
+      async function generateRealityKeys() {
+        try {
+          var r = await fetch('/admin/api/generate-reality-keys', { method: 'POST' });
+          var d = await r.json();
+          if (d.ok) {
+            document.getElementById('srv-reality-pub').value = d.public_key;
+            document.getElementById('srv-reality-priv').value = d.private_key;
+            document.getElementById('srv-reality-sid').value = d.short_id;
+            showToast('REALITY ключи сгенерированы', 'success');
+          } else { showToast(d.detail || 'Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
+      }
+
+      // ── GUIDES ──
+      var editingGuideId = null;
+      async function loadGuides() {
+        try {
+          var r = await fetch('/admin/api/guides');
+          var data = await r.json();
+          var tbody = document.getElementById('guides-tbody');
+          if (!data.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-gray-700 text-xs text-center py-6">Нет гайдов. Нажмите «+ Добавить гайд»</td></tr>';
+            return;
+          }
+          var html = '';
+          data.forEach(function(g) {
+            var statusBadge = g.is_active ? '<span class="badge badge-green">✅</span>' : '<span class="badge badge-gray">❌</span>';
+            html += '<tr>' +
+              '<td class="px-4 py-3 text-gray-200 text-sm font-medium">' + escapeHtml(g.title) + '<br><span class="text-gray-600 text-xs">' + escapeHtml(g.slug) + '</span></td>' +
+              '<td class="px-4 py-3 text-xs text-gray-400">' + escapeHtml(g.app_name) + '</td>' +
+              '<td class="px-4 py-3"><span class="badge badge-cyan">' + escapeHtml(g.platform) + '</span></td>' +
+              '<td class="px-4 py-3 text-xs text-gray-500">' + g.sort_order + '</td>' +
+              '<td class="px-4 py-3">' + statusBadge + '</td>' +
+              '<td class="px-4 py-3 text-right">' +
+                '<button onclick="editGuide(' + g.id + ')" class="p-1 rounded bg-white/5 text-gray-500 hover:text-emerald-400 transition text-xs" title="Редактировать">✏️</button>' +
+                '<button onclick="deleteGuide(' + g.id + ', \'' + escapeStr(g.title) + '\')" class="p-1 rounded bg-white/5 text-gray-500 hover:text-red-400 transition text-xs ml-1" title="Удалить">🗑️</button>' +
+              '</td>' +
+            '</tr>';
+          });
+          tbody.innerHTML = html;
+        } catch(e) { showToast('Ошибка загрузки гайдов', 'error'); }
+      }
+
+      function openGuideModal() {
+        editingGuideId = null;
+        document.getElementById('guide-modal').classList.remove('hidden');
+        document.getElementById('guide-form').reset();
+        document.getElementById('guide-id').value = '';
+        document.getElementById('guide-modal-title').textContent = 'Добавить гайд';
+        document.getElementById('guide-active').checked = true;
+      }
+      function closeGuideModal() { document.getElementById('guide-modal').classList.add('hidden'); }
+
+      async function editGuide(guideId) {
+        try {
+          var r = await fetch('/admin/api/guides');
+          var data = await r.json();
+          var g = data.find(function(x) { return x.id == guideId; });
+          if (!g) return showToast('Гайд не найден', 'error');
+          editingGuideId = guideId;
+          document.getElementById('guide-modal').classList.remove('hidden');
+          document.getElementById('guide-modal-title').textContent = 'Редактировать гайд';
+          document.getElementById('guide-id').value = g.id;
+          document.getElementById('guide-slug').value = g.slug;
+          document.getElementById('guide-title').value = g.title;
+          document.getElementById('guide-app').value = g.app_name;
+          document.getElementById('guide-platform').value = g.platform;
+          document.getElementById('guide-content').value = g.content;
+          document.getElementById('guide-sort').value = g.sort_order;
+          document.getElementById('guide-active').checked = g.is_active;
+        } catch(e) { showToast('Ошибка загрузки гайда', 'error'); }
+      }
+
+      async function submitGuide() {
+        var body = {
+          slug: document.getElementById('guide-slug').value.trim(),
+          title: document.getElementById('guide-title').value.trim(),
+          app_name: document.getElementById('guide-app').value.trim(),
+          platform: document.getElementById('guide-platform').value,
+          content: document.getElementById('guide-content').value,
+          sort_order: parseInt(document.getElementById('guide-sort').value) || 0,
+          is_active: document.getElementById('guide-active').checked,
+        };
+        if (!body.slug || !body.title) {
+          return showToast('Заполните slug и заголовок', 'error');
+        }
+        var url = '/admin/api/guides';
+        var method = 'POST';
+        if (editingGuideId) {
+          url = '/admin/api/guides/' + editingGuideId;
+          method = 'PUT';
+          var r = await fetch(url, { method: method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+          var d = await r.json();
+          if (d.ok) { showToast(editingGuideId ? 'Гайд обновлён' : 'Гайд создан', 'success'); closeGuideModal(); loadGuides(); }
+          else { showToast(d.detail || 'Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
+      }
+
+      function autoFormatGuide() {
+        var el = document.getElementById('guide-content');
+        var text = el.value.trim();
+        if (!text) return;
+        if (/<[a-z][\s\S]*>/i.test(text)) {
+          showToast('Текст уже содержит HTML-теги', 'info');
+          updateGuidePreview();
+          return;
+        }
+        var lines = text.split(/\n+/).filter(function(l) { return l.trim(); });
+        var html = '';
+        var inList = false;
+        lines.forEach(function(raw) {
+          var line = raw.trim();
+          if (/^\d+[\.\)]/.test(line) || /:$/.test(line)) {
+            if (inList) { html += '</ul>'; inList = false; }
+            var title = line.replace(/^\d+[\.\)]\s*/, '').replace(/:$/, '');
+            html += '<h3>' + escapeHtml(title) + '</h3>';
+          } else if (/^[-*•]\s/.test(line)) {
+            if (!inList) { html += '<ul>'; inList = true; }
+            var item = line.replace(/^[-*•]\s*/, '');
+            html += '<li>' + escapeHtml(item) + '</li>';
+          } else {
+            if (inList) { html += '</ul>'; inList = false; }
+            html += '<p>' + escapeHtml(line) + '</p>';
+          }
+        });
+        if (inList) html += '</ul>';
+        el.value = html;
+        showToast('Текст отформатирован в HTML', 'success');
+        updateGuidePreview();
+      }
+      function toggleGuidePreview() {
+        var p = document.getElementById('guide-preview');
+        p.classList.toggle('hidden');
+        updateGuidePreview();
+      }
+      function updateGuidePreview() {
+        document.getElementById('guide-preview').innerHTML = document.getElementById('guide-content').value;
+      }
+
+      async function deleteGuide(guideId, title) {
+        if (!confirm('Удалить гайд «' + (title || guideId) + '»?')) return;
+        try {
+          var r = await fetch('/admin/api/guides/' + guideId + '/delete', { method: 'POST' });
+          var d = await r.json();
+          if (d.ok) { showToast('Гайд удалён', 'success'); loadGuides(); }
+          else { showToast(d.detail || 'Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
+      }
+
+      // ── BILLING IMPROVEMENTS ──
+      async function quickMonthPay(userId, amount, monthOffset) {
+        try {
+          var r = await fetch('/admin/payments/quick-month', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ user_id: userId, amount: amount || 500, month_offset: monthOffset || 0 })
+          });
+          var d = await r.json();
+          if (d.ok) { showToast('Оплата добавлена', 'success'); loadBillingSummary(); loadPayments(); }
+          else { showToast(d.detail || 'Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
+      }
+
+      async function toggleUserFree(userId, currentFree, name) {
+        var action = currentFree ? 'Снять бесплатный доступ' : 'Сделать бесплатным';
+        if (!confirm(action + ' для ' + (name || 'пользователя') + '?')) return;
+        try {
+          var r = await fetch('/admin/users/' + userId + '/toggle-free', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ is_free: !currentFree })
+          });
+          var d = await r.json();
+          if (d.ok) {
+            showToast(currentFree ? 'Бесплатный доступ снят' : 'Бесплатный доступ включён', 'success');
+            loadBillingSummary();
+            // Update badge in table if visible
+            var row = document.getElementById('user-row-' + userId);
+            if (row) {
+              var freeBadge = row.querySelector('.badge-free');
+              if (freeBadge) freeBadge.remove();
+              if (!currentFree) {
+                var statusTd = row.querySelector('td:nth-child(8)');
+                if (statusTd) {
+                  var span = document.createElement('span');
+                  span.className = 'badge badge-cyan ml-1 badge-free';
+                  span.textContent = 'FREE';
+                  statusTd.appendChild(span);
+                }
+              }
+            }
+          } else { showToast(d.detail || 'Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
+      }
+
       // Load billing/settings on tab switch
       var _billingLoaded = false;
       var _settingsLoaded = false;
+      var _serversLoaded = false;
       var origSwitchTab = switchTab;
       switchTab = function(tabName) {
         origSwitchTab(tabName);
@@ -2626,6 +3269,10 @@
         if (tabName === 'appsettings' && !_settingsLoaded) {
           _settingsLoaded = true;
           loadAppSettings();
+        }
+        if (tabName === 'servers' && !_serversLoaded) {
+          _serversLoaded = true;
+          loadServers();
         }
       };
     </script>
@@ -2720,6 +3367,378 @@
               </button>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: ADD SERVER -->
+    <div id="server-modal" class="fixed inset-0 z-40 hidden">
+      <div
+        class="modal-backdrop absolute inset-0"
+        onclick="closeServerModal()"
+      ></div>
+      <div
+        class="relative z-50 flex items-center justify-center min-h-screen p-4"
+      >
+        <div
+          class="modal-content rounded-2xl w-full max-w-lg p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
+        >
+          <div class="flex items-center justify-between mb-5">
+            <h3
+              class="text-sm font-semibold text-gray-200 uppercase tracking-wider"
+            >
+              🌍 Добавить сервер
+            </h3>
+            <button
+              onclick="closeServerModal()"
+              class="text-gray-600 hover:text-gray-400 text-lg"
+            >
+              &times;
+            </button>
+          </div>
+          <form id="server-form" class="space-y-4" onsubmit="return false;">
+            <div class="grid grid-cols-3 gap-3">
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Имя</label>
+                <input
+                  type="text"
+                  id="srv-name"
+                  placeholder="Netherlands-2"
+                  class="input-field"
+                />
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Регион</label>
+                <select id="srv-region" class="input-field">
+                  <option value="eu">🇪🇺 Европа</option>
+                  <option value="ru">🇷🇺 Россия</option>
+                  <option value="fi">🇫🇮 Финляндия</option>
+                  <option value="us">🇺🇸 США</option>
+                  <option value="sg">🇸🇬 Сингапур</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Роль</label>
+                <select id="srv-role" class="input-field">
+                  <option value="remote">remote</option>
+                  <option value="transit">transit</option>
+                  <option value="local">local</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1"
+                >Хост (домен или IP для клиентов)</label
+              >
+              <input
+                type="text"
+                id="srv-host"
+                placeholder="nl2.vpn.example.com"
+                class="input-field"
+              />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1"
+                >API URL (xray-node)</label
+              >
+              <input
+                type="text"
+                id="srv-api"
+                placeholder="https://100.x.x.x:8080 или http://127.0.0.1:18080"
+                class="input-field"
+              />
+              <p class="text-gray-700 text-xs mt-1">
+                URL до xray-node микросервиса на remote сервере
+              </p>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">API Token</label>
+              <input
+                type="text"
+                id="srv-token"
+                placeholder="Bearer-токен из .env xray-node"
+                class="input-field"
+              />
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">WS порт</label>
+                <input
+                  type="number"
+                  id="srv-ws"
+                  value="443"
+                  class="input-field"
+                />
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1"
+                  >REALITY порт</label
+                >
+                <input
+                  type="number"
+                  id="srv-reality"
+                  value="2053"
+                  class="input-field"
+                />
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1"
+                  >Приоритет</label
+                >
+                <input
+                  type="number"
+                  id="srv-priority"
+                  value="100"
+                  class="input-field"
+                />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs text-gray-500 mb-1"
+                  >gRPC порт</label
+                >
+                <input
+                  type="number"
+                  id="srv-grpc"
+                  value="8445"
+                  class="input-field"
+                />
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1"
+                  >XHTTP порт</label
+                >
+                <input
+                  type="number"
+                  id="srv-xhttp"
+                  value="8444"
+                  class="input-field"
+                />
+              </div>
+            </div>
+
+            <div class="border-t border-white/5 pt-4">
+              <div class="flex items-center justify-between mb-3">
+                <h4 class="text-xs text-gray-500 uppercase tracking-wider">
+                  🔒 REALITY (опционально)
+                </h4>
+                <button
+                  type="button"
+                  onclick="generateRealityKeys()"
+                  class="btn-secondary text-xs py-1"
+                >
+                  ⚡ Сгенерировать ключи
+                </button>
+              </div>
+              <div class="space-y-2">
+                <input
+                  type="text"
+                  id="srv-reality-pub"
+                  placeholder="Public key"
+                  class="input-field text-xs font-mono"
+                />
+                <input
+                  type="text"
+                  id="srv-reality-priv"
+                  placeholder="Private key"
+                  class="input-field text-xs font-mono"
+                />
+                <input
+                  type="text"
+                  id="srv-reality-sid"
+                  placeholder="Short ID"
+                  class="input-field text-xs font-mono"
+                />
+                <input
+                  type="text"
+                  id="srv-reality-dest"
+                  placeholder="Dest (www.samsung.com:443)"
+                  value="www.samsung.com:443"
+                  class="input-field text-xs font-mono"
+                />
+                <input
+                  type="text"
+                  id="srv-reality-sn"
+                  placeholder="Server names (www.samsung.com)"
+                  value="www.samsung.com"
+                  class="input-field text-xs font-mono"
+                />
+              </div>
+            </div>
+
+            <div class="flex gap-3 pt-2">
+              <button
+                type="button"
+                onclick="submitServer()"
+                class="btn-primary flex-1"
+              >
+                Добавить сервер
+              </button>
+              <button
+                type="button"
+                onclick="closeServerModal()"
+                class="btn-secondary"
+              >
+                Отмена
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: ADD/EDIT GUIDE -->
+    <div id="guide-modal" class="fixed inset-0 z-40 hidden">
+      <div
+        class="modal-backdrop absolute inset-0"
+        onclick="closeGuideModal()"
+      ></div>
+      <div
+        class="relative z-50 flex items-center justify-center min-h-screen p-4"
+      >
+        <div
+          class="modal-content rounded-2xl w-full max-w-lg p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
+        >
+          <div class="flex items-center justify-between mb-5">
+            <h3
+              class="text-sm font-semibold text-gray-200 uppercase tracking-wider"
+              id="guide-modal-title"
+            >
+              📖 Добавить гайд
+            </h3>
+            <button
+              onclick="closeGuideModal()"
+              class="text-gray-600 hover:text-gray-400 text-lg"
+            >
+              &times;
+            </button>
+          </div>
+          <form id="guide-form" class="space-y-4" onsubmit="return false;">
+            <input type="hidden" id="guide-id" />
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs text-gray-500 mb-1"
+                  >Slug (уникальный ID)</label
+                >
+                <input
+                  type="text"
+                  id="guide-slug"
+                  placeholder="v2rayng-android"
+                  class="input-field"
+                />
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1"
+                  >Заголовок</label
+                >
+                <input
+                  type="text"
+                  id="guide-title"
+                  placeholder="V2RayNG — Android"
+                  class="input-field"
+                />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs text-gray-500 mb-1"
+                  >Приложение</label
+                >
+                <input
+                  type="text"
+                  id="guide-app"
+                  placeholder="V2RayNG"
+                  class="input-field"
+                />
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1"
+                  >Платформа</label
+                >
+                <select id="guide-platform" class="input-field">
+                  <option value="all">Все</option>
+                  <option value="ios">iOS</option>
+                  <option value="android">Android</option>
+                  <option value="windows">Windows</option>
+                  <option value="macos">macOS</option>
+                  <option value="linux">Linux</option>
+                </select>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Порядок</label>
+                <input
+                  type="number"
+                  id="guide-sort"
+                  value="0"
+                  class="input-field"
+                />
+              </div>
+              <div class="flex items-center gap-2 pt-5">
+                <input
+                  type="checkbox"
+                  id="guide-active"
+                  checked
+                  class="w-4 h-4 rounded border-gray-600 text-emerald-500 focus:ring-emerald-500 bg-gray-800"
+                />
+                <label for="guide-active" class="text-xs text-gray-400"
+                  >Активен</label
+                >
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Содержимое</label>
+              <textarea
+                id="guide-content"
+                rows="8"
+                class="input-field text-xs font-mono"
+                placeholder="1. Установите приложение...&#10;2. Откройте и нажмите +..."
+              ></textarea>
+              <div class="flex gap-2 mt-2">
+                <button
+                  type="button"
+                  onclick="autoFormatGuide()"
+                  class="px-2 py-1 rounded bg-white/5 text-xs text-gray-400 hover:text-emerald-400 transition"
+                >
+                  ✨ Автоформат
+                </button>
+                <button
+                  type="button"
+                  onclick="toggleGuidePreview()"
+                  class="px-2 py-1 rounded bg-white/5 text-xs text-gray-400 hover:text-cyan-400 transition"
+                >
+                  👁️ Предпросмотр
+                </button>
+              </div>
+              <div
+                id="guide-preview"
+                class="hidden mt-3 p-3 rounded-lg bg-black/30 guide-content text-xs"
+                style="max-height: 200px; overflow-y: auto"
+              ></div>
+              <p class="text-gray-700 text-xs mt-1">
+                Поддерживается HTML. Кнопка «Автоформат» превратит обычный текст
+                в красивый HTML.
+              </p>
+            </div>
+            <div class="flex gap-3 pt-2">
+              <button
+                type="button"
+                onclick="submitGuide()"
+                class="btn-primary flex-1"
+              >
+                Сохранить
+              </button>
+              <button
+                type="button"
+                onclick="closeGuideModal()"
+                class="btn-secondary"
+              >
+                Отмена
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>

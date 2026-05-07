@@ -4,7 +4,6 @@
 # ═══════════════════════════════════════════
 
 services:
-
   # ── Nginx — reverse proxy + SSL ──
   nginx:
     image: nginx:1.27-alpine
@@ -27,7 +26,11 @@ services:
       xray:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "wget -qS -O /dev/null http://127.0.0.1:80/ 2>&1 | grep -qE '301|200' || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qS -O /dev/null http://127.0.0.1:80/ 2>&1 | grep -qE '301|200' || exit 1",
+        ]
       interval: 30s
       timeout: 5s
       start_period: 15s
@@ -66,7 +69,12 @@ services:
       - xray-config:/etc/xray
       - xray-logs:/var/log/xray
     # Ждём конфиг от ufo-app (он создаётся при старте приложения)
-    entrypoint: ["/bin/sh", "-c", "until [ -f /etc/xray/config.json ]; do echo 'Waiting for xray config...'; sleep 2; done; exec xray run -config /etc/xray/config.json"]
+    entrypoint:
+      [
+        "/bin/sh",
+        "-c",
+        "until [ -f /etc/xray/config.json ]; do echo 'Waiting for xray config...'; sleep 2; done; exec xray run -config /etc/xray/config.json",
+      ]
     networks:
       - backend
 
@@ -86,12 +94,18 @@ services:
     volumes:
       - app-data:/project/data
       - xray-config:/etc/xray
-      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       xray:
         condition: service_started
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/')"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/')",
+        ]
       interval: 30s
       timeout: 10s
       start_period: 60s

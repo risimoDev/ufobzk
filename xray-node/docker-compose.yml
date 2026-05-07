@@ -1,0 +1,23 @@
+services:
+  xray-node:
+    build: .
+    container_name: ufobzk-xray-node
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${XRAY_NODE_PORT:-8080}:8080"
+    environment:
+      - XRAY_NODE_TOKEN=${XRAY_NODE_TOKEN:?err}
+      - XRAY_CONFIG_PATH=/etc/xray/config.json
+      - XRAY_CONTAINER_NAME=${XRAY_CONTAINER_NAME:-xray}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ufobzk-xray-config:/etc/xray
+    networks:
+      - ufobzk-xray-net
+
+networks:
+  ufobzk-xray-net:
+    driver: bridge
+
+volumes:
+  ufobzk-xray-config:

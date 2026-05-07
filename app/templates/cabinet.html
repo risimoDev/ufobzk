@@ -7,80 +7,349 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <style>
-      body { background: #080818; min-height: 100vh; font-family: ui-sans-serif,system-ui,sans-serif; }
-      .glass { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 1.25rem; }
-      .glass:hover { border-color: rgba(0,255,200,0.12); }
-      .btn-acid { display:inline-flex;align-items:center;gap:.3rem;background:rgba(0,255,200,0.1);border:1px solid rgba(0,255,200,0.2);color:#00ffc8;border-radius:.6rem;padding:.35rem .8rem;font-size:.75rem;font-weight:500;transition:all .2s;cursor:pointer;text-decoration:none; }
-      .btn-acid:hover { background:rgba(0,255,200,0.2); }
-      .btn-ghost { background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);color:#6b7280;border-radius:.6rem;padding:.35rem .75rem;font-size:.72rem;transition:all .2s;cursor:pointer;white-space:nowrap; }
-      .btn-ghost:hover { background:rgba(255,255,255,0.08);color:#9ca3af; }
-      .mono-box { background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.05);border-radius:.75rem;padding:.65rem .9rem;font-family:monospace;font-size:.72rem;color:rgba(0,255,200,.7);word-break:break-all;user-select:all;cursor:pointer; }
-      .server-badge { display:inline-flex;align-items:center;gap:.4rem;padding:.25rem .7rem;background:rgba(0,255,200,.06);border:1px solid rgba(0,255,200,.15);border-radius:999px;font-size:.7rem;color:#00ffc8; }
-      .status-active { background:rgba(16,185,129,.1);color:#34d399;border:1px solid rgba(16,185,129,.2);border-radius:999px;padding:.15rem .65rem;font-size:.7rem;font-weight:500; }
-      .status-expired { background:rgba(239,68,68,.1);color:#f87171;border:1px solid rgba(239,68,68,.2);border-radius:999px;padding:.15rem .65rem;font-size:.7rem;font-weight:500; }
-      .status-limited { background:rgba(245,158,11,.1);color:#fbbf24;border:1px solid rgba(245,158,11,.2);border-radius:999px;padding:.15rem .65rem;font-size:.7rem;font-weight:500; }
-      .status-disabled { background:rgba(107,114,128,.1);color:#6b7280;border:1px solid rgba(107,114,128,.2);border-radius:999px;padding:.15rem .65rem;font-size:.7rem;font-weight:500; }
-      .tab-btn { padding:.4rem 1rem;border-radius:.6rem;font-size:.75rem;font-weight:500;transition:all .2s;color:#6b7280;cursor:pointer;border:1px solid transparent;background:transparent; }
-      .tab-btn.active { color:#00ffc8;border-color:rgba(0,255,200,.2);background:rgba(0,255,200,.06); }
-      .tab-panel { display:none; }
-      .tab-panel.active { display:block; }
-      .progress-bar { height:.35rem;border-radius:999px;background:rgba(255,255,255,.05);overflow:hidden; }
-      .progress-fill { height:100%;border-radius:999px;transition:width .5s; }
-      body::before { content:'';position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(0,255,200,.012) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,200,.012) 1px,transparent 1px);background-size:64px 64px; }
+      body {
+        background: #080818;
+        min-height: 100vh;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+      .glass {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 1.25rem;
+      }
+      .glass:hover {
+        border-color: rgba(0, 255, 200, 0.12);
+      }
+      .btn-acid {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        background: rgba(0, 255, 200, 0.1);
+        border: 1px solid rgba(0, 255, 200, 0.2);
+        color: #00ffc8;
+        border-radius: 0.6rem;
+        padding: 0.35rem 0.8rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        transition: all 0.2s;
+        cursor: pointer;
+        text-decoration: none;
+      }
+      .btn-acid:hover {
+        background: rgba(0, 255, 200, 0.2);
+      }
+      .btn-ghost {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        color: #6b7280;
+        border-radius: 0.6rem;
+        padding: 0.35rem 0.75rem;
+        font-size: 0.72rem;
+        transition: all 0.2s;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn-ghost:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: #9ca3af;
+      }
+      .mono-box {
+        background: rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 0.75rem;
+        padding: 0.65rem 0.9rem;
+        font-family: monospace;
+        font-size: 0.72rem;
+        color: rgba(0, 255, 200, 0.7);
+        word-break: break-all;
+        user-select: all;
+        cursor: pointer;
+      }
+      .server-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.25rem 0.7rem;
+        background: rgba(0, 255, 200, 0.06);
+        border: 1px solid rgba(0, 255, 200, 0.15);
+        border-radius: 999px;
+        font-size: 0.7rem;
+        color: #00ffc8;
+      }
+      .status-active {
+        background: rgba(16, 185, 129, 0.1);
+        color: #34d399;
+        border: 1px solid rgba(16, 185, 129, 0.2);
+        border-radius: 999px;
+        padding: 0.15rem 0.65rem;
+        font-size: 0.7rem;
+        font-weight: 500;
+      }
+      .status-expired {
+        background: rgba(239, 68, 68, 0.1);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, 0.2);
+        border-radius: 999px;
+        padding: 0.15rem 0.65rem;
+        font-size: 0.7rem;
+        font-weight: 500;
+      }
+      .status-limited {
+        background: rgba(245, 158, 11, 0.1);
+        color: #fbbf24;
+        border: 1px solid rgba(245, 158, 11, 0.2);
+        border-radius: 999px;
+        padding: 0.15rem 0.65rem;
+        font-size: 0.7rem;
+        font-weight: 500;
+      }
+      .status-disabled {
+        background: rgba(107, 114, 128, 0.1);
+        color: #6b7280;
+        border: 1px solid rgba(107, 114, 128, 0.2);
+        border-radius: 999px;
+        padding: 0.15rem 0.65rem;
+        font-size: 0.7rem;
+        font-weight: 500;
+      }
+      .guide-content h3 {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #e5e7eb;
+        margin: 0 0 0.5rem 0;
+      }
+      .guide-content h3:not(:first-child) {
+        margin-top: 1rem;
+      }
+      .guide-content p {
+        margin: 0.4rem 0;
+        line-height: 1.6;
+      }
+      .guide-content ul {
+        list-style: disc;
+        padding-left: 1.25rem;
+        margin: 0.4rem 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+      }
+      .guide-content ol {
+        list-style: decimal;
+        padding-left: 1.25rem;
+        margin: 0.4rem 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+      }
+      .guide-content li {
+        line-height: 1.5;
+      }
+      .guide-content code {
+        background: rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 0.35rem;
+        padding: 0.1rem 0.35rem;
+        font-family: ui-monospace, SFMono-Regular, monospace;
+        font-size: 0.7rem;
+        color: #fbbf24;
+      }
+      .guide-content pre {
+        background: rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 0.5rem;
+        padding: 0.6rem 0.8rem;
+        overflow-x: auto;
+        font-family: ui-monospace, SFMono-Regular, monospace;
+        font-size: 0.7rem;
+        color: #fbbf24;
+        margin: 0.5rem 0;
+      }
+      .guide-content strong,
+      .guide-content b {
+        color: #e5e7eb;
+        font-weight: 600;
+      }
+      .guide-content a {
+        color: #00ffc8;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+      .guide-content a:hover {
+        opacity: 0.8;
+      }
+      .tab-btn {
+        padding: 0.4rem 1rem;
+        border-radius: 0.6rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        transition: all 0.2s;
+        color: #6b7280;
+        cursor: pointer;
+        border: 1px solid transparent;
+        background: transparent;
+      }
+      .tab-btn.active {
+        color: #00ffc8;
+        border-color: rgba(0, 255, 200, 0.2);
+        background: rgba(0, 255, 200, 0.06);
+      }
+      .tab-panel {
+        display: none;
+      }
+      .tab-panel.active {
+        display: block;
+      }
+      .progress-bar {
+        height: 0.35rem;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.05);
+        overflow: hidden;
+      }
+      .progress-fill {
+        height: 100%;
+        border-radius: 999px;
+        transition: width 0.5s;
+      }
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        background-image:
+          linear-gradient(rgba(0, 255, 200, 0.012) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(0, 255, 200, 0.012) 1px, transparent 1px);
+        background-size: 64px 64px;
+      }
     </style>
   </head>
   <body class="text-gray-300">
-
-    <nav class="relative z-10 border-b border-white/5 bg-black/20 backdrop-blur-sm sticky top-0">
-      <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+    <nav
+      class="relative z-10 border-b border-white/5 bg-black/20 backdrop-blur-sm sticky top-0"
+    >
+      <div
+        class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between"
+      >
         <div class="flex items-center gap-2">
           <span>&#x1f6e1;&#xfe0f;</span>
-          <span class="text-sm font-bold" style="color:#00ffc8;text-shadow:0 0 20px rgba(0,255,200,.4)">&#x041a;&#x0430;&#x0441;&#x043a;&#x0430;&#x0434;&#x043d;&#x044b;&#x0439; VPN</span>
+          <span
+            class="text-sm font-bold"
+            style="color: #00ffc8; text-shadow: 0 0 20px rgba(0, 255, 200, 0.4)"
+            >&#x041a;&#x0430;&#x0441;&#x043a;&#x0430;&#x0434;&#x043d;&#x044b;&#x0439;
+            VPN</span
+          >
         </div>
         <div class="flex items-center gap-2">
           {% if user.is_admin %}
-          <a href="/admin" class="btn-ghost" style="color:#fbbf24;border-color:rgba(251,191,36,.2)">&#x0410;&#x0434;&#x043c;&#x0438;&#x043d;</a>
+          <a
+            href="/admin"
+            class="btn-ghost"
+            style="color: #fbbf24; border-color: rgba(251, 191, 36, 0.2)"
+            >&#x0410;&#x0434;&#x043c;&#x0438;&#x043d;</a
+          >
           {% endif %}
-          <a href="/logout" class="btn-ghost">&#x0412;&#x044b;&#x0445;&#x043e;&#x0434;</a>
+          <a href="/logout" class="btn-ghost"
+            >&#x0412;&#x044b;&#x0445;&#x043e;&#x0434;</a
+          >
         </div>
       </div>
     </nav>
 
-    <main class="relative z-10 max-w-3xl mx-auto px-4 py-6" style="display:flex;flex-direction:column;gap:1rem">
-
+    <main
+      class="relative z-10 max-w-3xl mx-auto px-4 py-6"
+      style="display: flex; flex-direction: column; gap: 1rem"
+    >
       {% if not keys_data %}
       <div class="glass p-12 text-center">
-        <div class="text-4xl mb-4" style="opacity:.3">&#x1f511;</div>
-        <p class="text-sm font-medium" style="color:#d1d5db">VPN-&#x043a;&#x043b;&#x044e;&#x0447;&#x0438; &#x043d;&#x0435; &#x0441;&#x043e;&#x0437;&#x0434;&#x0430;&#x043d;&#x044b;</p>
-        <p class="text-xs mt-1" style="color:#4b5563">&#x041e;&#x0431;&#x0440;&#x0430;&#x0442;&#x0438;&#x0442;&#x0435;&#x0441;&#x044c; &#x043a; &#x0430;&#x0434;&#x043c;&#x0438;&#x043d;&#x0438;&#x0441;&#x0442;&#x0440;&#x0430;&#x0442;&#x043e;&#x0440;&#x0443;.</p>
+        <div class="text-4xl mb-4" style="opacity: 0.3">&#x1f511;</div>
+        <p class="text-sm font-medium" style="color: #d1d5db">
+          VPN-&#x043a;&#x043b;&#x044e;&#x0447;&#x0438; &#x043d;&#x0435;
+          &#x0441;&#x043e;&#x0437;&#x0434;&#x0430;&#x043d;&#x044b;
+        </p>
+        <p class="text-xs mt-1" style="color: #4b5563">
+          &#x041e;&#x0431;&#x0440;&#x0430;&#x0442;&#x0438;&#x0442;&#x0435;&#x0441;&#x044c;
+          &#x043a;
+          &#x0430;&#x0434;&#x043c;&#x0438;&#x043d;&#x0438;&#x0441;&#x0442;&#x0440;&#x0430;&#x0442;&#x043e;&#x0440;&#x0443;.
+        </p>
       </div>
 
-      {% else %}
-
-      {% if subscription_url %}
+      {% else %} {% if subscription_url %}
       <div class="glass p-5">
         <div class="flex items-start justify-between gap-3 mb-3">
           <div>
-            <p class="text-xs font-semibold uppercase tracking-widest mb-0.5" style="color:#d1d5db">&#x421;&#x441;&#x044b;&#x043b;&#x043a;&#x0430; &#x043f;&#x043e;&#x0434;&#x043f;&#x0438;&#x0441;&#x043a;&#x0438;</p>
-            <p class="text-xs" style="color:#4b5563">&#x0412;&#x0441;&#x0442;&#x0430;&#x0432;&#x044c;&#x0442;&#x0435; &#x0432; &#x043f;&#x0440;&#x0438;&#x043b;&#x043e;&#x0436;&#x0435;&#x043d;&#x0438;&#x0435; &mdash; &#x0441;&#x0435;&#x0440;&#x0432;&#x0435;&#x0440;&#x044b; &#x0434;&#x043e;&#x0431;&#x0430;&#x0432;&#x044f;&#x0442;&#x0441;&#x044f; &#x0430;&#x0432;&#x0442;&#x043e;&#x043c;&#x0430;&#x0442;&#x0438;&#x0447;&#x0435;&#x0441;&#x043a;&#x0438;</p>
+            <p
+              class="text-xs font-semibold uppercase tracking-widest mb-0.5"
+              style="color: #d1d5db"
+            >
+              &#x421;&#x441;&#x044b;&#x043b;&#x043a;&#x0430;
+              &#x043f;&#x043e;&#x0434;&#x043f;&#x0438;&#x0441;&#x043a;&#x0438;
+            </p>
+            <p class="text-xs" style="color: #4b5563">
+              &#x0412;&#x0441;&#x0442;&#x0430;&#x0432;&#x044c;&#x0442;&#x0435;
+              &#x0432;
+              &#x043f;&#x0440;&#x0438;&#x043b;&#x043e;&#x0436;&#x0435;&#x043d;&#x0438;&#x0435;
+              &mdash; &#x0441;&#x0435;&#x0440;&#x0432;&#x0435;&#x0440;&#x044b;
+              &#x0434;&#x043e;&#x0431;&#x0430;&#x0432;&#x044f;&#x0442;&#x0441;&#x044f;
+              &#x0430;&#x0432;&#x0442;&#x043e;&#x043c;&#x0430;&#x0442;&#x0438;&#x0447;&#x0435;&#x0441;&#x043a;&#x0438;
+            </p>
           </div>
-          <button onclick='copyText({{ subscription_url | tojson }})' class="btn-acid">&#x1f4cb; &#x041a;&#x043e;&#x043f;&#x0438;&#x0440;&#x043e;&#x0432;&#x0430;&#x0442;&#x044c;</button>
+          <button
+            onclick="copyText({{ subscription_url | tojson }})"
+            class="btn-acid"
+          >
+            &#x1f4cb;
+            &#x041a;&#x043e;&#x043f;&#x0438;&#x0440;&#x043e;&#x0432;&#x0430;&#x0442;&#x044c;
+          </button>
         </div>
-        <div class="mono-box mb-4" onclick='copyText({{ subscription_url | tojson }})'>{{ subscription_url }}</div>
-        <div class="flex justify-center"><div id="qrcode-sub" class="bg-white rounded-xl p-2.5 inline-block"></div></div>
+        <div
+          class="mono-box mb-4"
+          onclick="copyText({{ subscription_url | tojson }})"
+        >
+          {{ subscription_url }}
+        </div>
+        <div class="flex justify-center">
+          <div
+            id="qrcode-sub"
+            class="bg-white rounded-xl p-2.5 inline-block"
+          ></div>
+        </div>
       </div>
       {% endif %}
 
       <div class="glass p-4">
-        <p class="text-xs uppercase tracking-widest mb-3" style="color:#6b7280">&#x041a;&#x0430;&#x043a; &#x0440;&#x0430;&#x0431;&#x043e;&#x0442;&#x0430;&#x0435;&#x0442;</p>
+        <p
+          class="text-xs uppercase tracking-widest mb-3"
+          style="color: #6b7280"
+        >
+          &#x041a;&#x0430;&#x043a;
+          &#x0440;&#x0430;&#x0431;&#x043e;&#x0442;&#x0430;&#x0435;&#x0442;
+        </p>
         <div class="grid grid-cols-2 gap-3">
-          <div class="rounded-xl p-3.5" style="background:rgba(0,0,0,.3)">
-            <div class="flex items-center gap-2 mb-1.5"><span>&#x1f1f7;&#x1f1fa;</span><span class="text-xs font-medium" style="color:#e5e7eb">&#x0420;&#x043e;&#x0441;&#x0441;&#x0438;&#x044f;</span></div>
-            <p class="text-xs leading-relaxed" style="color:#4b5563">&#x042f;&#x043d;&#x0434;&#x0435;&#x043a;&#x0441;, &#x0412;&#x041a;&#x043e;&#x043d;&#x0442;&#x0430;&#x043a;&#x0442;&#x0435;, &#x0421;&#x0431;&#x0435;&#x0440;, .ru &#x0434;&#x043e;&#x043c;&#x0435;&#x043d;&#x044b;</p>
+          <div class="rounded-xl p-3.5" style="background: rgba(0, 0, 0, 0.3)">
+            <div class="flex items-center gap-2 mb-1.5">
+              <span>&#x1f1f7;&#x1f1fa;</span
+              ><span class="text-xs font-medium" style="color: #e5e7eb"
+                >&#x0420;&#x043e;&#x0441;&#x0441;&#x0438;&#x044f;</span
+              >
+            </div>
+            <p class="text-xs leading-relaxed" style="color: #4b5563">
+              &#x042f;&#x043d;&#x0434;&#x0435;&#x043a;&#x0441;,
+              &#x0412;&#x041a;&#x043e;&#x043d;&#x0442;&#x0430;&#x043a;&#x0442;&#x0435;,
+              &#x0421;&#x0431;&#x0435;&#x0440;, .ru
+              &#x0434;&#x043e;&#x043c;&#x0435;&#x043d;&#x044b;
+            </p>
           </div>
-          <div class="rounded-xl p-3.5" style="background:rgba(0,0,0,.3)">
-            <div class="flex items-center gap-2 mb-1.5"><span>&#x1f1f3;&#x1f1f1;</span><span class="text-xs font-medium" style="color:#e5e7eb">&#x041d;&#x0438;&#x0434;&#x0435;&#x0440;&#x043b;&#x0430;&#x043d;&#x0434;&#x044b;</span></div>
-            <p class="text-xs leading-relaxed" style="color:#4b5563">YouTube, Google, Instagram, &#x0432;&#x0441;&#x0451; &#x043e;&#x0441;&#x0442;&#x0430;&#x043b;&#x044c;&#x043d;&#x043e;&#x0435;</p>
+          <div class="rounded-xl p-3.5" style="background: rgba(0, 0, 0, 0.3)">
+            <div class="flex items-center gap-2 mb-1.5">
+              <span>&#x1f1f3;&#x1f1f1;</span
+              ><span class="text-xs font-medium" style="color: #e5e7eb"
+                >&#x041d;&#x0438;&#x0434;&#x0435;&#x0440;&#x043b;&#x0430;&#x043d;&#x0434;&#x044b;</span
+              >
+            </div>
+            <p class="text-xs leading-relaxed" style="color: #4b5563">
+              YouTube, Google, Instagram, &#x0432;&#x0441;&#x0451;
+              &#x043e;&#x0441;&#x0442;&#x0430;&#x043b;&#x044c;&#x043d;&#x043e;&#x0435;
+            </p>
           </div>
         </div>
       </div>
@@ -90,115 +359,321 @@
         <div class="flex items-center justify-between mb-3">
           <div class="flex items-center gap-2">
             <span>&#x1f511;</span>
-            <span class="text-sm font-semibold" style="color:#e5e7eb">{{ kd.key.name }}</span>
-            {% if kd.status == 'active' %}<span class="status-active">&#x0410;&#x043a;&#x0442;&#x0438;&#x0432;&#x0435;&#x043d;</span>
-            {% elif kd.status == 'expired' %}<span class="status-expired">&#x0418;&#x0441;&#x0442;&#x0451;&#x043a;</span>
-            {% elif kd.status == 'limited' %}<span class="status-limited">&#x041b;&#x0438;&#x043c;&#x0438;&#x0442;</span>
-            {% elif kd.status == 'disabled' %}<span class="status-disabled">&#x041e;&#x0442;&#x043a;&#x043b;&#x044e;&#x0447;&#x0451;&#x043d;</span>
+            <span class="text-sm font-semibold" style="color: #e5e7eb"
+              >{{ kd.key.name }}</span
+            >
+            {% if kd.status == 'active' %}<span class="status-active"
+              >&#x0410;&#x043a;&#x0442;&#x0438;&#x0432;&#x0435;&#x043d;</span
+            >
+            {% elif kd.status == 'expired' %}<span class="status-expired"
+              >&#x0418;&#x0441;&#x0442;&#x0451;&#x043a;</span
+            >
+            {% elif kd.status == 'limited' %}<span class="status-limited"
+              >&#x041b;&#x0438;&#x043c;&#x0438;&#x0442;</span
+            >
+            {% elif kd.status == 'disabled' %}<span class="status-disabled"
+              >&#x041e;&#x0442;&#x043a;&#x043b;&#x044e;&#x0447;&#x0451;&#x043d;</span
+            >
             {% endif %}
           </div>
-          <div class="flex gap-3 text-xs" style="color:#4b5563">
-            <span>{{ format_bytes(kd.key.data_used) }}{% if kd.key.data_limit %} / {{ format_bytes(kd.key.data_limit) }}{% else %} / &infin;{% endif %}</span>
-            <span>{% if kd.key.expire_at %}&#x0434;&#x043e; {{ kd.key.expire_at.strftime('%d.%m.%Y') }}{% else %}&infin;{% endif %}</span>
+          <div class="flex gap-3 text-xs" style="color: #4b5563">
+            <span
+              >{{ format_bytes(kd.key.data_used) }}{% if kd.key.data_limit %} /
+              {{ format_bytes(kd.key.data_limit) }}{% else %} / &infin;{% endif
+              %}</span
+            >
+            <span
+              >{% if kd.key.expire_at %}&#x0434;&#x043e; {{
+              kd.key.expire_at.strftime('%d.%m.%Y') }}{% else %}&infin;{% endif
+              %}</span
+            >
           </div>
         </div>
 
-        {% if kd.key.data_limit and kd.key.data_limit > 0 %}
-        {% set pct = (kd.key.data_used / kd.key.data_limit * 100) | round(1) %}
+        {% if kd.key.data_limit and kd.key.data_limit > 0 %} {% set pct =
+        (kd.key.data_used / kd.key.data_limit * 100) | round(1) %}
         <div class="progress-bar mb-4">
-          <div class="progress-fill" style="{% if pct > 90 %}background:#f87171{% elif pct > 70 %}background:#fbbf24{% else %}background:#00ffc8{% endif %};width:{{ [pct,100]|min }}%"></div>
+          <div
+            class="progress-fill"
+            style="{% if pct > 90 %}background:#f87171{% elif pct > 70 %}background:#fbbf24{% else %}background:#00ffc8{% endif %};width:{{ [pct,100]|min }}%"
+          ></div>
         </div>
         {% endif %}
 
-        {% if kd.links %}
-        {% for link in kd.links %}
-        <div class="rounded-xl p-3.5 mb-3" style="background:rgba(0,0,0,.3)">
-          <div class="flex items-center justify-between mb-2.5 gap-2">
-            <span class="server-badge">{{ link.name }}</span>
-            <div class="flex gap-1.5">
-              <button onclick='copyText({{ link.link | tojson }})' class="btn-ghost">&#x1f4cb; &#x041a;&#x043e;&#x043f;&#x0438;&#x0440;&#x043e;&#x0432;&#x0430;&#x0442;&#x044c;</button>
-              <button onclick='openQr({{ link.link | tojson }}, {{ link.name | tojson }})' class="btn-ghost">QR</button>
+        <div class="mb-2">
+          <p
+            class="text-xs uppercase tracking-widest mb-2"
+            style="color: #6b7280"
+          >
+            Подключения
+          </p>
+          {% for link in kd.links %}
+          <div
+            class="rounded-xl p-3 mb-2"
+            style="background: rgba(0, 0, 0, 0.3)"
+          >
+            <div class="flex items-center justify-between mb-2 gap-2">
+              <span class="server-badge">{{ link.name }}</span>
+              <div class="flex gap-1.5">
+                <button
+                  onclick="copyText({{ link.link | tojson }})"
+                  class="btn-ghost"
+                  title="Копировать"
+                >
+                  &#x1f4cb; Копировать
+                </button>
+                <button
+                  onclick="openQr({{ link.link | tojson }}, {{ link.name | tojson }})"
+                  class="btn-ghost"
+                  title="QR-код"
+                >
+                  QR
+                </button>
+              </div>
+            </div>
+            <div
+              class="mono-box cursor-pointer"
+              onclick="copyText({{ link.link | tojson }})"
+              title="Кликните чтобы скопировать"
+            >
+              {{ link.link[:80] }}{% if link.link|length > 80 %}&hellip;{% endif
+              %}
             </div>
           </div>
-          <div class="mono-box" onclick='copyText({{ link.link | tojson }})'>{{ link.link[:100] }}{% if link.link|length > 100 %}&hellip;{% endif %}</div>
+          {% endfor %}
         </div>
-        {% endfor %}
-        {% endif %}
 
         {% if kd.key_sub_url and kd.status == 'active' %}
-        <div class="border-t pt-3" style="border-color:rgba(255,255,255,.05)">
-          <p class="text-xs mb-2" style="color:#4b5563">&#x1f465; &#x041f;&#x043e;&#x0434;&#x0435;&#x043b;&#x0438;&#x0442;&#x044c;&#x0441;&#x044f; &#x0441; &#x0440;&#x043e;&#x0434;&#x0441;&#x0442;&#x0432;&#x0435;&#x043d;&#x043d;&#x0438;&#x043a;&#x043e;&#x043c; / &#x0434;&#x0440;&#x0443;&#x0433;&#x043e;&#x043c;:</p>
+        <div
+          class="border-t pt-3 mt-2"
+          style="border-color: rgba(255, 255, 255, 0.05)"
+        >
+          <p
+            class="text-xs uppercase tracking-widest mb-2"
+            style="color: #6b7280"
+          >
+            &#x1f465; Подписка ключа (поделиться)
+          </p>
           <div class="flex items-center gap-2">
-            <div class="mono-box flex-1" style="opacity:.6">{{ kd.key_sub_url }}</div>
-            <button onclick='copyText({{ kd.key_sub_url | tojson }})' class="btn-ghost">&#x1f4cb;</button>
-            <button onclick='openQr({{ kd.key_sub_url | tojson }}, {{ ("Ключ: " ~ kd.key.name) | tojson }})' class="btn-ghost">QR</button>
+            <div
+              class="mono-box flex-1 cursor-pointer"
+              style="opacity: 0.8"
+              onclick="copyText({{ kd.key_sub_url | tojson }})"
+            >
+              {{ kd.key_sub_url[:60] }}{% if kd.key_sub_url|length > 60
+              %}&hellip;{% endif %}
+            </div>
+            <button
+              onclick="copyText({{ kd.key_sub_url | tojson }})"
+              class="btn-ghost"
+              title="Копировать"
+            >
+              &#x1f4cb;
+            </button>
+            <button
+              onclick='openQr({{ kd.key_sub_url | tojson }}, {{ ("Подписка: " ~ kd.key.name) | tojson }})'
+              class="btn-ghost"
+              title="QR"
+            >
+              QR
+            </button>
           </div>
         </div>
         {% endif %}
       </div>
       {% endfor %}
 
-      <div class="glass p-5">
-        <p class="text-xs uppercase tracking-widest mb-4" style="color:#6b7280">&#x0418;&#x043d;&#x0441;&#x0442;&#x0440;&#x0443;&#x043a;&#x0446;&#x0438;&#x0438; &#x043f;&#x043e; &#x043f;&#x043e;&#x0434;&#x043a;&#x043b;&#x044e;&#x0447;&#x0435;&#x043d;&#x0438;&#x044e;</p>
-        <div class="flex flex-wrap gap-2 mb-4 pb-4" style="border-bottom:1px solid rgba(255,255,255,.05)">
-          <button class="tab-btn active" data-tab="ios">&#x1f34e; iOS</button>
-          <button class="tab-btn" data-tab="android">&#x1f916; Android</button>
-          <button class="tab-btn" data-tab="windows">&#x1f5a5;&#xfe0f; Windows</button>
-          <button class="tab-btn" data-tab="macos">&#x1f4bb; macOS</button>
+      <div class="glass p-5" id="guides-section">
+        <p
+          class="text-xs uppercase tracking-widest mb-4"
+          style="color: #6b7280"
+        >
+          &#x0418;&#x043d;&#x0441;&#x0442;&#x0440;&#x0443;&#x043a;&#x0446;&#x0438;&#x0438;
+          &#x043f;&#x043e;
+          &#x043f;&#x043e;&#x0434;&#x043a;&#x043b;&#x044e;&#x0447;&#x0435;&#x043d;&#x0438;&#x044e;
+        </p>
+        <div
+          class="flex flex-wrap gap-2 mb-4 pb-4"
+          id="guides-tabs"
+          style="border-bottom: 1px solid rgba(255, 255, 255, 0.05)"
+        >
+          <button
+            class="tab-btn active"
+            data-tab="all"
+            onclick="filterGuides('all')"
+          >
+            Все
+          </button>
+          <button class="tab-btn" data-tab="ios" onclick="filterGuides('ios')">
+            &#x1f34e; iOS
+          </button>
+          <button
+            class="tab-btn"
+            data-tab="android"
+            onclick="filterGuides('android')"
+          >
+            &#x1f916; Android
+          </button>
+          <button
+            class="tab-btn"
+            data-tab="windows"
+            onclick="filterGuides('windows')"
+          >
+            &#x1f5a5;&#xfe0f; Windows
+          </button>
+          <button
+            class="tab-btn"
+            data-tab="macos"
+            onclick="filterGuides('macos')"
+          >
+            &#x1f4bb; macOS
+          </button>
         </div>
-        <div class="tab-panel active" id="tab-ios">
-          {% if settings.app_link_ios %}<a href="{{ settings.app_link_ios }}" target="_blank" rel="noopener" class="btn-acid mb-4">&#x2b07;&#xfe0f; &#x0421;&#x043a;&#x0430;&#x0447;&#x0430;&#x0442;&#x044c;</a>{% endif %}
-          <div id="inst-ios" class="text-sm leading-relaxed mt-3" style="color:#9ca3af"></div>
-        </div>
-        <div class="tab-panel" id="tab-android">
-          {% if settings.app_link_android %}<a href="{{ settings.app_link_android }}" target="_blank" rel="noopener" class="btn-acid mb-4">&#x2b07;&#xfe0f; &#x0421;&#x043a;&#x0430;&#x0447;&#x0430;&#x0442;&#x044c;</a>{% endif %}
-          <div id="inst-android" class="text-sm leading-relaxed mt-3" style="color:#9ca3af"></div>
-        </div>
-        <div class="tab-panel" id="tab-windows">
-          {% if settings.app_link_windows %}<a href="{{ settings.app_link_windows }}" target="_blank" rel="noopener" class="btn-acid mb-4">&#x2b07;&#xfe0f; &#x0421;&#x043a;&#x0430;&#x0447;&#x0430;&#x0442;&#x044c;</a>{% endif %}
-          <div id="inst-windows" class="text-sm leading-relaxed mt-3" style="color:#9ca3af"></div>
-        </div>
-        <div class="tab-panel" id="tab-macos">
-          {% if settings.app_link_macos %}<a href="{{ settings.app_link_macos }}" target="_blank" rel="noopener" class="btn-acid mb-4">&#x2b07;&#xfe0f; &#x0421;&#x043a;&#x0430;&#x0447;&#x0430;&#x0442;&#x044c;</a>{% endif %}
-          <div id="inst-macos" class="text-sm leading-relaxed mt-3" style="color:#9ca3af"></div>
+        <div
+          id="guides-container"
+          style="display: flex; flex-direction: column; gap: 0.75rem"
+        >
+          <p class="text-xs" style="color: #4b5563">Загрузка инструкций...</p>
         </div>
       </div>
 
       {% if settings.support_text %}
-      <div class="glass p-4 text-center"><p class="text-xs" style="color:#6b7280">{{ settings.support_text }}</p></div>
-      {% endif %}
-
-      {% if has_password %}
+      <div class="glass p-4 text-center">
+        <p class="text-xs" style="color: #6b7280">
+          {{ settings.support_text }}
+        </p>
+      </div>
+      {% endif %} {% if has_password %}
       <div class="glass p-5">
-        <p class="text-xs uppercase tracking-widest mb-4" style="color:#6b7280">&#x0421;&#x043c;&#x0435;&#x043d;&#x0438;&#x0442;&#x044c; &#x043f;&#x0430;&#x0440;&#x043e;&#x043b;&#x044c;</p>
-        <div class="grid gap-3" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">
+        <p
+          class="text-xs uppercase tracking-widest mb-4"
+          style="color: #6b7280"
+        >
+          &#x0421;&#x043c;&#x0435;&#x043d;&#x0438;&#x0442;&#x044c;
+          &#x043f;&#x0430;&#x0440;&#x043e;&#x043b;&#x044c;
+        </p>
+        <div
+          class="grid gap-3"
+          style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr))"
+        >
           <div>
-            <label class="block text-xs mb-1" style="color:#6b7280">&#x0422;&#x0435;&#x043a;&#x0443;&#x0449;&#x0438;&#x0439; &#x043f;&#x0430;&#x0440;&#x043e;&#x043b;&#x044c;</label>
-            <input type="password" id="pw-old" autocomplete="current-password" style="width:100%;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.05);border-radius:.5rem;padding:.5rem .75rem;font-size:.875rem;color:#d1d5db;outline:none;box-sizing:border-box" />
+            <label class="block text-xs mb-1" style="color: #6b7280"
+              >&#x0422;&#x0435;&#x043a;&#x0443;&#x0449;&#x0438;&#x0439;
+              &#x043f;&#x0430;&#x0440;&#x043e;&#x043b;&#x044c;</label
+            >
+            <input
+              type="password"
+              id="pw-old"
+              autocomplete="current-password"
+              style="
+                width: 100%;
+                background: rgba(0, 0, 0, 0.3);
+                border: 1px solid rgba(255, 255, 255, 0.05);
+                border-radius: 0.5rem;
+                padding: 0.5rem 0.75rem;
+                font-size: 0.875rem;
+                color: #d1d5db;
+                outline: none;
+                box-sizing: border-box;
+              "
+            />
           </div>
           <div>
-            <label class="block text-xs mb-1" style="color:#6b7280">&#x041d;&#x043e;&#x0432;&#x044b;&#x0439; &#x043f;&#x0430;&#x0440;&#x043e;&#x043b;&#x044c;</label>
-            <input type="password" id="pw-new" autocomplete="new-password" style="width:100%;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.05);border-radius:.5rem;padding:.5rem .75rem;font-size:.875rem;color:#d1d5db;outline:none;box-sizing:border-box" />
+            <label class="block text-xs mb-1" style="color: #6b7280"
+              >&#x041d;&#x043e;&#x0432;&#x044b;&#x0439;
+              &#x043f;&#x0430;&#x0440;&#x043e;&#x043b;&#x044c;</label
+            >
+            <input
+              type="password"
+              id="pw-new"
+              autocomplete="new-password"
+              style="
+                width: 100%;
+                background: rgba(0, 0, 0, 0.3);
+                border: 1px solid rgba(255, 255, 255, 0.05);
+                border-radius: 0.5rem;
+                padding: 0.5rem 0.75rem;
+                font-size: 0.875rem;
+                color: #d1d5db;
+                outline: none;
+                box-sizing: border-box;
+              "
+            />
           </div>
-          <div style="display:flex;align-items:flex-end">
-            <button onclick="changePassword()" class="btn-acid" style="width:100%;justify-content:center;padding:.5rem;font-size:.875rem">&#x0421;&#x043c;&#x0435;&#x043d;&#x0438;&#x0442;&#x044c;</button>
+          <div style="display: flex; align-items: flex-end">
+            <button
+              onclick="changePassword()"
+              class="btn-acid"
+              style="
+                width: 100%;
+                justify-content: center;
+                padding: 0.5rem;
+                font-size: 0.875rem;
+              "
+            >
+              &#x0421;&#x043c;&#x0435;&#x043d;&#x0438;&#x0442;&#x044c;
+            </button>
           </div>
         </div>
         <p id="pw-msg" class="text-xs mt-2 hidden"></p>
       </div>
-      {% endif %}
-
-      {% endif %}
+      {% endif %} {% endif %}
     </main>
 
-    <div id="qr-modal" class="fixed inset-0 z-50 hidden" style="display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.8);backdrop-filter:blur(8px)" onclick="closeQr()">
-      <div class="glass p-6 text-center" style="max-width:20rem;margin:0 1rem" onclick="event.stopPropagation()">
+    <div
+      id="qr-modal"
+      class="fixed inset-0 z-50 hidden"
+      style="
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.8);
+        backdrop-filter: blur(8px);
+      "
+      onclick="closeQr()"
+    >
+      <div
+        class="glass p-6 text-center"
+        style="max-width: 20rem; margin: 0 1rem"
+        onclick="event.stopPropagation()"
+      >
         <div class="flex items-center justify-between mb-4">
-          <h3 id="qr-modal-title" class="text-sm font-semibold" style="color:#e5e7eb;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:.5rem;max-width:calc(100% - 2rem)"></h3>
-          <button onclick="closeQr()" style="color:#6b7280;font-size:1.25rem;line-height:1;cursor:pointer;background:none;border:none;flex-shrink:0">&#x2715;</button>
+          <h3
+            id="qr-modal-title"
+            class="text-sm font-semibold"
+            style="
+              color: #e5e7eb;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+              padding-right: 0.5rem;
+              max-width: calc(100% - 2rem);
+            "
+          ></h3>
+          <button
+            onclick="closeQr()"
+            style="
+              color: #6b7280;
+              font-size: 1.25rem;
+              line-height: 1;
+              cursor: pointer;
+              background: none;
+              border: none;
+              flex-shrink: 0;
+            "
+          >
+            &#x2715;
+          </button>
         </div>
-        <div id="qr-modal-canvas" class="bg-white rounded-xl p-3 inline-block mb-3"></div>
-        <p class="text-xs" style="color:#4b5563">&#x041e;&#x0442;&#x0441;&#x043a;&#x0430;&#x043d;&#x0438;&#x0440;&#x0443;&#x0439;&#x0442;&#x0435; &#x0432; &#x043f;&#x0440;&#x0438;&#x043b;&#x043e;&#x0436;&#x0435;&#x043d;&#x0438;&#x0438;</p>
+        <div
+          id="qr-modal-canvas"
+          class="bg-white rounded-xl p-3 inline-block mb-3"
+        ></div>
+        <p class="text-xs" style="color: #4b5563">
+          &#x041e;&#x0442;&#x0441;&#x043a;&#x0430;&#x043d;&#x0438;&#x0440;&#x0443;&#x0439;&#x0442;&#x0435;
+          &#x0432;
+          &#x043f;&#x0440;&#x0438;&#x043b;&#x043e;&#x0436;&#x0435;&#x043d;&#x0438;&#x0438;
+        </p>
       </div>
     </div>
 
@@ -251,28 +726,44 @@
       }
       document.addEventListener('keydown', function(e){if(e.key==='Escape')closeQr();});
 
-      document.addEventListener('DOMContentLoaded', function() {
-        var instMap = {
-          'inst-ios': {{ settings.instructions_ios | tojson }},
-          'inst-android': {{ settings.instructions_android | tojson }},
-          'inst-windows': {{ settings.instructions_windows | tojson }},
-          'inst-macos': {{ settings.instructions_macos | tojson }},
-        };
-        Object.keys(instMap).forEach(function(id) {
-          var el = document.getElementById(id);
-          if (!el) return;
-          var text = instMap[id] || '';
-          var lines = text.split('\n').filter(function(l){return l.trim();});
-          if (!lines.length) return;
-          var html = '<ol style="list-style:decimal;padding-left:1.25rem;display:flex;flex-direction:column;gap:.5rem">';
-          lines.forEach(function(line) {
-            var clean = line.replace(/^\s*\d+\.\s*/, '');
-            clean = clean.replace(/\*\*(.*?)\*\*/g, '<strong style="color:#e5e7eb">$1</strong>');
-            html += '<li>' + clean + '</li>';
-          });
-          html += '</ol>';
-          el.innerHTML = html;
+      var allGuides = [];
+      function renderGuides(platform) {
+        var container = document.getElementById('guides-container');
+        var filtered = platform === 'all' ? allGuides : allGuides.filter(function(g) {
+          return g.platform === 'all' || g.platform === platform;
         });
+        if (!filtered.length) {
+          container.innerHTML = '<p class="text-xs" style="color:#4b5563">Нет инструкций для выбранной платформы.</p>';
+          return;
+        }
+        container.innerHTML = filtered.map(function(g) {
+          return '<div class="rounded-xl p-3.5" style="background:rgba(0,0,0,.3)">' +
+            '<button class="flex items-center justify-between w-full text-left" onclick="this.nextElementSibling.classList.toggle(\'hidden\')">' +
+              '<span class="text-sm font-medium" style="color:#e5e7eb">' + (g.app_name || g.title) + '</span>' +
+              '<span style="color:#6b7280;font-size:1.25rem;line-height:1">&#x25bc;</span>' +
+            '</button>' +
+            '<div class="hidden mt-3 text-xs leading-relaxed guide-content" style="color:#9ca3af">' + g.content + '</div>' +
+          '</div>';
+        }).join('');
+      }
+      function filterGuides(platform) {
+        document.querySelectorAll('#guides-tabs .tab-btn').forEach(function(b) { b.classList.remove('active'); });
+        var activeBtn = document.querySelector('#guides-tabs .tab-btn[data-tab="' + platform + '"]');
+        if (activeBtn) activeBtn.classList.add('active');
+        renderGuides(platform);
+      }
+      async function loadGuides() {
+        try {
+          var r = await fetch('/api/guides');
+          allGuides = await r.json();
+          filterGuides('all');
+        } catch(e) {
+          document.getElementById('guides-container').innerHTML = '<p class="text-xs" style="color:#4b5563">Не удалось загрузить инструкции. Попробуйте позже.</p>';
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', function() {
+        loadGuides();
 
         var qrEl = document.getElementById('qrcode-sub');
         if (!qrEl) return;

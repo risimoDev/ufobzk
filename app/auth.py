@@ -5,7 +5,7 @@ import os
 import secrets
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 import bcrypt
 from itsdangerous import BadSignature, URLSafeTimedSerializer
@@ -87,7 +87,7 @@ def verify_code_and_get_user(db: Session, code: str) -> User | None:
     if not user:
         return None
 
-    user.last_login = datetime.utcnow()
+    user.last_login = datetime.now(timezone.utc)
     db.commit()
     db.refresh(user)
     return user
@@ -155,7 +155,7 @@ def mark_invite_used(db: Session, invite: InviteKey, user_id: int) -> None:
     """Помечает ключ как использованный."""
     invite.is_used = True
     invite.used_by = user_id
-    invite.used_at = datetime.utcnow()
+    invite.used_at = datetime.now(timezone.utc)
     db.commit()
 
 
@@ -209,7 +209,7 @@ def verify_user_credentials(db: Session, username: str, password: str) -> User |
         return None
     if not verify_password(password, user.password_hash):
         return None
-    user.last_login = datetime.utcnow()
+    user.last_login = datetime.now(timezone.utc)
     db.commit()
     db.refresh(user)
     return user

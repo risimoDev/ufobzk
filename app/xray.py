@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 from sqlalchemy.orm import Session
 
-from app.models import VPNKey
+from app.models import Server, VPNKey
 
 logger = logging.getLogger(__name__)
 
@@ -161,12 +161,38 @@ def build_xray_config(db: Session) -> dict[str, Any]:
                     "enabled": True,
                     "destOverride": ["http", "tls", "quic"]
                 }
+            },
+            {
+                "tag": "VLESS-gRPC",
+                "listen": "0.0.0.0",
+                "port": 8445,
+                "protocol": "vless",
+                "settings": {
+                    "clients": vless_clients,
+                    "decryption": "none"
+                },
+                "streamSettings": {
+                    "network": "grpc",
+                    "security": "none",
+                    "grpcSettings": {
+                        "serviceName": "VpnService",
+                        "multiMode": False
+                    }
+                },
+                "sniffing": {
+                    "enabled": True,
+                    "destOverride": ["http", "tls", "quic"]
+                }
             }
         ],
         "outbounds": [
             {
                 "tag": "DIRECT",
-                "protocol": "freedom"
+                "protocol": "freedom",
+                "settings": {
+                    "domainStrategy": "UseIP",
+                    "packetEncoding": "xudp"
+                }
             },
             {
                 "tag": "BLACKHOLE",
@@ -250,6 +276,12 @@ def build_xray_config(db: Session) -> dict[str, Any]:
                     "publicKey": RU_TRANSIT_PUBLIC_KEY,
                     "shortId": RU_TRANSIT_SHORT_ID
                 }
+            },
+            "mux": {
+                "enabled": True,
+                "concurrency": 8,
+                "xudpConcurrency": 16,
+                "xudpProxyUDP443": "skip"
             }
         })
 
@@ -409,6 +441,18 @@ def build_vless_reality_link(key: VPNKey, server_ip: str, port: int = 443, remar
     return f"vless://{key.uuid}@{server_ip}:{port}?{params}#{quote(remark)}"
 
 
+def build_vless_grpc_link(key: VPNKey, server_domain: str, port: int = 443, remark: str = "") -> str:
+    """VLESS gRPC + TLS ссылка (HTTP/2, сложнее fingerprint для DPI)."""
+    if not remark:
+        remark = f"{key.name}@{server_domain}-grpc"
+    params = (
+        f"type=grpc&security=tls&host={server_domain}"
+        f"&serviceName=VpnService&sni={server_domain}"
+        f"&fp=chrome&alpn=h2"
+    )
+    return f"vless://{key.uuid}@{server_domain}:{port}?{params}#{quote(remark)}"
+
+
 def get_user_links(key: VPNKey) -> list[dict[str, str]]:
     """Получить все ссылки подключения для ключа.
 
@@ -429,6 +473,11 @@ def get_user_links(key: VPNKey) -> list[dict[str, str]]:
             "name": f"\U0001f1f3\U0001f1f1 Европа (XHTTP+TLS)",
             "link": build_vless_xhttp_link(key, DOMAIN, VLESS_WS_PORT, f"NL-XHTTP-{key.name}"),
             "type": "vless-xhttp"
+        })
+        links.append({
+            "name": f"🇳🇱 Европа (gRPC+TLS)",
+            "link": build_vless_grpc_link(key, DOMAIN, VLESS_WS_PORT, f"NL-gRPC-{key.name}"),
+            "type": "vless-grpc"
         })
     # NL сервер через REALITY
     if NL_SERVER_IP and REALITY_PUBLIC_KEY:
@@ -457,19 +506,226 @@ def get_user_links(key: VPNKey) -> list[dict[str, str]]:
     return links
 
 
-def get_subscription_content(keys: list[VPNKey]) -> str:
+def get_server_links(key: VPNKey, server: Server) -> list[dict[str, str]]:
+    """Ссылки для ключа на конкретном remote сервере."""
+    links = []
+    host = server.host
+    ws_port = server.ws_port or 443
+    reality_port = server.reality_port or 2053
+    grpc_port = server.grpc_port or 8445
+    xhttp_port = server.xhttp_port or 8444
+    suffix = server.name.replace(" ", "-")
+
+    # WS
+    links.append({
+        "name": f"{server.region.upper()}-{suffix} (WS+TLS)",
+        "link": build_vless_ws_link(key, host, ws_port, f"{suffix}-{key.name}"),
+        "type": "vless-ws",
+        "server_id": server.id,
+        "region": server.region,
+    })
+    # XHTTP
+    links.append({
+        "name": f"{server.region.upper()}-{suffix} (XHTTP+TLS)",
+        "link": build_vless_xhttp_link(key, host, ws_port, f"{suffix}-XHTTP-{key.name}"),
+        "type": "vless-xhttp",
+        "server_id": server.id,
+        "region": server.region,
+    })
+    # gRPC
+    links.append({
+        "name": f"{server.region.upper()}-{suffix} (gRPC+TLS)",
+        "link": build_vless_grpc_link(key, host, ws_port, f"{suffix}-gRPC-{key.name}"),
+        "type": "vless-grpc",
+        "server_id": server.id,
+        "region": server.region,
+    })
+    # REALITY если настроен
+    if server.reality_public_key and server.reality_short_id:
+        # Переопределяем глобальные для реальности этого сервера
+        _orig_pk = REALITY_PUBLIC_KEY
+        _orig_sid = REALITY_SHORT_ID
+        _orig_sn = REALITY_SERVER_NAMES
+        try:
+            import os as _os
+            _os.environ["REALITY_PUBLIC_KEY"] = server.reality_public_key
+            _os.environ["REALITY_SHORT_ID"] = server.reality_short_id
+            _os.environ["REALITY_SERVER_NAMES"] = server.reality_server_names or "www.samsung.com"
+            links.append({
+                "name": f"{server.region.upper()}-{suffix} (REALITY)",
+                "link": build_vless_reality_link(key, host, reality_port, f"{suffix}-Reality-{key.name}"),
+                "type": "vless-reality",
+                "server_id": server.id,
+                "region": server.region,
+            })
+        finally:
+            if _orig_pk:
+                _os.environ["REALITY_PUBLIC_KEY"] = _orig_pk
+            if _orig_sid:
+                _os.environ["REALITY_SHORT_ID"] = _orig_sid
+            if _orig_sn:
+                _os.environ["REALITY_SERVER_NAMES"] = _orig_sn
+    return links
+
+
+def get_all_links(db: Session, key: VPNKey) -> list[dict[str, str]]:
+    """Все ссылки для ключа: локальный сервер + все remote серверы из БД."""
+    links = get_user_links(key)
+    # Добавляем server_id и region для локальных ссылок
+    for link in links:
+        link.setdefault("server_id", None)
+        link.setdefault("region", "main")
+
+    remote_servers = db.query(Server).filter(Server.is_active == True).order_by(Server.priority).all()  # noqa: E712
+    for server in remote_servers:
+        links.extend(get_server_links(key, server))
+    return links
+
+
+def get_subscription_content(keys: list[VPNKey], db: Session | None = None) -> str:
     """Собрать base64-подписку из всех ключей пользователя.
-    Подписка содержит только WS+TLS ссылки (безопасно для клиентов).
+    Если db передана — включает remote серверы.
     """
     import base64
     all_links = []
     for key in keys:
         if key.status != "active":
             continue
-        for link_info in get_user_links(key):
-            if link_info["type"] in ("vless-ws", "vless-xhttp"):  # WS + XHTTP через CDN
+        if db is not None:
+            link_list = get_all_links(db, key)
+        else:
+            link_list = get_user_links(key)
+        for link_info in link_list:
+            if link_info["type"] in ("vless-ws", "vless-xhttp", "vless-grpc"):
                 all_links.append(link_info["link"])
     return base64.b64encode("\n".join(all_links).encode()).decode()
+
+
+def _build_outbound_for_link(key: VPNKey, link_info: dict[str, Any]) -> dict[str, Any] | None:
+    """Построить outbound JSON для одной ссылки."""
+    server_host = link_info["link"].split("@")[1].split(":")[0] if "@" in link_info["link"] else DOMAIN
+    port = VLESS_WS_PORT
+    if link_info["type"] == "vless-ws":
+        return {
+            "tag": link_info["name"],
+            "protocol": "vless",
+            "settings": {
+                "vnext": [{
+                    "address": server_host,
+                    "port": port,
+                    "users": [{"id": key.uuid, "encryption": "none"}]
+                }]
+            },
+            "streamSettings": {
+                "network": "ws",
+                "security": "tls",
+                "tlsSettings": {"serverName": server_host, "fingerprint": "chrome"},
+                "wsSettings": {"path": "/vless-ws"}
+            },
+            "mux": {"enabled": True, "concurrency": 8, "xudpConcurrency": 16, "packetEncoding": "xudp"}
+        }
+    elif link_info["type"] == "vless-grpc":
+        return {
+            "tag": link_info["name"],
+            "protocol": "vless",
+            "settings": {
+                "vnext": [{
+                    "address": server_host,
+                    "port": port,
+                    "users": [{"id": key.uuid, "encryption": "none"}]
+                }]
+            },
+            "streamSettings": {
+                "network": "grpc",
+                "security": "tls",
+                "tlsSettings": {"serverName": server_host, "fingerprint": "chrome"},
+                "grpcSettings": {"serviceName": "VpnService", "multiMode": False}
+            },
+            "mux": {"enabled": True, "concurrency": 8, "xudpConcurrency": 16, "packetEncoding": "xudp"}
+        }
+    return None
+
+
+def get_subscription_json(keys: list[VPNKey], db: Session | None = None) -> dict[str, Any]:
+    """JSON подписка для продвинутых клиентов (v2rayNG, Hiddify, Nekoray).
+    Включает mux + fingerprint + каскад routing + fallback балансировку.
+    """
+    outbounds = []
+    eu_tags = []
+    ru_tags = []
+
+    for key in keys:
+        if key.status != "active":
+            continue
+        if db is not None:
+            link_list = get_all_links(db, key)
+        else:
+            link_list = get_user_links(key)
+
+        for link_info in link_list:
+            ob = _build_outbound_for_link(key, link_info)
+            if ob:
+                outbounds.append(ob)
+                region = link_info.get("region", "main")
+                if region == "ru":
+                    ru_tags.append(ob["tag"])
+                else:
+                    eu_tags.append(ob["tag"])
+
+    # Balancer + routing для каскада и fallback
+    routing_rules = [
+        {"type": "field", "outboundTag": "BLOCK", "protocol": ["bittorrent"]},
+    ]
+
+    # RU трафик → RU серверы (каскад)
+    if ru_tags:
+        routing_rules.append({
+            "type": "field",
+            "outboundTag": ru_tags[0],
+            "domain": ["regexp:\\.ru$", "regexp:\\.su$", "geosite:ru"],
+        })
+        routing_rules.append({
+            "type": "field",
+            "outboundTag": ru_tags[0],
+            "ip": ["geoip:ru"],
+        })
+
+    # Остальной трафик → ближайший EU сервер (первый в списке = приоритетный)
+    if eu_tags:
+        routing_rules.append({
+            "type": "field",
+            "outboundTag": eu_tags[0],
+            "network": "tcp,udp",
+        })
+
+    result = {
+        "outbounds": outbounds + [
+            {"tag": "DIRECT", "protocol": "freedom", "settings": {"domainStrategy": "UseIP", "packetEncoding": "xudp"}},
+            {"tag": "BLOCK", "protocol": "blackhole"},
+        ],
+        "log": {"loglevel": "warning"},
+        "routing": {
+            "domainStrategy": "IPIfNonMatch",
+            "rules": routing_rules,
+        }
+    }
+
+    # Если несколько EU серверов — добавляем balancer
+    if len(eu_tags) > 1:
+        result["routing"]["balancers"] = [
+            {
+                "tag": "balancer-eu",
+                "selector": eu_tags,
+                "strategy": {"type": "random"},
+            }
+        ]
+        # Заменяем правило для EU на balancer
+        for rule in result["routing"]["rules"]:
+            if rule.get("outboundTag") == eu_tags[0] and rule.get("network") == "tcp,udp":
+                rule.pop("outboundTag")
+                rule["balancerTag"] = "balancer-eu"
+
+    return result
 
 
 def get_xray_stats(uuid: str) -> dict[str, int]:
