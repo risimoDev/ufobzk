@@ -142,6 +142,7 @@ async def admin_dashboard(request: Request, admin: User = Depends(require_admin)
 @limiter.limit("10/minute")
 async def admin_create_user(
     request: Request,
+    background_tasks: BackgroundTasks,
     display_name: str = Form(""),
     telegram_id: int = Form(0),
     username: str = Form(""),
@@ -166,11 +167,7 @@ async def admin_create_user(
     from app.schemas import create_user_and_key
     new_user, vpn_key = create_user_and_key(db, validated)
 
-    try:
-        sync_and_reload(db)
-    except Exception as e:
-        logger.error("Ошибка синхронизации Xray: %s", e)
-
+    background_tasks.add_task(_bg_sync_and_reload)
     _log_action(db, admin.id, "create_user", str(validated.telegram_id), f"key={vpn_key.uuid}")
     return RedirectResponse(url="/admin", status_code=303)
 
@@ -219,6 +216,7 @@ async def admin_create_user_json(
 async def admin_add_key(
     user_id: int,
     request: Request,
+    background_tasks: BackgroundTasks,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -243,11 +241,7 @@ async def admin_add_key(
     db.add(vpn_key)
     db.commit()
 
-    try:
-        sync_and_reload(db)
-    except Exception as e:
-        logger.error("Ошибка синхронизации Xray: %s", e)
-
+    background_tasks.add_task(_bg_sync_and_reload)
     _log_action(db, admin.id, "add_key", str(target.telegram_id), f"key={vpn_key.uuid} name={key_name}")
     return JSONResponse({"ok": True, "key_id": vpn_key.id, "uuid": vpn_key.uuid})
 
@@ -259,6 +253,7 @@ async def admin_add_key(
 async def admin_rotate_keys(
     user_id: int,
     request: Request,
+    background_tasks: BackgroundTasks,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -275,11 +270,7 @@ async def admin_rotate_keys(
         key.uuid = generate_uuid()
     db.commit()
 
-    try:
-        sync_and_reload(db)
-    except Exception as e:
-        logger.error("Ошибка синхронизации Xray: %s", e)
-
+    background_tasks.add_task(_bg_sync_and_reload)
     _log_action(
         db, admin.id, "rotate_keys",
         str(target.telegram_id or target.id),
@@ -295,6 +286,7 @@ async def admin_rotate_keys(
 async def admin_edit_user(
     user_id: int,
     request: Request,
+    background_tasks: BackgroundTasks,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -322,10 +314,7 @@ async def admin_edit_user(
     db.commit()
 
     if need_reload:
-        try:
-            sync_and_reload(db)
-        except Exception as e:
-            logger.error("Ошибка синхронизации Xray: %s", e)
+        background_tasks.add_task(_bg_sync_and_reload)
 
     _log_action(db, admin.id, "edit_user", str(target.telegram_id or target.username), str(body))
     return JSONResponse({"ok": True})
@@ -371,6 +360,7 @@ async def admin_set_password(
 async def admin_edit_key(
     key_id: int,
     request: Request,
+    background_tasks: BackgroundTasks,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -395,11 +385,7 @@ async def admin_edit_key(
 
     db.commit()
 
-    try:
-        sync_and_reload(db)
-    except Exception as e:
-        logger.error("Ошибка синхронизации Xray: %s", e)
-
+    background_tasks.add_task(_bg_sync_and_reload)
     _log_action(db, admin.id, "edit_key", str(key.uuid), str(body))
     return JSONResponse({"ok": True})
 
@@ -411,6 +397,7 @@ async def admin_edit_key(
 async def admin_delete_user(
     user_id: int,
     request: Request,
+    background_tasks: BackgroundTasks,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -422,11 +409,7 @@ async def admin_delete_user(
     db.delete(target)  # cascade удалит и ключи
     db.commit()
 
-    try:
-        sync_and_reload(db)
-    except Exception as e:
-        logger.error("Ошибка синхронизации Xray: %s", e)
-
+    background_tasks.add_task(_bg_sync_and_reload)
     _log_action(db, admin.id, "delete_user", target_info)
     return JSONResponse({"ok": True})
 
@@ -438,6 +421,7 @@ async def admin_delete_user(
 async def admin_delete_key(
     key_id: int,
     request: Request,
+    background_tasks: BackgroundTasks,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -449,11 +433,7 @@ async def admin_delete_key(
     db.delete(key)
     db.commit()
 
-    try:
-        sync_and_reload(db)
-    except Exception as e:
-        logger.error("Ошибка синхронизации Xray: %s", e)
-
+    background_tasks.add_task(_bg_sync_and_reload)
     _log_action(db, admin.id, "delete_vpnkey", key_info)
     return JSONResponse({"ok": True})
 
@@ -1296,6 +1276,7 @@ async def admin_save_settings(
 @router.post("/admin/migrate-nl")
 async def admin_migrate_nl(
     request: Request,
+    background_tasks: BackgroundTasks,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -1339,11 +1320,7 @@ async def admin_migrate_nl(
     for k, v in changes.items():
         os.environ[k] = v
 
-    try:
-        sync_and_reload(db)
-    except Exception as e:
-        logger.error("Xray reload after migration: %s", e)
-
+    background_tasks.add_task(_bg_sync_and_reload)
     _log_action(db, admin.id, "migrate_nl", "", f"changed={list(changes.keys())}")
     return JSONResponse({"ok": True, "changed": list(changes.keys())})
 
