@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Личный кабинет</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script src="/static/qrcode.min.js"></script>
     <style>
       body {
         background: #080818;
@@ -712,11 +712,11 @@
         document.getElementById('qr-modal-title').textContent = name;
         var c = document.getElementById('qr-modal-canvas');
         c.innerHTML = '';
-        var canvas = document.createElement('canvas');
-        c.appendChild(canvas);
-        QRCode.toCanvas(canvas, link, {width:220,margin:1,color:{dark:'#000000',light:'#ffffff'}}, function(err){
-          if (err) c.innerHTML = '<p style="color:#f87171;font-size:.75rem;padding:1rem">\u041e\u0448\u0438\u0431\u043a\u0430 QR</p>';
-        });
+        if (typeof QRCode !== 'undefined') {
+          new QRCode(c, { text: link, width: 220, height: 220, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
+        } else {
+          c.innerHTML = '<p style="color:#f87171;font-size:.75rem;padding:1rem">QRCode не загружен</p>';
+        }
         var m = document.getElementById('qr-modal');
         m.classList.remove('hidden'); m.style.display = 'flex';
       }

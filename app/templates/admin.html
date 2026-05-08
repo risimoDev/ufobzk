@@ -238,7 +238,7 @@
         border-color: rgba(0, 255, 200, 0.08);
       }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script src="/static/qrcode.min.js"></script>
   </head>
   <body class="text-gray-300 font-sans relative">
     <div class="stars"></div>
@@ -2473,9 +2473,8 @@
           qrItems.forEach(function(q) {
             var el = document.getElementById(q.id);
             if (el && typeof QRCode !== 'undefined') {
-              QRCode.toCanvas(el, q.text, { width: 160, margin: 1, color: { dark: '#00ffc8', light: '#0a0a1a' } }, function(err) {
-                if (err) console.warn('QR error:', err);
-              });
+              el.innerHTML = '';
+              new QRCode(el, { text: q.text, width: 160, height: 160, colorDark: '#00ffc8', colorLight: '#0a0a1a', correctLevel: QRCode.CorrectLevel.M });
             }
           });
         } catch(e) {
