@@ -46,7 +46,7 @@ API_PORT="${2:-9090}"
 SKIP_XRAY=false
 MAIN_SERVER_IP="66.248.207.111"
 XRAY_NODE_TOKEN=""
-REPO_URL=""
+REPO_URL="https://github.com/risimoDev/ufobzk.git"
 
 shift 2 || true
 while [[ $# -gt 0 ]]; do
@@ -151,25 +151,18 @@ if [ -d "$PROJECT_DIR/.git" ]; then
     cd "$PROJECT_DIR"
     git pull origin main 2>/dev/null || git pull origin master 2>/dev/null || warn "Git pull не удался — продолжаем"
 else
-    if [ -n "$REPO_URL" ]; then
-        git clone "$REPO_URL" "$PROJECT_DIR"
-    else
-        # Попробуем найти repo URL из git remote если запущено из клонированного репо
-        CURRENT_REPO="$(git remote get-url origin 2>/dev/null || echo "")"
-        if [ -n "$CURRENT_REPO" ]; then
-            git clone "$CURRENT_REPO" "$PROJECT_DIR"
-        else
-            err "Не указан URL репозитория. Используйте --repo-url или запустите из git-репозитория."
-            exit 1
-        fi
-    fi
+    git clone "$REPO_URL" "$PROJECT_DIR"
 fi
 ok "Репозиторий готов"
 
 # ── 4. Python зависимости ──
 log "Установка Python-зависимостей..."
 cd "$PROJECT_DIR/xray-node"
-pip3 install -q -r requirements.txt
+# Используем venv чтобы избежать проблем с externally-managed-environment (Ubuntu 24.04)
+if [ ! -d "venv" ]; then
+    python3 -m venv venv
+fi
+venv/bin/pip install -q -r requirements.txt
 ok "Python-зависимости установлены"
 
 # ── 5. Создание .env ──
@@ -198,7 +191,7 @@ Environment=XRAY_NODE_TOKEN=${XRAY_NODE_TOKEN}
 Environment=XRAY_NODE_PORT=${API_PORT}
 Environment=XRAY_CONFIG_PATH=/etc/xray/config.json
 Environment=XRAY_CONTAINER_NAME=xray
-ExecStart=/usr/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port ${API_PORT}
+ExecStart=${PROJECT_DIR}/xray-node/venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port ${API_PORT}
 Restart=always
 RestartSec=5
 StandardOutput=journal
