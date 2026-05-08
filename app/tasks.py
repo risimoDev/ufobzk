@@ -21,21 +21,20 @@ async def periodic_traffic_collector() -> None:
     while True:
         try:
             await asyncio.sleep(TRAFFIC_COLLECT_INTERVAL)
-            stats = get_xray_stats()
-            if not stats:
-                continue
-
             db = SessionLocal()
             try:
+                keys = db.query(VPNKey).filter(VPNKey.is_active == True).all()  # noqa: E712
                 updated = 0
-                for email, traffic in stats.items():
-                    # email в Xray = UUID ключа (мы используем uuid как email)
-                    key = db.query(VPNKey).filter(VPNKey.uuid == email).first()
-                    if key and key.is_active:
-                        new_used = traffic.get("downlink", 0) + traffic.get("uplink", 0)
-                        if new_used > (key.data_used or 0):
-                            key.data_used = new_used
-                            updated += 1
+                for key in keys:
+                    if key.protocol != "vless":
+                        continue
+                    stats = await asyncio.to_thread(get_xray_stats, key.uuid)
+                    if not stats:
+                        continue
+                    new_used = stats.get("downlink", 0) + stats.get("uplink", 0)
+                    if new_used > (key.data_used or 0):
+                        key.data_used = new_used
+                        updated += 1
                 if updated:
                     db.commit()
                     logger.info("Трафик обновлён для %d ключей", updated)
