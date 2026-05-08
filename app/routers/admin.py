@@ -11,7 +11,7 @@ import time as _time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -37,6 +37,16 @@ limiter = Limiter(key_func=get_remote_address)
 def _log_action(db: Session, admin_id: int, action: str, target: str = "", detail: str = "") -> None:
     db.add(AuditLog(admin_id=admin_id, action=action, target=target, detail=detail))
     db.commit()
+
+
+def _bg_sync_and_reload() -> None:
+    """Фоновая синхронизация Xray — запускается после ответа клиенту."""
+    try:
+        from app.dependencies import get_db as _get_db
+        db = next(_get_db())
+        sync_and_reload(db)
+    except Exception as e:
+        logger.error("Ошибка фоновой синхронизации Xray: %s", e)
 
 
 # ── Dashboard ──
@@ -172,6 +182,7 @@ async def admin_create_user(
 @limiter.limit("10/minute")
 async def admin_create_user_json(
     request: Request,
+    background_tasks: BackgroundTasks,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -194,14 +205,12 @@ async def admin_create_user_json(
     new_user, vpn_key = create_user_and_key(db, validated)
 
     try:
-        sync_and_reload(db)
-    except Exception as e:
-        logger.error("Ошибка синхронизации Xray: %s", e)
-
-    try:
         _log_action(db, admin.id, "create_user", str(validated.telegram_id), f"key={vpn_key.uuid}")
     except Exception as e:
         logger.error("Ошибка audit log: %s", e)
+
+    # sync_and_reload запускаем в фоне — не блокируем ответ клиенту
+    background_tasks.add_task(_bg_sync_and_reload)
 
     return JSONResponse({"ok": True, "user_id": new_user.id, "display_name": new_user.display_name, "username": new_user.username, "telegram_id": new_user.telegram_id})
 

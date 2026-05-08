@@ -2080,7 +2080,8 @@
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(body)
           });
-          var data = await resp.json();
+          var data;
+          try { data = await resp.json(); } catch(e) { data = {}; }
           if (!resp.ok || !data.ok) {
             showToast(data.detail || 'Ошибка создания', 'error');
             return;
