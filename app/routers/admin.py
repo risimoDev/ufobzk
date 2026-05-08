@@ -1,5 +1,6 @@
 """Роуты админ-панели: пользователи, ключи, инвайты, платежи, настройки, диагностика."""
 
+import asyncio
 import json as _json
 import logging
 import os
@@ -511,7 +512,7 @@ async def admin_sync_xray(
     db: Session = Depends(get_db),
 ):
     try:
-        success = sync_and_reload(db)
+        success = await asyncio.to_thread(sync_and_reload, db)
         _log_action(db, admin.id, "sync_xray", "", f"success={success}")
         return JSONResponse({"ok": success})
     except Exception as e:

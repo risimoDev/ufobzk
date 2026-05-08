@@ -277,12 +277,7 @@ def build_xray_config(db: Session) -> dict[str, Any]:
                     "shortId": RU_TRANSIT_SHORT_ID
                 }
             },
-            "mux": {
-                "enabled": True,
-                "concurrency": 8,
-                "xudpConcurrency": 16,
-                "xudpProxyUDP443": "skip"
-            }
+            "mux": {"enabled": False}
         })
 
         # Вставляем RU-правила перед catch-all DIRECT правилом

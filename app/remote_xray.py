@@ -154,12 +154,7 @@ def _build_remote_config(server: Server, keys: list[VPNKey]) -> dict[str, Any]:
                     "shortId": RU_TRANSIT_SHORT_ID
                 }
             },
-            "mux": {
-                "enabled": True,
-                "concurrency": 8,
-                "xudpConcurrency": 16,
-                "xudpProxyUDP443": "skip"
-            }
+            "mux": {"enabled": False}
         })
         rules = config["routing"]["rules"]
         catchall = rules.pop()  # убираем catch-all (tcp,udp → DIRECT)
