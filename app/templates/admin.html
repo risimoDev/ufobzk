@@ -2605,10 +2605,15 @@
         showToast('Синхронизация...', 'info');
         try {
           var resp = await fetch('/admin/sync-xray', { method: 'POST' });
+          if (!resp.ok && resp.status !== 200) {
+            var text = await resp.text();
+            showToast('HTTP ' + resp.status + ': ' + text.substring(0, 120), 'error');
+            return;
+          }
           var data = await resp.json();
           if (data.ok) { showToast('Xray синхронизирован', 'success'); }
           else { showToast('Ошибка: ' + (data.error || 'unknown'), 'error'); }
-        } catch(e) { showToast('Ошибка сети', 'error'); }
+        } catch(e) { showToast('Ошибка сети: ' + e.message, 'error'); }
       }
 
       // Security

@@ -331,40 +331,28 @@ def reload_xray() -> bool:
     """Перезагрузить Xray.
 
     Порядок попыток:
-    1. Docker socket API (production — xray в отдельном контейнере)
+    1. docker restart (production — xray в отдельном контейнере)
     2. systemctl restart xray (bare metal)
     3. killall -HUP xray (bare metal без systemd)
     """
     docker_sock = "/var/run/docker.sock"
     container_name = os.getenv("XRAY_CONTAINER_NAME", "ufobzk-xray")
 
-    # ── Попытка 1: Docker socket ──
+    # ── Попытка 1: docker CLI (есть сокет → контейнер запущен в Docker) ──
     if os.path.exists(docker_sock):
         try:
-            import socket as _socket
-            sock = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
-            sock.settimeout(15)
-            sock.connect(docker_sock)
-            request = (
-                f"POST /containers/{container_name}/restart?t=5 HTTP/1.1\r\n"
-                f"Host: localhost\r\n"
-                f"Content-Length: 0\r\n"
-                f"Connection: close\r\n\r\n"
-            ).encode()
-            sock.sendall(request)
-            response = b""
-            while True:
-                chunk = sock.recv(256)
-                if not chunk:
-                    break
-                response += chunk
-            sock.close()
-            if b"204" in response or b"200" in response:
-                logger.info("Xray перезагружен через Docker socket")
+            result = subprocess.run(
+                ["docker", "restart", "-t", "5", container_name],
+                capture_output=True, text=True, timeout=30
+            )
+            if result.returncode == 0:
+                logger.info("Xray перезагружен через docker restart")
                 return True
-            logger.warning("Docker socket ответил неожиданно: %s", response[:100])
+            logger.warning("docker restart вернул код %s: %s", result.returncode, result.stderr.strip())
+        except FileNotFoundError:
+            logger.debug("docker CLI не найден")
         except Exception as e:
-            logger.warning("Не удалось перезагрузить через Docker socket: %s", e)
+            logger.warning("Не удалось перезагрузить через docker restart: %s", e)
 
     # ── Попытка 2: systemctl (bare metal) ──
     try:
