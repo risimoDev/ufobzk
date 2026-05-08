@@ -750,14 +750,14 @@
                         🔑
                       </button>
                       <button
-                        onclick="openLinksModal({{ u.id }}, {{ u.display_name|tojson }})"
+                        onclick='openLinksModal({{ u.id }}, {{ u.display_name|tojson }})'
                         class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-purple-400 hover:bg-purple-400/10 transition text-xs"
                         title="Ссылки"
                       >
                         🔗
                       </button>
                       <button
-                        onclick="rotateUserKeys({{ u.id }}, {{ u.display_name|tojson }})"
+                        onclick='rotateUserKeys({{ u.id }}, {{ u.display_name|tojson }})'
                         class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-orange-400 hover:bg-orange-400/10 transition text-xs"
                         title="Заменить все ключи"
                       >
@@ -771,14 +771,14 @@
                         {{ '▶️' if not u.is_active else '⏸️' }}
                       </button>
                       <button
-                        onclick="toggleUserFree({{ u.id }}, {{ 'true' if u.is_free else 'false' }}, {{ u.display_name|tojson }})"
+                        onclick='toggleUserFree({{ u.id }}, {{ "true" if u.is_free else "false" }}, {{ u.display_name|tojson }})'
                         class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-cyan-400 hover:bg-cyan-400/10 transition text-xs"
                         title="{{ 'Снять FREE' if u.is_free else 'Сделать FREE' }}"
                       >
                         {{ '💰' if u.is_free else '🎁' }}
                       </button>
                       <button
-                        onclick="deleteUser({{ u.id }}, {{ u.display_name|tojson }})"
+                        onclick='deleteUser({{ u.id }}, {{ u.display_name|tojson }})'
                         class="p-1.5 rounded-md bg-white/5 text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition text-xs"
                         title="Удалить"
                       >
@@ -839,8 +839,8 @@
 
                       <!-- Actions -->
                       <div class="flex gap-2">
-                        <button onclick="openKeysModal({{ u.id }}, {{ u.display_name|tojson }}, {{ row['keys']|tojson }})" class="btn-primary text-xs flex-1">+ Добавить устройство / пользователя</button>
-                        <button onclick="openLinksModal({{ u.id }}, {{ u.display_name|tojson }})" class="btn-secondary text-xs flex-1">🔗 Все ссылки и QR-коды</button>
+                        <button onclick='openKeysModal({{ u.id }}, {{ u.display_name|tojson }}, {{ row["keys"]|tojson }})' class="btn-primary text-xs flex-1">+ Добавить устройство / пользователя</button>
+                        <button onclick='openLinksModal({{ u.id }}, {{ u.display_name|tojson }})' class="btn-secondary text-xs flex-1">🔗 Все ссылки и QR-коды</button>
                       </div>
                     </div>
                   </td>
