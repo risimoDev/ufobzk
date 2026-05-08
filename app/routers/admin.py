@@ -511,11 +511,20 @@ async def admin_sync_xray(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    def _do_sync():
+        from app.dependencies import get_db as _get_db
+        _db = next(_get_db())
+        try:
+            return sync_and_reload(_db)
+        finally:
+            _db.close()
+
     try:
-        success = await asyncio.to_thread(sync_and_reload, db)
+        success = await asyncio.to_thread(_do_sync)
         _log_action(db, admin.id, "sync_xray", "", f"success={success}")
         return JSONResponse({"ok": success})
     except Exception as e:
+        logger.error("Ошибка sync_xray: %s", e)
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
