@@ -3216,6 +3216,8 @@
         if (editingGuideId) {
           url = '/admin/api/guides/' + editingGuideId;
           method = 'PUT';
+        }
+        try {
           var r = await fetch(url, { method: method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
           var d = await r.json();
           if (d.ok) { showToast(editingGuideId ? 'Гайд обновлён' : 'Гайд создан', 'success'); closeGuideModal(); loadGuides(); }
