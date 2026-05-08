@@ -1059,7 +1059,7 @@ async def admin_add_server(
 async def admin_edit_server(
     server_id: int,
     request: Request,
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     """Редактировать существующий сервер."""
@@ -1102,7 +1102,7 @@ async def admin_edit_server(
         server.reality_server_names = body["reality_server_names"] or None
 
     db.commit()
-    _log_action(db, None, "edit_server", str(server_id), server.name)
+    _log_action(db, admin.id, "edit_server", str(server_id), server.name)
     return JSONResponse({"ok": True})
 
 

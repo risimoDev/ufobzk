@@ -3129,7 +3129,8 @@
         document.getElementById('srv-reality-priv').value = '';
         document.getElementById('srv-reality-sid').value = '';
         delete document.getElementById('server-modal')._editId;
-        document.querySelector('#server-modal .modal-title') && (document.querySelector('#server-modal .modal-title').textContent = 'Добавить сервер');
+        document.getElementById('server-modal-title').textContent = '🌍 Добавить сервер';
+        document.getElementById('server-submit-btn').textContent = 'Добавить сервер';
       }
 
       function editServer(s) {
@@ -3151,7 +3152,8 @@
         document.getElementById('srv-reality-sid').value = s.reality_short_id || '';
         document.getElementById('srv-reality-dest').value = s.reality_dest || '';
         document.getElementById('srv-reality-sn').value = s.reality_server_names || '';
-        document.querySelector('#server-modal .modal-title') && (document.querySelector('#server-modal .modal-title').textContent = 'Редактировать сервер');
+        document.getElementById('server-modal-title').textContent = '✏️ Редактировать сервер';
+        document.getElementById('server-submit-btn').textContent = 'Сохранить';
       }
       function closeServerModal() { document.getElementById('server-modal').classList.add('hidden'); }
 
@@ -3525,6 +3527,7 @@
         >
           <div class="flex items-center justify-between mb-5">
             <h3
+              id="server-modal-title"
               class="text-sm font-semibold text-gray-200 uppercase tracking-wider"
             >
               🌍 Добавить сервер
@@ -3710,6 +3713,7 @@
             <div class="flex gap-3 pt-2">
               <button
                 type="button"
+                id="server-submit-btn"
                 onclick="submitServer()"
                 class="btn-primary flex-1"
               >
