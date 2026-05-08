@@ -16,6 +16,14 @@ logger = logging.getLogger(__name__)
 # Таймауты для HTTP запросов
 HTTP_TIMEOUT = httpx.Timeout(15.0, connect=5.0)
 
+# Каскад: NL/FI → RU для российского трафика
+RU_SERVER_IP = os.getenv("RU_SERVER_IP", "")
+RU_TRANSIT_UUID = os.getenv("RU_TRANSIT_UUID", "")
+RU_TRANSIT_PORT = int(os.getenv("RU_TRANSIT_PORT", "443"))
+RU_TRANSIT_PUBLIC_KEY = os.getenv("RU_TRANSIT_PUBLIC_KEY", "")
+RU_TRANSIT_SHORT_ID = os.getenv("RU_TRANSIT_SHORT_ID", "aabbccdd")
+RU_TRANSIT_SN = os.getenv("RU_TRANSIT_SN", "www.yandex.ru")
+
 
 def _build_remote_config(server: Server, keys: list[VPNKey]) -> dict[str, Any]:
     """Собрать Xray config для remote сервера (только inbound + minimal outbound)."""
@@ -118,6 +126,75 @@ def _build_remote_config(server: Server, keys: list[VPNKey]) -> dict[str, Any]:
             ]
         }
     }
+
+    # Каскад: российский трафик → RU сервер (выход с RU IP)
+    if RU_SERVER_IP and RU_TRANSIT_UUID and RU_TRANSIT_PUBLIC_KEY:
+        config["outbounds"].append({
+            "tag": "RU-PROXY",
+            "protocol": "vless",
+            "settings": {
+                "vnext": [{
+                    "address": RU_SERVER_IP,
+                    "port": RU_TRANSIT_PORT,
+                    "users": [{
+                        "id": RU_TRANSIT_UUID,
+                        "encryption": "none",
+                        "flow": "xtls-rprx-vision"
+                    }]
+                }]
+            },
+            "streamSettings": {
+                "network": "tcp",
+                "security": "reality",
+                "realitySettings": {
+                    "show": False,
+                    "fingerprint": "chrome",
+                    "serverName": RU_TRANSIT_SN,
+                    "publicKey": RU_TRANSIT_PUBLIC_KEY,
+                    "shortId": RU_TRANSIT_SHORT_ID
+                }
+            },
+            "mux": {
+                "enabled": True,
+                "concurrency": 8,
+                "xudpConcurrency": 16,
+                "xudpProxyUDP443": "skip"
+            }
+        })
+        rules = config["routing"]["rules"]
+        catchall = rules.pop()  # убираем catch-all (tcp,udp → DIRECT)
+        rules.extend([
+            {
+                "type": "field",
+                "outboundTag": "RU-PROXY",
+                "domain": [
+                    "regexp:\\.ru$",
+                    "regexp:\\.su$",
+                    "domain:yandex.com",
+                    "domain:yandex.ru",
+                    "domain:mail.ru",
+                    "domain:vk.com",
+                    "domain:ok.ru",
+                    "domain:sberbank.ru",
+                    "domain:gosuslugi.ru",
+                    "domain:nalog.gov.ru",
+                    "domain:mos.ru",
+                    "domain:rt.ru",
+                    "domain:tinkoff.ru",
+                    "domain:wildberries.ru",
+                    "domain:ozon.ru",
+                    "domain:avito.ru",
+                    "domain:1c.ru"
+                ]
+            },
+            {
+                "type": "field",
+                "outboundTag": "RU-PROXY",
+                "ip": ["geoip:ru"]
+            }
+        ])
+        rules.append(catchall)
+
     return config
 
 
