@@ -1121,6 +1121,9 @@
               <button onclick="loadServers()" class="btn-secondary text-xs">
                 🔄 Обновить
               </button>
+              <button onclick="checkAllServers()" class="btn-secondary text-xs">
+                🔍 Проверить доступность
+              </button>
               <button onclick="syncAllServers()" class="btn-primary text-xs">
                 📡 Синхронизировать все
               </button>
@@ -1129,6 +1132,7 @@
               </button>
             </div>
           </div>
+          <div id="server-check-results" class="hidden mb-4 space-y-2"></div>
           <div class="overflow-x-auto">
             <table class="w-full tbl" id="servers-table">
               <thead>
@@ -1352,11 +1356,15 @@
             <button onclick="loadServers()" class="btn-secondary text-xs">
               🔄 Обновить
             </button>
+            <button onclick="checkAllServers()" class="btn-secondary text-xs">
+              🔍 Проверить доступность
+            </button>
             <button onclick="openServerModal()" class="btn-primary text-xs">
               + Добавить сервер
             </button>
           </div>
         </div>
+        <div id="server-check-results" class="hidden mb-4 space-y-2"></div>
 
         <div class="card glow-box overflow-hidden mb-6">
           <div class="overflow-x-auto">
@@ -3072,6 +3080,35 @@
             loadServers();
           } else { showToast(d.detail || 'Ошибка', 'error'); }
         } catch(e) { showToast('Ошибка сети', 'error'); }
+      }
+
+      async function checkAllServers() {
+        showToast('Проверка серверов...', 'info');
+        var container = document.getElementById('server-check-results');
+        container.classList.remove('hidden');
+        container.innerHTML = '<div class="text-xs text-gray-500 p-3">Проверяем...</div>';
+        try {
+          var r = await fetch('/admin/api/servers/check-all');
+          var data = await r.json();
+          var html = '';
+          data.forEach(function(s) {
+            var healthIcon = s.health_ok ? '🟢' : '🔴';
+            var realityIcon = s.reality_ok ? '🟢' : '🔴';
+            var healthMs = s.health_ms !== null ? s.health_ms + 'ms' : '—';
+            var realityMs = s.reality_ms !== null ? s.reality_ms + 'ms' : '—';
+            var errHtml = s.error ? '<span class="text-red-400 ml-2">' + escapeHtml(s.error.substring(0, 80)) + '</span>' : '';
+            html += '<div class="flex flex-wrap items-center gap-x-4 gap-y-1 bg-black/30 rounded-lg px-3 py-2 text-xs">' +
+              '<span class="text-gray-300 font-medium w-28 shrink-0">' + escapeHtml(s.name) + '</span>' +
+              '<span class="text-gray-500 font-mono w-32 shrink-0">' + escapeHtml(s.host) + '</span>' +
+              '<span title="xray-node API">' + healthIcon + ' API: <span class="text-gray-400">' + healthMs + '</span></span>' +
+              '<span title="REALITY port TCP">' + realityIcon + ' REALITY: <span class="text-gray-400">' + realityMs + '</span></span>' +
+              errHtml +
+            '</div>';
+          });
+          container.innerHTML = html || '<div class="text-xs text-gray-600 p-3">Нет серверов</div>';
+        } catch(e) {
+          container.innerHTML = '<div class="text-xs text-red-400 p-3">Ошибка проверки: ' + e.message + '</div>';
+        }
       }
 
       async function deleteServer(serverId, name) {

@@ -1100,6 +1100,62 @@ async def admin_sync_server(
         raise HTTPException(status_code=502, detail=f"Ошибка синхронизации: {str(e)}")
 
 
+@router.get("/admin/api/servers/check-all")
+async def admin_check_all_servers(
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Проверить доступность (health + TCP REALITY) всех серверов."""
+    import asyncio
+    import socket as _socket
+    import time as _t
+    import httpx as _httpx
+
+    servers = db.query(Server).order_by(Server.priority.asc()).all()
+
+    async def _check(s: Server) -> dict:
+        res: dict[str, Any] = {
+            "id": s.id,
+            "name": s.name,
+            "host": s.host,
+            "health_ok": False,
+            "health_ms": None,
+            "reality_ok": False,
+            "reality_ms": None,
+            "error": None,
+        }
+        # 1. HTTP health check xray-node
+        try:
+            t0 = _t.monotonic()
+            async with _httpx.AsyncClient(timeout=5.0, verify=False) as cl:
+                resp = await cl.get(f"{s.api_url.rstrip('/')}/health")
+            res["health_ms"] = round((_t.monotonic() - t0) * 1000)
+            res["health_ok"] = resp.status_code == 200
+        except Exception as e:
+            res["error"] = str(e)
+
+        # 2. TCP probe to REALITY port
+        if s.reality_port:
+            try:
+                t0 = _t.monotonic()
+                await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(
+                        None,
+                        lambda h=s.host, p=s.reality_port: _socket.create_connection((h, p), timeout=3).close()
+                    ),
+                    timeout=4.0
+                )
+                res["reality_ms"] = round((_t.monotonic() - t0) * 1000)
+                res["reality_ok"] = True
+            except Exception:
+                res["reality_ok"] = False
+
+        return res
+
+    results = await asyncio.gather(*[_check(s) for s in servers])
+    return JSONResponse(list(results))
+
+
 @router.post("/admin/api/servers/sync-all")
 async def admin_sync_all_servers(
     _: User = Depends(require_admin),
