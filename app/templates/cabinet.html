@@ -294,7 +294,7 @@
             </p>
           </div>
           <button
-            onclick="copyText({{ subscription_url | tojson }})"
+            onclick='copyText({{ subscription_url | tojson }})'
             class="btn-acid"
           >
             &#x1f4cb;
@@ -303,7 +303,7 @@
         </div>
         <div
           class="mono-box mb-4"
-          onclick="copyText({{ subscription_url | tojson }})"
+          onclick='copyText({{ subscription_url | tojson }})'
         >
           {{ subscription_url }}
         </div>
@@ -416,14 +416,14 @@
               <span class="server-badge">{{ link.name }}</span>
               <div class="flex gap-1.5">
                 <button
-                  onclick="copyText({{ link.link | tojson }})"
+                  onclick='copyText({{ link.link | tojson }})'
                   class="btn-ghost"
                   title="Копировать"
                 >
                   &#x1f4cb; Копировать
                 </button>
                 <button
-                  onclick="openQr({{ link.link | tojson }}, {{ link.name | tojson }})"
+                  onclick='openQr({{ link.link | tojson }}, {{ link.name | tojson }})'
                   class="btn-ghost"
                   title="QR-код"
                 >
@@ -433,7 +433,7 @@
             </div>
             <div
               class="mono-box cursor-pointer"
-              onclick="copyText({{ link.link | tojson }})"
+              onclick='copyText({{ link.link | tojson }})'
               title="Кликните чтобы скопировать"
             >
               {{ link.link[:80] }}{% if link.link|length > 80 %}&hellip;{% endif
@@ -458,13 +458,13 @@
             <div
               class="mono-box flex-1 cursor-pointer"
               style="opacity: 0.8"
-              onclick="copyText({{ kd.key_sub_url | tojson }})"
+              onclick='copyText({{ kd.key_sub_url | tojson }})'
             >
               {{ kd.key_sub_url[:60] }}{% if kd.key_sub_url|length > 60
               %}&hellip;{% endif %}
             </div>
             <button
-              onclick="copyText({{ kd.key_sub_url | tojson }})"
+              onclick='copyText({{ kd.key_sub_url | tojson }})'
               class="btn-ghost"
               title="Копировать"
             >
@@ -769,11 +769,11 @@
         if (!qrEl) return;
         {% if subscription_url %}var subUrl = {{ subscription_url | tojson }};{% else %}var subUrl = null;{% endif %}
         if (subUrl) {
-          var canvas = document.createElement('canvas');
-          qrEl.appendChild(canvas);
-          QRCode.toCanvas(canvas, subUrl, {width:200,margin:1,color:{dark:'#080818',light:'#ffffff'}}, function(err){
-            if (err) qrEl.removeChild(canvas);
-          });
+          var qrContainer = document.getElementById('qrcode-sub');
+          qrContainer.innerHTML = '';
+          if (typeof QRCode !== 'undefined') {
+            new QRCode(qrContainer, { text: subUrl, width: 200, height: 200, colorDark: '#080818', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
+          }
         }
       });
 
