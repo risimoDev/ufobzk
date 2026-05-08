@@ -198,7 +198,11 @@ async def admin_create_user_json(
     except Exception as e:
         logger.error("Ошибка синхронизации Xray: %s", e)
 
-    _log_action(db, admin.id, "create_user", str(validated.telegram_id), f"key={vpn_key.uuid}")
+    try:
+        _log_action(db, admin.id, "create_user", str(validated.telegram_id), f"key={vpn_key.uuid}")
+    except Exception as e:
+        logger.error("Ошибка audit log: %s", e)
+
     return JSONResponse({"ok": True, "user_id": new_user.id, "display_name": new_user.display_name, "username": new_user.username, "telegram_id": new_user.telegram_id})
 
 

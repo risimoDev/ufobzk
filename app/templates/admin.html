@@ -2086,6 +2086,7 @@
             return;
           }
           // Показываем модалку с данными
+          showToast('Пользователь создан!', 'success');
           document.getElementById('cred-name').textContent = data.display_name || '—';
           document.getElementById('cred-username').textContent = data.username || '—';
           document.getElementById('cred-password').textContent = body.password;
