@@ -3050,7 +3050,8 @@
               '<td class="px-4 py-3 text-xs text-gray-500">' + s.priority + '</td>' +
               '<td class="px-4 py-3 text-xs ' + syncCls + '">' + syncText + '</td>' +
               '<td class="px-4 py-3 text-right">' +
-                '<button onclick="syncServer(' + s.id + ')" class="p-1 rounded bg-white/5 text-gray-500 hover:text-emerald-400 transition text-xs" title="Синхронизировать">🔄</button>' +
+                '<button onclick="editServer(' + JSON.stringify(s).replace(/"/g, '&quot;') + ')" class="p-1 rounded bg-white/5 text-gray-500 hover:text-blue-400 transition text-xs" title="Редактировать">✏️</button>' +
+                '<button onclick="syncServer(' + s.id + ')" class="p-1 rounded bg-white/5 text-gray-500 hover:text-emerald-400 transition text-xs ml-1" title="Синхронизировать">🔄</button>' +
                 '<button onclick="deleteServer(' + s.id + ', \'' + escapeStr(s.name) + '\')" class="p-1 rounded bg-white/5 text-gray-500 hover:text-red-400 transition text-xs ml-1" title="Удалить">🗑️</button>' +
               '</td>' +
             '</tr>';
@@ -3127,6 +3128,30 @@
         document.getElementById('srv-reality-pub').value = '';
         document.getElementById('srv-reality-priv').value = '';
         document.getElementById('srv-reality-sid').value = '';
+        delete document.getElementById('server-modal')._editId;
+        document.querySelector('#server-modal .modal-title') && (document.querySelector('#server-modal .modal-title').textContent = 'Добавить сервер');
+      }
+
+      function editServer(s) {
+        openServerModal();
+        document.getElementById('server-modal')._editId = s.id;
+        document.getElementById('srv-name').value = s.name || '';
+        document.getElementById('srv-host').value = s.host || '';
+        document.getElementById('srv-api').value = s.api_url || '';
+        document.getElementById('srv-token').value = '';
+        document.getElementById('srv-region').value = s.region || 'eu';
+        document.getElementById('srv-role').value = s.role || 'remote';
+        document.getElementById('srv-ws').value = s.ws_port || 443;
+        document.getElementById('srv-reality').value = s.reality_port || 2053;
+        document.getElementById('srv-grpc').value = s.grpc_port || 8445;
+        document.getElementById('srv-xhttp').value = s.xhttp_port || 8444;
+        document.getElementById('srv-priority').value = s.priority || 100;
+        document.getElementById('srv-reality-pub').value = s.reality_public_key || '';
+        document.getElementById('srv-reality-priv').value = '';
+        document.getElementById('srv-reality-sid').value = s.reality_short_id || '';
+        document.getElementById('srv-reality-dest').value = s.reality_dest || '';
+        document.getElementById('srv-reality-sn').value = s.reality_server_names || '';
+        document.querySelector('#server-modal .modal-title') && (document.querySelector('#server-modal .modal-title').textContent = 'Редактировать сервер');
       }
       function closeServerModal() { document.getElementById('server-modal').classList.add('hidden'); }
 
@@ -3151,14 +3176,23 @@
           body.reality_short_id = document.getElementById('srv-reality-sid').value.trim();
           body.reality_dest = document.getElementById('srv-reality-dest').value.trim() || 'www.samsung.com:443';
           body.reality_server_names = document.getElementById('srv-reality-sn').value.trim() || 'www.samsung.com';
+        } else {
+          // Если поле оставлено пустым при редактировании — явно передать пустые чтобы сохранить старые (не перетирать)
+          body.reality_public_key = pk;
+          body.reality_short_id = document.getElementById('srv-reality-sid').value.trim();
+          body.reality_dest = document.getElementById('srv-reality-dest').value.trim();
+          body.reality_server_names = document.getElementById('srv-reality-sn').value.trim();
         }
-        if (!body.name || !body.host || !body.api_url || !body.api_token) {
-          return showToast('Заполните имя, хост, API URL и токен', 'error');
+        if (!body.name || !body.host || !body.api_url) {
+          return showToast('Заполните имя, хост и API URL', 'error');
         }
+        var editId = document.getElementById('server-modal')._editId;
         try {
-          var r = await fetch('/admin/api/servers', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+          var url = editId ? '/admin/api/servers/' + editId + '/edit' : '/admin/api/servers';
+          if (!editId && !body.api_token) return showToast('Токен обязателен для нового сервера', 'error');
+          var r = await fetch(url, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
           var d = await r.json();
-          if (d.ok) { showToast('Сервер добавлен', 'success'); closeServerModal(); loadServers(); }
+          if (d.ok) { showToast(editId ? 'Сервер обновлён' : 'Сервер добавлен', 'success'); closeServerModal(); loadServers(); }
           else { showToast(d.detail || 'Ошибка', 'error'); }
         } catch(e) { showToast('Ошибка сети', 'error'); }
       }

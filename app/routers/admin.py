@@ -1055,6 +1055,57 @@ async def admin_add_server(
     return JSONResponse({"ok": True, "id": server.id})
 
 
+@router.post("/admin/api/servers/{server_id}/edit")
+async def admin_edit_server(
+    server_id: int,
+    request: Request,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Редактировать существующий сервер."""
+    server = db.query(Server).filter(Server.id == server_id).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Сервер не найден")
+
+    body = await request.json()
+    if "name" in body:
+        server.name = body["name"]
+    if "host" in body:
+        server.host = body["host"]
+    if "api_url" in body:
+        server.api_url = body["api_url"]
+    if "api_token" in body and body["api_token"]:
+        server.api_token = body["api_token"]
+    if "region" in body:
+        server.region = body["region"]
+    if "role" in body:
+        server.role = body["role"]
+    if "ws_port" in body:
+        server.ws_port = int(body["ws_port"])
+    if "reality_port" in body:
+        server.reality_port = int(body["reality_port"])
+    if "grpc_port" in body:
+        server.grpc_port = int(body["grpc_port"])
+    if "xhttp_port" in body:
+        server.xhttp_port = int(body["xhttp_port"])
+    if "priority" in body:
+        server.priority = int(body["priority"])
+    if "reality_public_key" in body:
+        server.reality_public_key = body["reality_public_key"] or None
+    if "reality_private_key" in body:
+        server.reality_private_key = body["reality_private_key"] or None
+    if "reality_short_id" in body:
+        server.reality_short_id = body["reality_short_id"] or None
+    if "reality_dest" in body:
+        server.reality_dest = body["reality_dest"] or None
+    if "reality_server_names" in body:
+        server.reality_server_names = body["reality_server_names"] or None
+
+    db.commit()
+    _log_action(db, None, "edit_server", str(server_id), server.name)
+    return JSONResponse({"ok": True})
+
+
 @router.post("/admin/api/servers/{server_id}/delete")
 async def admin_delete_server(
     server_id: int,
