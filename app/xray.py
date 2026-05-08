@@ -506,65 +506,70 @@ def get_user_links(key: VPNKey) -> list[dict[str, str]]:
     return links
 
 
+import re as _re
+
+_IP_RE = _re.compile(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$')
+
+
+def _host_is_ip(host: str) -> bool:
+    return bool(_IP_RE.match(host))
+
+
 def get_server_links(key: VPNKey, server: Server) -> list[dict[str, str]]:
-    """Ссылки для ключа на конкретном remote сервере."""
+    """Ссылки для ключа на конкретном remote сервере.
+
+    Если host — IP адрес (нет nginx/TLS): только REALITY (работает без nginx).
+    Если host — доменное имя: WS/XHTTP/gRPC+TLS + REALITY.
+    """
     links = []
     host = server.host
     ws_port = server.ws_port or 443
     reality_port = server.reality_port or 2053
-    grpc_port = server.grpc_port or 8445
-    xhttp_port = server.xhttp_port or 8444
     suffix = server.name.replace(" ", "-")
+    is_ip = _host_is_ip(host)
 
-    # WS
-    links.append({
-        "name": f"{server.region.upper()}-{suffix} (WS+TLS)",
-        "link": build_vless_ws_link(key, host, ws_port, f"{suffix}-{key.name}"),
-        "type": "vless-ws",
-        "server_id": server.id,
-        "region": server.region,
-    })
-    # XHTTP
-    links.append({
-        "name": f"{server.region.upper()}-{suffix} (XHTTP+TLS)",
-        "link": build_vless_xhttp_link(key, host, ws_port, f"{suffix}-XHTTP-{key.name}"),
-        "type": "vless-xhttp",
-        "server_id": server.id,
-        "region": server.region,
-    })
-    # gRPC
-    links.append({
-        "name": f"{server.region.upper()}-{suffix} (gRPC+TLS)",
-        "link": build_vless_grpc_link(key, host, ws_port, f"{suffix}-gRPC-{key.name}"),
-        "type": "vless-grpc",
-        "server_id": server.id,
-        "region": server.region,
-    })
-    # REALITY если настроен
+    if not is_ip:
+        # Домен с nginx/TLS — WS/XHTTP/gRPC работают
+        links.append({
+            "name": f"{server.region.upper()}-{suffix} (WS+TLS)",
+            "link": build_vless_ws_link(key, host, ws_port, f"{suffix}-{key.name}"),
+            "type": "vless-ws",
+            "server_id": server.id,
+            "region": server.region,
+        })
+        links.append({
+            "name": f"{server.region.upper()}-{suffix} (XHTTP+TLS)",
+            "link": build_vless_xhttp_link(key, host, ws_port, f"{suffix}-XHTTP-{key.name}"),
+            "type": "vless-xhttp",
+            "server_id": server.id,
+            "region": server.region,
+        })
+        links.append({
+            "name": f"{server.region.upper()}-{suffix} (gRPC+TLS)",
+            "link": build_vless_grpc_link(key, host, ws_port, f"{suffix}-gRPC-{key.name}"),
+            "type": "vless-grpc",
+            "server_id": server.id,
+            "region": server.region,
+        })
+
+    # REALITY — работает на IP напрямую, не требует nginx
     if server.reality_public_key and server.reality_short_id:
-        # Переопределяем глобальные для реальности этого сервера
-        _orig_pk = REALITY_PUBLIC_KEY
-        _orig_sid = REALITY_SHORT_ID
-        _orig_sn = REALITY_SERVER_NAMES
-        try:
-            import os as _os
-            _os.environ["REALITY_PUBLIC_KEY"] = server.reality_public_key
-            _os.environ["REALITY_SHORT_ID"] = server.reality_short_id
-            _os.environ["REALITY_SERVER_NAMES"] = server.reality_server_names or "www.samsung.com"
-            links.append({
-                "name": f"{server.region.upper()}-{suffix} (REALITY)",
-                "link": build_vless_reality_link(key, host, reality_port, f"{suffix}-Reality-{key.name}"),
-                "type": "vless-reality",
-                "server_id": server.id,
-                "region": server.region,
-            })
-        finally:
-            if _orig_pk:
-                _os.environ["REALITY_PUBLIC_KEY"] = _orig_pk
-            if _orig_sid:
-                _os.environ["REALITY_SHORT_ID"] = _orig_sid
-            if _orig_sn:
-                _os.environ["REALITY_SERVER_NAMES"] = _orig_sn
+        sn = (server.reality_server_names or "www.samsung.com").split(",")[0].strip()
+        remark = f"{suffix}-Reality-{key.name}"
+        params = (
+            f"type=tcp&security=reality&sni={sn}"
+            f"&fp=chrome&pbk={server.reality_public_key}"
+            f"&sid={server.reality_short_id}&flow=xtls-rprx-vision"
+        )
+        from urllib.parse import quote as _quote
+        link = f"vless://{key.uuid}@{host}:{reality_port}?{params}#{_quote(remark)}"
+        links.append({
+            "name": f"{server.region.upper()}-{suffix} (REALITY)",
+            "link": link,
+            "type": "vless-reality",
+            "server_id": server.id,
+            "region": server.region,
+        })
     return links
 
 
@@ -596,7 +601,7 @@ def get_subscription_content(keys: list[VPNKey], db: Session | None = None) -> s
         else:
             link_list = get_user_links(key)
         for link_info in link_list:
-            if link_info["type"] in ("vless-ws", "vless-xhttp", "vless-grpc"):
+            if link_info["type"] in ("vless-ws", "vless-xhttp", "vless-grpc", "vless-reality"):
                 all_links.append(link_info["link"])
     return base64.b64encode("\n".join(all_links).encode()).decode()
 
