@@ -2,15 +2,17 @@
 
 import logging
 import os
+import secrets
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
 from app.auth import hash_password, verify_user_credentials
-from app.dependencies import _get_current_user, templates
+from app.dependencies import _get_current_user, templates, verify_csrf
 from app.models import DEFAULT_SETTINGS, User, get_db, get_setting
 from app.xray import DOMAIN, get_all_links
 
@@ -83,3 +85,21 @@ async def cabinet_change_password(
     user.password_hash = hash_password(new_pw)
     db.commit()
     return JSONResponse({"ok": True})
+
+
+@router.post("/cabinet/rotate-sub-token")
+@limiter.limit("5/minute")
+async def cabinet_rotate_sub_token(
+    request: Request,
+    csrf_token: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Генерирует новый sub_token — старая ссылка подписки перестаёт работать."""
+    user = _get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=302, headers={"Location": "/login"})
+    verify_csrf(request, csrf_token)
+    user.sub_token = secrets.token_urlsafe(32)
+    user.sub_token_updated_at = datetime.now(timezone.utc)
+    db.commit()
+    return RedirectResponse(url="/cabinet", status_code=303)

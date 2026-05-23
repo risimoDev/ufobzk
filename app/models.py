@@ -19,12 +19,31 @@ from sqlalchemy import (
     String,
     Text,
     create_engine,
+    event,
 )
 from sqlalchemy.orm import DeclarativeBase, relationship, sessionmaker
 
 DATABASE_URL = "sqlite:///./data/vpnbzk.db"
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False, "timeout": 30},
+    pool_pre_ping=True,
+)
+
+
+@event.listens_for(engine, "connect")
+def _set_sqlite_pragmas(dbapi_conn, _):
+    """WAL mode + оптимизации при каждом открытии соединения с БД."""
+    cur = dbapi_conn.cursor()
+    cur.execute("PRAGMA journal_mode=WAL")    # concurrent reads + writes
+    cur.execute("PRAGMA synchronous=NORMAL")  # быстрее, безопасно с WAL
+    cur.execute("PRAGMA busy_timeout=30000")  # 30 сек ожидание вместо ошибки
+    cur.execute("PRAGMA cache_size=-32000")   # 32 MB page cache
+    cur.execute("PRAGMA temp_store=MEMORY")   # temp-таблицы в RAM
+    cur.close()
+
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 _sa_raw = os.getenv("SUPERADMIN_TELEGRAM_ID", "0")
@@ -48,6 +67,7 @@ class User(Base):
     username = Column(String(64), unique=True, nullable=True, index=True)
     password_hash = Column(String(128), nullable=True)
     sub_token = Column(String(36), unique=True, nullable=True, index=True)
+    sub_token_updated_at = Column(DateTime, nullable=True)
     is_admin = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     is_free = Column(Boolean, default=False)  # Бесплатный доступ на всё время
@@ -158,6 +178,29 @@ class VPNKey(Base):
         if self.is_over_limit:
             return "limited"
         return "active"
+
+
+class TrafficSnapshot(Base):
+    """Ежечасные снимки трафика для построения графиков и аналитики."""
+    __tablename__ = "traffic_snapshots"
+
+    id = Column(Integer, primary_key=True)
+    vpn_key_id = Column(
+        Integer,
+        ForeignKey("vpn_keys.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    bytes_delta = Column(BigInteger, default=0)   # прирост за период
+    total_bytes = Column(BigInteger, default=0)   # кумулятив на момент записи
+    recorded_at = Column(
+        DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        index=True,
+    )
+
+    vpn_key = relationship("VPNKey", backref="snapshots")
 
 
 class AuditLog(Base):

@@ -344,6 +344,12 @@
         >
           &#x1f9ea; Тесты
         </button>
+        <button
+          class="tab-btn px-4 py-2 rounded-lg border border-white/5 text-xs font-medium text-gray-500"
+          data-tab="analytics"
+        >
+          &#x1f4c8; Аналитика
+        </button>
       </div>
 
       <!-- TAB: DASHBOARD -->
@@ -2146,6 +2152,7 @@
         if (tabName === 'diagnostics') runDiagnostics();
         if (tabName === 'servers') loadServers();
         if (tabName === 'guides') loadGuides();
+        if (tabName === 'analytics') loadAnalytics();
       }
       document.querySelectorAll('.tab-btn').forEach(function(btn) {
         btn.addEventListener('click', function() { switchTab(btn.dataset.tab); });
@@ -3601,12 +3608,23 @@
             </div>
             <div>
               <label class="block text-xs text-gray-500 mb-1">API Token</label>
-              <input
-                type="text"
-                id="srv-token"
-                placeholder="Bearer-токен из .env xray-node"
-                class="input-field"
-              />
+              <div class="flex gap-2">
+                <input
+                  type="text"
+                  id="srv-token"
+                  placeholder="Bearer-токен из .env xray-node"
+                  class="input-field flex-1"
+                />
+                <button
+                  type="button"
+                  onclick="genServerToken()"
+                  title="Сгенерировать случайный токен"
+                  class="px-3 py-2 rounded-lg border border-accent/30 text-accent text-xs hover:bg-accent/10 transition-colors whitespace-nowrap"
+                >
+                  🎲 Новый
+                </button>
+              </div>
+              <p class="text-xs text-gray-600 mt-1">Оставьте пустым при редактировании — токен не изменится</p>
             </div>
             <div class="grid grid-cols-3 gap-3">
               <div>
@@ -3890,6 +3908,238 @@
           </form>
         </div>
       </div>
+      <!-- TAB: ANALYTICS -->
+      <div id="tab-analytics" class="tab-panel">
+        <div class="mb-6 flex items-center justify-between">
+          <h2 class="text-lg font-semibold text-white">&#x1f4c8; Аналитика</h2>
+          <div class="flex gap-2">
+            <button onclick="loadAnalytics(7)" id="analytics-7d" class="btn-acid text-xs px-3 py-1.5">7 дней</button>
+            <button onclick="loadAnalytics(14)" id="analytics-14d" class="btn-secondary text-xs px-3 py-1.5">14 дней</button>
+            <button onclick="loadAnalytics(30)" id="analytics-30d" class="btn-secondary text-xs px-3 py-1.5">30 дней</button>
+          </div>
+        </div>
+
+        <!-- KPI карточки -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" id="analytics-kpi">
+          <div class="card p-4 glow-box text-center">
+            <div class="text-2xl font-bold text-accent" id="kpi-users">—</div>
+            <div class="text-xs text-gray-500 mt-1">Пользователей</div>
+          </div>
+          <div class="card p-4 glow-box text-center">
+            <div class="text-2xl font-bold text-accent" id="kpi-keys">—</div>
+            <div class="text-xs text-gray-500 mt-1">Активных ключей</div>
+          </div>
+          <div class="card p-4 glow-box text-center">
+            <div class="text-2xl font-bold text-accent" id="kpi-traffic-total">—</div>
+            <div class="text-xs text-gray-500 mt-1">Трафик всего</div>
+          </div>
+          <div class="card p-4 glow-box text-center">
+            <div class="text-2xl font-bold text-accent" id="kpi-traffic-period">—</div>
+            <div class="text-xs text-gray-500 mt-1">Трафик за период</div>
+          </div>
+          <div class="card p-4 text-center">
+            <div class="text-2xl font-bold" id="kpi-expired" style="color:#f87171">—</div>
+            <div class="text-xs text-gray-500 mt-1">Истёкших ключей</div>
+          </div>
+          <div class="card p-4 text-center">
+            <div class="text-2xl font-bold" id="kpi-limited" style="color:#fbbf24">—</div>
+            <div class="text-xs text-gray-500 mt-1">Превысили лимит</div>
+          </div>
+          <div class="card p-4 text-center">
+            <div class="text-2xl font-bold" id="kpi-servers-ok" style="color:#34d399">—</div>
+            <div class="text-xs text-gray-500 mt-1">Серверов онлайн</div>
+          </div>
+          <div class="card p-4 text-center">
+            <div class="text-2xl font-bold" id="kpi-servers-err" style="color:#f87171">—</div>
+            <div class="text-xs text-gray-500 mt-1">Серверов с ошибкой</div>
+          </div>
+        </div>
+
+        <!-- Графики -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <div class="card p-5">
+            <h3 class="text-sm font-semibold text-white mb-4">&#x1f4c9; Трафик по дням</h3>
+            <div style="position:relative;height:220px">
+              <canvas id="chart-traffic-daily"></canvas>
+            </div>
+          </div>
+          <div class="card p-5">
+            <h3 class="text-sm font-semibold text-white mb-4">&#x23f0; Активность по часам суток</h3>
+            <div style="position:relative;height:220px">
+              <canvas id="chart-traffic-hourly"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Топ пользователей -->
+        <div class="card p-5">
+          <h3 class="text-sm font-semibold text-white mb-4">&#x1f3c6; Топ пользователей по трафику</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full tbl" id="analytics-top-users-table">
+              <thead>
+                <tr>
+                  <th class="text-left">#</th>
+                  <th class="text-left">Пользователь</th>
+                  <th class="text-right">Трафик</th>
+                  <th class="text-right">Ключей</th>
+                  <th class="text-center">Статус</th>
+                  <th class="text-right">Доля</th>
+                </tr>
+              </thead>
+              <tbody id="analytics-top-users">
+                <tr><td colspan="6" class="text-center text-gray-500 py-4">Загрузка...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div><!-- /tab-analytics -->
+
     </div>
   </body>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script>
+    // ── Server token generator ──
+    async function genServerToken() {
+      try {
+        var r = await fetch('/admin/api/generate-token');
+        var d = await r.json();
+        document.getElementById('srv-token').value = d.token;
+      } catch(e) {
+        console.error('Token generation error:', e);
+      }
+    }
+
+    // ── Analytics ──
+    var _analyticsChartDaily = null;
+    var _analyticsChartHourly = null;
+    var _analyticsDays = 7;
+
+    function fmtBytes(b) {
+      if (b === 0) return '0 B';
+      var units = ['B','KB','MB','GB','TB'];
+      var i = Math.floor(Math.log(b) / Math.log(1024));
+      return (b / Math.pow(1024, i)).toFixed(2) + ' ' + units[i];
+    }
+
+    async function loadAnalytics(days) {
+      _analyticsDays = days || _analyticsDays;
+      // Подсветить активную кнопку
+      ['7','14','30'].forEach(function(d) {
+        var btn = document.getElementById('analytics-' + d + 'd');
+        if (btn) {
+          if (parseInt(d) === _analyticsDays) {
+            btn.className = 'btn-acid text-xs px-3 py-1.5';
+          } else {
+            btn.className = 'btn-secondary text-xs px-3 py-1.5';
+          }
+        }
+      });
+
+      try {
+        var [summary, traffic, hourly, topUsers] = await Promise.all([
+          fetch('/admin/api/analytics/summary').then(r => r.json()),
+          fetch('/admin/api/analytics/traffic?days=' + _analyticsDays).then(r => r.json()),
+          fetch('/admin/api/analytics/hourly?days=' + _analyticsDays).then(r => r.json()),
+          fetch('/admin/api/analytics/top-users?limit=15').then(r => r.json()),
+        ]);
+
+        // KPI
+        document.getElementById('kpi-users').textContent = summary.active_users + ' / ' + summary.total_users;
+        document.getElementById('kpi-keys').textContent = summary.active_keys;
+        document.getElementById('kpi-traffic-total').textContent = fmtBytes(summary.traffic_total_bytes);
+        document.getElementById('kpi-traffic-period').textContent = fmtBytes(summary.traffic_7d_bytes);
+        document.getElementById('kpi-expired').textContent = summary.expired_keys;
+        document.getElementById('kpi-limited').textContent = summary.limited_keys;
+        document.getElementById('kpi-servers-ok').textContent = summary.servers_ok;
+        document.getElementById('kpi-servers-err').textContent = summary.servers_error;
+
+        // График трафика по дням
+        var ctxDaily = document.getElementById('chart-traffic-daily').getContext('2d');
+        var dailyGB = traffic.data.map(function(b) { return +(b / 1073741824).toFixed(3); });
+        if (_analyticsChartDaily) _analyticsChartDaily.destroy();
+        _analyticsChartDaily = new Chart(ctxDaily, {
+          type: 'bar',
+          data: {
+            labels: traffic.labels,
+            datasets: [{
+              label: 'Трафик (GB)',
+              data: dailyGB,
+              backgroundColor: 'rgba(0,255,200,0.25)',
+              borderColor: '#00ffc8',
+              borderWidth: 1.5,
+              borderRadius: 4,
+            }]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+              y: { ticks: { color: '#6b7280', font: { size: 11 }, callback: function(v) { return v + ' GB'; } }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true }
+            }
+          }
+        });
+
+        // График по часам
+        var ctxHourly = document.getElementById('chart-traffic-hourly').getContext('2d');
+        var hourlyGB = hourly.data.map(function(b) { return +(b / 1073741824).toFixed(3); });
+        if (_analyticsChartHourly) _analyticsChartHourly.destroy();
+        _analyticsChartHourly = new Chart(ctxHourly, {
+          type: 'bar',
+          data: {
+            labels: hourly.labels,
+            datasets: [{
+              label: 'Трафик (GB)',
+              data: hourlyGB,
+              backgroundColor: 'rgba(139,92,246,0.3)',
+              borderColor: '#8b5cf6',
+              borderWidth: 1.5,
+              borderRadius: 3,
+            }]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+              y: { ticks: { color: '#6b7280', font: { size: 11 }, callback: function(v) { return v + ' GB'; } }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true }
+            }
+          }
+        });
+
+        // Топ пользователей
+        var totalBytes = summary.traffic_total_bytes || 1;
+        var tbody = document.getElementById('analytics-top-users');
+        if (topUsers.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-500 py-4">Нет данных</td></tr>';
+        } else {
+          tbody.innerHTML = topUsers.map(function(u, i) {
+            var pct = totalBytes > 0 ? (u.traffic_bytes / totalBytes * 100).toFixed(1) : '0.0';
+            var barW = Math.round(u.traffic_bytes / totalBytes * 100);
+            return '<tr>' +
+              '<td class="text-gray-500">' + (i+1) + '</td>' +
+              '<td>' +
+                '<span class="font-medium text-white">' + (u.display_name || '—') + '</span>' +
+              '</td>' +
+              '<td class="text-right font-mono text-accent">' + fmtBytes(u.traffic_bytes) + '</td>' +
+              '<td class="text-right text-gray-400">' + u.active_keys + ' / ' + u.keys_count + '</td>' +
+              '<td class="text-center">' +
+                (u.is_active
+                  ? '<span class="text-xs px-2 py-0.5 rounded-full bg-green-500/15 text-green-400">активен</span>'
+                  : '<span class="text-xs px-2 py-0.5 rounded-full bg-red-500/15 text-red-400">откл.</span>') +
+              '</td>' +
+              '<td class="text-right">' +
+                '<div class="flex items-center gap-2 justify-end">' +
+                  '<div class="w-16 bg-white/5 rounded-full h-1.5"><div class="h-1.5 rounded-full bg-accent" style="width:' + barW + '%"></div></div>' +
+                  '<span class="text-xs text-gray-400">' + pct + '%</span>' +
+                '</div>' +
+              '</td>' +
+            '</tr>';
+          }).join('');
+        }
+      } catch(e) {
+        console.error('Analytics error:', e);
+      }
+    }
+  </script>
 </html>

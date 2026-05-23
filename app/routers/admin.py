@@ -16,6 +16,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Re
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
 
 from app.auth import generate_csrf_token, generate_invite_key, hash_password, list_invite_keys, delete_invite_key
@@ -23,7 +24,7 @@ from app.bruteforce import admin_guard, api_guard, login_guard
 from app.dependencies import _format_bytes, require_admin, templates, verify_csrf, _client_ip
 from app.models import (
     AppSetting, AuditLog, DEFAULT_SETTINGS, Guide, Payment, Server,
-    User, VPNKey, get_db, get_setting, set_setting,
+    TrafficSnapshot, User, VPNKey, get_db, get_setting, set_setting,
 )
 from app.xray import (
     DOMAIN, GB, NL_SERVER_IP, REALITY_PORT, REALITY_PUBLIC_KEY,
@@ -1604,4 +1605,158 @@ async def admin_diagnostics(
         results["cert"] = {"ok": False, "error": str(e)[:100]}
 
     return JSONResponse(results)
+
+
+# ── Analytics API ──
+
+
+@router.get("/admin/api/analytics/summary")
+async def analytics_summary(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Сводные KPI-метрики для дашборда аналитики."""
+    from datetime import timedelta
+
+    now = datetime.now(timezone.utc)
+    week_ago = now - timedelta(days=7)
+
+    all_users = db.query(User).all()
+    all_keys = db.query(VPNKey).all()
+    all_servers = db.query(Server).all()
+
+    active_keys = [k for k in all_keys if k.status == "active"]
+    expired_keys = [k for k in all_keys if k.status == "expired"]
+    limited_keys = [k for k in all_keys if k.status == "limited"]
+
+    traffic_total = sum(k.data_used or 0 for k in all_keys)
+
+    # Трафик за последние 7 дней из снимков
+    traffic_7d = db.query(
+        sa_func.coalesce(sa_func.sum(TrafficSnapshot.bytes_delta), 0)
+    ).filter(TrafficSnapshot.recorded_at >= week_ago).scalar() or 0
+
+    servers_ok = sum(1 for s in all_servers if s.is_active and s.last_sync_status == "ok")
+    servers_err = sum(1 for s in all_servers if s.is_active and s.last_sync_status == "error")
+
+    return JSONResponse({
+        "total_users": len(all_users),
+        "active_users": sum(1 for u in all_users if u.is_active),
+        "total_keys": len(all_keys),
+        "active_keys": len(active_keys),
+        "expired_keys": len(expired_keys),
+        "limited_keys": len(limited_keys),
+        "traffic_total_bytes": traffic_total,
+        "traffic_7d_bytes": traffic_7d,
+        "servers_total": len(all_servers),
+        "servers_ok": servers_ok,
+        "servers_error": servers_err,
+    })
+
+
+@router.get("/admin/api/analytics/traffic")
+async def analytics_traffic(
+    days: int = 7,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Агрегированный трафик по дням для построения графика.
+
+    Возвращает {labels: [дата...], data: [bytes...]}.
+    Источник: TrafficSnapshot.bytes_delta группируется по дате.
+    """
+    from datetime import timedelta
+
+    days = max(1, min(days, 90))
+    now = datetime.now(timezone.utc)
+
+    result_labels = []
+    result_data = []
+
+    for i in range(days - 1, -1, -1):
+        day_start = (now - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
+        day_end = day_start + timedelta(days=1)
+        label = day_start.strftime("%d.%m")
+
+        total = db.query(
+            sa_func.coalesce(sa_func.sum(TrafficSnapshot.bytes_delta), 0)
+        ).filter(
+            TrafficSnapshot.recorded_at >= day_start,
+            TrafficSnapshot.recorded_at < day_end,
+        ).scalar() or 0
+
+        result_labels.append(label)
+        result_data.append(total)
+
+    return JSONResponse({"labels": result_labels, "data": result_data})
+
+
+@router.get("/admin/api/analytics/top-users")
+async def analytics_top_users(
+    limit: int = 10,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Топ пользователей по суммарному трафику."""
+    all_users = db.query(User).all()
+    all_keys = db.query(VPNKey).all()
+
+    keys_by_user: dict[int, list] = {}
+    for k in all_keys:
+        keys_by_user.setdefault(k.user_id, []).append(k)
+
+    user_stats = []
+    for u in all_users:
+        ukeys = keys_by_user.get(u.id, [])
+        total_bytes = sum(k.data_used or 0 for k in ukeys)
+        active_count = sum(1 for k in ukeys if k.status == "active")
+        user_stats.append({
+            "user_id": u.id,
+            "display_name": u.display_name or u.username or f"ID:{u.id}",
+            "traffic_bytes": total_bytes,
+            "keys_count": len(ukeys),
+            "active_keys": active_count,
+            "is_active": u.is_active,
+        })
+
+    user_stats.sort(key=lambda x: x["traffic_bytes"], reverse=True)
+    return JSONResponse(user_stats[:max(1, min(limit, 50))])
+
+
+@router.get("/admin/api/analytics/hourly")
+async def analytics_hourly(
+    days: int = 7,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Распределение трафика по часам суток за последние N дней.
+
+    Показывает пиковую нагрузку по часам — полезно для планирования обслуживания.
+    """
+    from datetime import timedelta
+
+    days = max(1, min(days, 30))
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+
+    snapshots = db.query(
+        TrafficSnapshot.recorded_at,
+        TrafficSnapshot.bytes_delta,
+    ).filter(TrafficSnapshot.recorded_at >= since).all()
+
+    hourly: dict[int, int] = {h: 0 for h in range(24)}
+    for snap in snapshots:
+        hour = snap.recorded_at.hour
+        hourly[hour] = hourly.get(hour, 0) + (snap.bytes_delta or 0)
+
+    return JSONResponse({
+        "labels": [f"{h:02d}:00" for h in range(24)],
+        "data": [hourly[h] for h in range(24)],
+    })
+
+
+@router.get("/admin/api/generate-token")
+async def admin_generate_token(admin: User = Depends(require_admin)):
+    """Генерирует безопасный случайный токен для нового remote-сервера."""
+    import secrets as _secrets
+    return JSONResponse({"token": _secrets.token_hex(32)})
 

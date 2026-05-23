@@ -293,13 +293,20 @@
               &#x0430;&#x0432;&#x0442;&#x043e;&#x043c;&#x0430;&#x0442;&#x0438;&#x0447;&#x0435;&#x0441;&#x043a;&#x0438;
             </p>
           </div>
-          <button
-            onclick='copyText({{ subscription_url | tojson }})'
-            class="btn-acid"
-          >
-            &#x1f4cb;
-            &#x041a;&#x043e;&#x043f;&#x0438;&#x0440;&#x043e;&#x0432;&#x0430;&#x0442;&#x044c;
-          </button>
+          <div class="flex flex-col gap-2 items-end">
+            <button
+              onclick='copyText({{ subscription_url | tojson }})'
+              class="btn-acid"
+            >
+              &#x1f4cb; &#x041a;&#x043e;&#x043f;&#x0438;&#x0440;&#x043e;&#x0432;&#x0430;&#x0442;&#x044c;
+            </button>
+            <form method="POST" action="/cabinet/rotate-sub-token" onsubmit="return confirm('Старая ссылка подписки перестанет работать. Продолжить?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="text-xs px-3 py-1.5 rounded-lg border border-yellow-500/40 text-yellow-400 hover:bg-yellow-500/10 transition-colors">
+                &#x1f504; &#x41e;&#x431;&#x43d;&#x43e;&#x432;&#x438;&#x442;&#x44c; &#x441;&#x441;&#x44b;&#x43b;&#x43a;&#x443;
+              </button>
+            </form>
+          </div>
         </div>
         <div
           class="mono-box mb-4"

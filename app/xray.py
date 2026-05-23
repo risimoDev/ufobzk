@@ -42,6 +42,9 @@ REALITY_PUBLIC_KEY = os.getenv("REALITY_PUBLIC_KEY", "")
 REALITY_PRIVATE_KEY = os.getenv("REALITY_PRIVATE_KEY", "")
 REALITY_SHORT_ID = os.getenv("REALITY_SHORT_ID", "")
 
+# Адрес gRPC stats API Xray — в Docker xray-контейнер доступен по hostname "xray"
+XRAY_API_ADDR = os.getenv("XRAY_API_ADDR", "xray:10085")
+
 GB = 1_073_741_824
 
 
@@ -716,30 +719,59 @@ def get_subscription_json(keys: list[VPNKey], db: Session | None = None) -> dict
     return result
 
 
-def get_xray_stats(uuid: str) -> dict[str, int]:
-    """Получить статистику трафика из Xray API для клиента по UUID."""
+def get_all_xray_stats() -> dict[str, int]:
+    """Получить статистику трафика всех пользователей одним вызовом к Xray stats API.
+
+    Возвращает {uuid: total_bytes} — суммарный трафик (uplink + downlink)
+    по всем inbound тегам для каждого пользователя.
+
+    Xray выдаёт protobuf-text формат:
+        stat:  {
+          name:  "user>>>UUID@VLESS-WS>>>traffic>>>downlink"
+          value:  12345
+        }
+    UUID в поле email клиента (client.email = client.id = uuid).
+    """
+    import re as _re
     try:
-        # Используем xray api для получения статистики
         result = subprocess.run(
-            ["xray", "api", "statsquery", "--server=127.0.0.1:10085",
-             f"-pattern=user>>>{uuid}>>>"],
-            capture_output=True, text=True, timeout=5
+            ["xray", "api", "statsquery",
+             f"--server={XRAY_API_ADDR}",
+             "-pattern=user>>>"],
+            capture_output=True, text=True, timeout=10
         )
-        uplink = 0
-        downlink = 0
-        if result.returncode == 0:
-            for line in result.stdout.split("\n"):
-                if "uplink" in line.lower() and "value" in line.lower():
-                    try:
-                        uplink = int(line.split(":")[-1].strip())
-                    except ValueError:
-                        pass
-                if "downlink" in line.lower() and "value" in line.lower():
-                    try:
-                        downlink = int(line.split(":")[-1].strip())
-                    except ValueError:
-                        pass
-        return {"uplink": uplink, "downlink": downlink, "total": uplink + downlink}
+        if result.returncode != 0:
+            logger.debug("Xray statsquery вернул код %d: %s",
+                         result.returncode, result.stderr[:200])
+            return {}
+
+        totals: dict[str, int] = {}
+        current_name: str | None = None
+
+        for raw_line in result.stdout.splitlines():
+            line = raw_line.strip()
+
+            name_m = _re.search(r'name:\s+"([^"]+)"', line)
+            if name_m:
+                current_name = name_m.group(1)
+                continue
+
+            value_m = _re.search(r'value:\s+(\d+)', line)
+            if value_m and current_name:
+                value = int(value_m.group(1))
+                # Формат: "user>>>UUID@TAG>>>traffic>>>uplink|downlink"
+                parts = current_name.split(">>>")
+                if len(parts) >= 2:
+                    # Убираем @TAG-суффикс — берём только UUID
+                    uuid_part = parts[1].split("@")[0]
+                    totals[uuid_part] = totals.get(uuid_part, 0) + value
+                current_name = None
+
+        return totals
+
+    except FileNotFoundError:
+        logger.warning("Бинарник xray не найден — статистика недоступна")
+        return {}
     except Exception as e:
-        logger.debug("Не удалось получить статистику Xray: %s", e)
-        return {"uplink": 0, "downlink": 0, "total": 0}
+        logger.debug("Ошибка получения статистики Xray: %s", e)
+        return {}

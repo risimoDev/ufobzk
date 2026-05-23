@@ -1,6 +1,11 @@
+FROM teddysun/xray:latest AS xray-source
+
 FROM python:3.12-slim
 
 WORKDIR /project
+
+# Xray бинарник нужен для вызова stats API (xray api statsquery --server=xray:10085)
+COPY --from=xray-source /usr/bin/xray /usr/bin/xray
 
 # Зависимости отдельным слоем для кэша
 COPY requirements.txt .
