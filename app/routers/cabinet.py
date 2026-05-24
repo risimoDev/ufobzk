@@ -28,16 +28,37 @@ async def cabinet(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse(url="/login", status_code=303)
 
     webapp_url = os.getenv("WEBAPP_URL", "https://vpn.example.com")
+    now = datetime.now(timezone.utc)
     keys_data = []
     for key in user.vpn_keys:
         all_links = get_all_links(db, key)
         ws_links = [l for l in all_links if l["type"] == "vless-ws"]
+
+        # Expiry warning: ≤7 days remaining
+        days_left = None
+        warn_expiry = False
+        if key.expire_at:
+            expire_aware = key.expire_at if key.expire_at.tzinfo else key.expire_at.replace(tzinfo=timezone.utc)
+            days_left = max((expire_aware - now).days, 0)
+            warn_expiry = key.status == "active" and days_left <= 7
+
+        # Traffic warning: ≥80% used
+        traffic_pct = None
+        warn_traffic = False
+        if key.data_limit and key.data_limit > 0:
+            traffic_pct = round(key.data_used / key.data_limit * 100, 1)
+            warn_traffic = key.status == "active" and traffic_pct >= 80
+
         keys_data.append({
             "key": key,
             "links": ws_links,
             "all_links": all_links,
             "status": key.status,
             "key_sub_url": f"{webapp_url}/sub/key/{key.uuid}",
+            "days_left": days_left,
+            "warn_expiry": warn_expiry,
+            "traffic_pct": traffic_pct,
+            "warn_traffic": warn_traffic,
         })
 
     sub_token = user.sub_token or ""

@@ -3910,13 +3910,19 @@
       </div>
       <!-- TAB: ANALYTICS -->
       <div id="tab-analytics" class="tab-panel">
-        <div class="mb-6 flex items-center justify-between">
+        <div class="mb-6 flex items-center justify-between flex-wrap gap-3">
           <h2 class="text-lg font-semibold text-white">&#x1f4c8; Аналитика</h2>
-          <div class="flex gap-2">
+          <div class="flex gap-2 flex-wrap">
             <button onclick="loadAnalytics(7)" id="analytics-7d" class="btn-acid text-xs px-3 py-1.5">7 дней</button>
             <button onclick="loadAnalytics(14)" id="analytics-14d" class="btn-secondary text-xs px-3 py-1.5">14 дней</button>
             <button onclick="loadAnalytics(30)" id="analytics-30d" class="btn-secondary text-xs px-3 py-1.5">30 дней</button>
+            <button onclick="forceCollectTraffic()" id="analytics-collect-btn" class="btn-secondary text-xs px-3 py-1.5 border border-blue-500/40 text-blue-400 hover:bg-blue-500/10">&#x21bb; Собрать сейчас</button>
           </div>
+        </div>
+        <!-- Error / info banner -->
+        <div id="analytics-error" class="hidden mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm"></div>
+        <div id="analytics-nodata" class="hidden mb-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 text-sm">
+          &#x26a0; Данные трафика ещё не собраны. Нажмите «Собрать сейчас» или подождите 5 минут — фоновый сборщик запишет первые снимки.
         </div>
 
         <!-- KPI карточки -->
@@ -3996,7 +4002,7 @@
 
     </div>
   </body>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="/static/js/chart.umd.min.js"></script>
   <script>
     // ── Server token generator ──
     async function genServerToken() {
@@ -4015,33 +4021,49 @@
     var _analyticsDays = 7;
 
     function fmtBytes(b) {
-      if (b === 0) return '0 B';
+      if (!b || b === 0) return '0 B';
       var units = ['B','KB','MB','GB','TB'];
-      var i = Math.floor(Math.log(b) / Math.log(1024));
+      var i = Math.min(Math.floor(Math.log(Math.abs(b)) / Math.log(1024)), 4);
       return (b / Math.pow(1024, i)).toFixed(2) + ' ' + units[i];
+    }
+
+    function _analyticsSetError(msg) {
+      var el = document.getElementById('analytics-error');
+      if (!el) return;
+      if (msg) { el.textContent = '⚠ ' + msg; el.classList.remove('hidden'); }
+      else { el.classList.add('hidden'); el.textContent = ''; }
     }
 
     async function loadAnalytics(days) {
       _analyticsDays = days || _analyticsDays;
-      // Подсветить активную кнопку
+      _analyticsSetError('');
+      document.getElementById('analytics-nodata').classList.add('hidden');
+
       ['7','14','30'].forEach(function(d) {
         var btn = document.getElementById('analytics-' + d + 'd');
         if (btn) {
-          if (parseInt(d) === _analyticsDays) {
-            btn.className = 'btn-acid text-xs px-3 py-1.5';
-          } else {
-            btn.className = 'btn-secondary text-xs px-3 py-1.5';
-          }
+          btn.className = parseInt(d) === _analyticsDays
+            ? 'btn-acid text-xs px-3 py-1.5'
+            : 'btn-secondary text-xs px-3 py-1.5';
         }
       });
 
       try {
-        var [summary, traffic, hourly, topUsers] = await Promise.all([
-          fetch('/admin/api/analytics/summary').then(r => r.json()),
-          fetch('/admin/api/analytics/traffic?days=' + _analyticsDays).then(r => r.json()),
-          fetch('/admin/api/analytics/hourly?days=' + _analyticsDays).then(r => r.json()),
-          fetch('/admin/api/analytics/top-users?limit=15').then(r => r.json()),
+        var responses = await Promise.all([
+          fetch('/admin/api/analytics/summary'),
+          fetch('/admin/api/analytics/traffic?days=' + _analyticsDays),
+          fetch('/admin/api/analytics/hourly?days=' + _analyticsDays),
+          fetch('/admin/api/analytics/top-users?limit=15'),
         ]);
+
+        for (var ri = 0; ri < responses.length; ri++) {
+          if (!responses[ri].ok) {
+            var errText = await responses[ri].text();
+            throw new Error('API ' + responses[ri].url.split('/').pop() + ' → ' + responses[ri].status + ': ' + errText.slice(0, 120));
+          }
+        }
+
+        var [summary, traffic, hourly, topUsers] = await Promise.all(responses.map(function(r) { return r.json(); }));
 
         // KPI
         document.getElementById('kpi-users').textContent = summary.active_users + ' / ' + summary.total_users;
@@ -4053,74 +4075,80 @@
         document.getElementById('kpi-servers-ok').textContent = summary.servers_ok;
         document.getElementById('kpi-servers-err').textContent = summary.servers_error;
 
-        // График трафика по дням
-        var ctxDaily = document.getElementById('chart-traffic-daily').getContext('2d');
-        var dailyGB = traffic.data.map(function(b) { return +(b / 1073741824).toFixed(3); });
-        if (_analyticsChartDaily) _analyticsChartDaily.destroy();
-        _analyticsChartDaily = new Chart(ctxDaily, {
-          type: 'bar',
-          data: {
-            labels: traffic.labels,
-            datasets: [{
-              label: 'Трафик (GB)',
-              data: dailyGB,
-              backgroundColor: 'rgba(0,255,200,0.25)',
-              borderColor: '#00ffc8',
-              borderWidth: 1.5,
-              borderRadius: 4,
-            }]
-          },
-          options: {
-            responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-              x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
-              y: { ticks: { color: '#6b7280', font: { size: 11 }, callback: function(v) { return v + ' GB'; } }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true }
-            }
-          }
-        });
+        // «Нет данных» если снимков нет вообще
+        if ((summary.snapshot_count || 0) === 0 && summary.traffic_7d_bytes === 0) {
+          document.getElementById('analytics-nodata').classList.remove('hidden');
+        }
 
-        // График по часам
-        var ctxHourly = document.getElementById('chart-traffic-hourly').getContext('2d');
-        var hourlyGB = hourly.data.map(function(b) { return +(b / 1073741824).toFixed(3); });
-        if (_analyticsChartHourly) _analyticsChartHourly.destroy();
-        _analyticsChartHourly = new Chart(ctxHourly, {
-          type: 'bar',
-          data: {
-            labels: hourly.labels,
-            datasets: [{
-              label: 'Трафик (GB)',
-              data: hourlyGB,
-              backgroundColor: 'rgba(139,92,246,0.3)',
-              borderColor: '#8b5cf6',
-              borderWidth: 1.5,
-              borderRadius: 3,
-            }]
-          },
-          options: {
-            responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-              x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
-              y: { ticks: { color: '#6b7280', font: { size: 11 }, callback: function(v) { return v + ' GB'; } }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true }
+        // График трафика по дням
+        if (typeof Chart !== 'undefined') {
+          var ctxDaily = document.getElementById('chart-traffic-daily').getContext('2d');
+          var dailyGB = traffic.data.map(function(b) { return +(b / 1073741824).toFixed(3); });
+          if (_analyticsChartDaily) _analyticsChartDaily.destroy();
+          _analyticsChartDaily = new Chart(ctxDaily, {
+            type: 'bar',
+            data: {
+              labels: traffic.labels,
+              datasets: [{
+                label: 'Трафик (GB)',
+                data: dailyGB,
+                backgroundColor: 'rgba(0,255,200,0.25)',
+                borderColor: '#00ffc8',
+                borderWidth: 1.5,
+                borderRadius: 4,
+              }]
+            },
+            options: {
+              responsive: true, maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+                y: { ticks: { color: '#6b7280', font: { size: 11 }, callback: function(v) { return v + ' GB'; } }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true }
+              }
             }
-          }
-        });
+          });
+
+          var ctxHourly = document.getElementById('chart-traffic-hourly').getContext('2d');
+          var hourlyGB = hourly.data.map(function(b) { return +(b / 1073741824).toFixed(3); });
+          if (_analyticsChartHourly) _analyticsChartHourly.destroy();
+          _analyticsChartHourly = new Chart(ctxHourly, {
+            type: 'bar',
+            data: {
+              labels: hourly.labels,
+              datasets: [{
+                label: 'Трафик (GB)',
+                data: hourlyGB,
+                backgroundColor: 'rgba(139,92,246,0.3)',
+                borderColor: '#8b5cf6',
+                borderWidth: 1.5,
+                borderRadius: 3,
+              }]
+            },
+            options: {
+              responsive: true, maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+                y: { ticks: { color: '#6b7280', font: { size: 11 }, callback: function(v) { return v + ' GB'; } }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true }
+              }
+            }
+          });
+        } else {
+          _analyticsSetError('Chart.js не загружен — графики недоступны. Проверьте /static/js/chart.umd.min.js');
+        }
 
         // Топ пользователей
         var totalBytes = summary.traffic_total_bytes || 1;
         var tbody = document.getElementById('analytics-top-users');
-        if (topUsers.length === 0) {
+        if (!topUsers || topUsers.length === 0) {
           tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-500 py-4">Нет данных</td></tr>';
         } else {
           tbody.innerHTML = topUsers.map(function(u, i) {
             var pct = totalBytes > 0 ? (u.traffic_bytes / totalBytes * 100).toFixed(1) : '0.0';
-            var barW = Math.round(u.traffic_bytes / totalBytes * 100);
+            var barW = Math.min(Math.round(u.traffic_bytes / totalBytes * 100), 100);
             return '<tr>' +
               '<td class="text-gray-500">' + (i+1) + '</td>' +
-              '<td>' +
-                '<span class="font-medium text-white">' + (u.display_name || '—') + '</span>' +
-              '</td>' +
+              '<td><span class="font-medium text-white">' + (u.display_name || '—') + '</span></td>' +
               '<td class="text-right font-mono text-accent">' + fmtBytes(u.traffic_bytes) + '</td>' +
               '<td class="text-right text-gray-400">' + u.active_keys + ' / ' + u.keys_count + '</td>' +
               '<td class="text-center">' +
@@ -4139,6 +4167,31 @@
         }
       } catch(e) {
         console.error('Analytics error:', e);
+        _analyticsSetError(e.message || 'Ошибка загрузки аналитики');
+      }
+    }
+
+    async function forceCollectTraffic() {
+      var btn = document.getElementById('analytics-collect-btn');
+      if (btn) { btn.disabled = true; btn.textContent = '⏳ Сбор...'; }
+      _analyticsSetError('');
+      try {
+        var r = await fetch('/admin/api/analytics/force-collect', { method: 'POST' });
+        var data = await r.json();
+        if (r.ok) {
+          var msg = 'Собрано: ' + data.collected + ' ключей';
+          if (!data.stats_available) msg += ' (Xray stats API недоступен — нет данных)';
+          if (btn) { btn.textContent = '✓ ' + msg; }
+          setTimeout(function() {
+            if (btn) { btn.disabled = false; btn.textContent = '↻ Собрать сейчас'; }
+            loadAnalytics();
+          }, 1500);
+        } else {
+          throw new Error(data.detail || 'Ошибка ' + r.status);
+        }
+      } catch(e) {
+        _analyticsSetError('Ошибка сбора: ' + e.message);
+        if (btn) { btn.disabled = false; btn.textContent = '↻ Собрать сейчас'; }
       }
     }
   </script>

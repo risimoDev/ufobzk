@@ -364,7 +364,7 @@
       {% for kd in keys_data %}
       <div class="glass p-5">
         <div class="flex items-center justify-between mb-3">
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 flex-wrap">
             <span>&#x1f511;</span>
             <span class="text-sm font-semibold" style="color: #e5e7eb"
               >{{ kd.key.name }}</span
@@ -381,6 +381,16 @@
             {% elif kd.status == 'disabled' %}<span class="status-disabled"
               >&#x041e;&#x0442;&#x043a;&#x043b;&#x044e;&#x0447;&#x0451;&#x043d;</span
             >
+            {% endif %}
+            {% if kd.warn_expiry %}
+            <span style="background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.25);border-radius:999px;padding:.12rem .55rem;font-size:.68rem;font-weight:500;">
+              &#x26a0; {{ kd.days_left }} &#x434;&#x43d;.
+            </span>
+            {% endif %}
+            {% if kd.warn_traffic %}
+            <span style="background:rgba(249,115,22,0.1);color:#fb923c;border:1px solid rgba(249,115,22,0.25);border-radius:999px;padding:.12rem .55rem;font-size:.68rem;font-weight:500;">
+              {{ kd.traffic_pct }}%
+            </span>
             {% endif %}
           </div>
           <div class="flex gap-3 text-xs" style="color: #4b5563">

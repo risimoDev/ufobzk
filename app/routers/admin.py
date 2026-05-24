@@ -1636,6 +1636,8 @@ async def analytics_summary(
         sa_func.coalesce(sa_func.sum(TrafficSnapshot.bytes_delta), 0)
     ).filter(TrafficSnapshot.recorded_at >= week_ago).scalar() or 0
 
+    snapshot_count = db.query(sa_func.count(TrafficSnapshot.id)).scalar() or 0
+
     servers_ok = sum(1 for s in all_servers if s.is_active and s.last_sync_status == "ok")
     servers_err = sum(1 for s in all_servers if s.is_active and s.last_sync_status == "error")
 
@@ -1648,6 +1650,7 @@ async def analytics_summary(
         "limited_keys": len(limited_keys),
         "traffic_total_bytes": traffic_total,
         "traffic_7d_bytes": traffic_7d,
+        "snapshot_count": snapshot_count,
         "servers_total": len(all_servers),
         "servers_ok": servers_ok,
         "servers_error": servers_err,
@@ -1759,4 +1762,39 @@ async def admin_generate_token(admin: User = Depends(require_admin)):
     """Генерирует безопасный случайный токен для нового remote-сервера."""
     import secrets as _secrets
     return JSONResponse({"token": _secrets.token_hex(32)})
+
+
+@router.post("/admin/api/analytics/force-collect")
+async def analytics_force_collect(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Немедленно собирает статистику трафика из Xray API (без ожидания 5 минут)."""
+    from app.xray import get_all_xray_stats
+
+    all_stats = await asyncio.to_thread(get_all_xray_stats)
+    stats_available = bool(all_stats)
+
+    collected = 0
+    if all_stats:
+        now = datetime.now(timezone.utc)
+        keys = db.query(VPNKey).filter(VPNKey.is_active == True).all()  # noqa: E712
+        for key in keys:
+            if key.protocol != "vless":
+                continue
+            new_total = all_stats.get(key.uuid, 0)
+            if new_total > (key.data_used or 0):
+                delta = new_total - (key.data_used or 0)
+                key.data_used = new_total
+                db.add(TrafficSnapshot(
+                    vpn_key_id=key.id,
+                    bytes_delta=delta,
+                    total_bytes=new_total,
+                    recorded_at=now,
+                ))
+                collected += 1
+        if collected:
+            db.commit()
+
+    return JSONResponse({"ok": True, "collected": collected, "stats_available": stats_available})
 
