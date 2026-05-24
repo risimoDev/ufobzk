@@ -37,7 +37,7 @@ async def periodic_traffic_collector() -> None:
             try:
                 keys = db.query(VPNKey).filter(VPNKey.is_active == True).all()  # noqa: E712
                 updated = 0
-                now = datetime.now(timezone.utc)
+                now = datetime.utcnow()  # naive UTC — совместимо с SQLite DateTime
                 for key in keys:
                     if key.protocol != "vless":
                         continue

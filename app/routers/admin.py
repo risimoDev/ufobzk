@@ -384,12 +384,64 @@ async def admin_edit_key(
         key.expire_at = datetime.now(timezone.utc) + timedelta(days=days) if days > 0 else None
     if "reset_traffic" in body and body["reset_traffic"]:
         key.data_used = 0
+        # Сбрасываем счётчик в Xray чтобы следующий цикл сбора не записал ложную дельту
+        from app.xray import reset_xray_user_stats as _reset_xray
+        background_tasks.add_task(_reset_xray, key.uuid)
+
+    if "notes" in body:
+        key.notes = str(body["notes"]).strip()[:2000] if body["notes"] else None
+    if "speed_limit_kbps" in body:
+        val = body["speed_limit_kbps"]
+        key.speed_limit_kbps = int(val) if val and int(val) > 0 else None
 
     db.commit()
 
     background_tasks.add_task(_bg_sync_and_reload)
     _log_action(db, admin.id, "edit_key", str(key.uuid), str(body))
     return JSONResponse({"ok": True})
+
+
+# ── Быстрое продление ключа ──
+
+
+@router.post("/admin/keys/{key_id}/extend")
+async def admin_extend_key(
+    key_id: int,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Продлить ключ на N дней от текущей даты истечения (или от сейчас, если не задана)."""
+    key = db.query(VPNKey).filter(VPNKey.id == key_id).first()
+    if not key:
+        raise HTTPException(status_code=404, detail="Ключ не найден")
+
+    body = await request.json()
+    days = int(body.get("days", 30))
+    if days <= 0 or days > 3650:
+        raise HTTPException(status_code=422, detail="days должен быть от 1 до 3650")
+
+    now = datetime.now(timezone.utc)
+    # Продлеваем от текущей даты истечения если она в будущем, иначе от сейчас
+    base = key.expire_at
+    if base:
+        # expire_at хранится как naive UTC
+        base_aware = base if base.tzinfo else base.replace(tzinfo=timezone.utc)
+        base = base_aware if base_aware > now else now
+    else:
+        base = now
+
+    key.expire_at = base + timedelta(days=days)
+    # Если ключ был отключён из-за истечения — реактивируем
+    if not key.is_active and key.status in ("expired",):
+        key.is_active = True
+
+    db.commit()
+    background_tasks.add_task(_bg_sync_and_reload)
+    _log_action(db, admin.id, "extend_key", str(key.uuid), f"+{days}d → {key.expire_at.date()}")
+
+    return JSONResponse({"ok": True, "expire_at": key.expire_at.isoformat()})
 
 
 # ── Удаление пользователя ──
@@ -612,6 +664,8 @@ async def admin_list_user_keys(
         "data_limit": k.data_limit,
         "expire_at": k.expire_at.isoformat() if k.expire_at else None,
         "status": k.status,
+        "notes": k.notes,
+        "speed_limit_kbps": k.speed_limit_kbps,
     } for k in target.vpn_keys]
     return JSONResponse({"keys": keys})
 
@@ -1631,12 +1685,17 @@ async def analytics_summary(
 
     traffic_total = sum(k.data_used or 0 for k in all_keys)
 
-    # Трафик за последние 7 дней из снимков
-    traffic_7d = db.query(
-        sa_func.coalesce(sa_func.sum(TrafficSnapshot.bytes_delta), 0)
-    ).filter(TrafficSnapshot.recorded_at >= week_ago).scalar() or 0
-
-    snapshot_count = db.query(sa_func.count(TrafficSnapshot.id)).scalar() or 0
+    # Трафик за последние 7 дней из снимков (таблица может отсутствовать на старых деплоях)
+    traffic_7d = 0
+    snapshot_count = 0
+    try:
+        week_ago_naive = (now - timedelta(days=7)).replace(tzinfo=None)
+        traffic_7d = db.query(
+            sa_func.coalesce(sa_func.sum(TrafficSnapshot.bytes_delta), 0)
+        ).filter(TrafficSnapshot.recorded_at >= week_ago_naive).scalar() or 0
+        snapshot_count = db.query(sa_func.count(TrafficSnapshot.id)).scalar() or 0
+    except Exception as _e:
+        logger.warning("analytics_summary: traffic_snapshots недоступна: %s", _e)
 
     servers_ok = sum(1 for s in all_servers if s.is_active and s.last_sync_status == "ok")
     servers_err = sum(1 for s in all_servers if s.is_active and s.last_sync_status == "error")
@@ -1676,20 +1735,25 @@ async def analytics_traffic(
     result_labels = []
     result_data = []
 
-    for i in range(days - 1, -1, -1):
-        day_start = (now - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
-        day_end = day_start + timedelta(days=1)
-        label = day_start.strftime("%d.%m")
+    try:
+        for i in range(days - 1, -1, -1):
+            day_start = (now - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+            day_end = day_start + timedelta(days=1)
+            label = day_start.strftime("%d.%m")
 
-        total = db.query(
-            sa_func.coalesce(sa_func.sum(TrafficSnapshot.bytes_delta), 0)
-        ).filter(
-            TrafficSnapshot.recorded_at >= day_start,
-            TrafficSnapshot.recorded_at < day_end,
-        ).scalar() or 0
+            total = db.query(
+                sa_func.coalesce(sa_func.sum(TrafficSnapshot.bytes_delta), 0)
+            ).filter(
+                TrafficSnapshot.recorded_at >= day_start,
+                TrafficSnapshot.recorded_at < day_end,
+            ).scalar() or 0
 
-        result_labels.append(label)
-        result_data.append(total)
+            result_labels.append(label)
+            result_data.append(total)
+    except Exception as _e:
+        logger.warning("analytics_traffic: %s", _e)
+        result_labels = [(now - timedelta(days=i)).strftime("%d.%m") for i in range(days - 1, -1, -1)]
+        result_data = [0] * days
 
     return JSONResponse({"labels": result_labels, "data": result_data})
 
@@ -1739,17 +1803,20 @@ async def analytics_hourly(
     from datetime import timedelta
 
     days = max(1, min(days, 30))
-    since = datetime.now(timezone.utc) - timedelta(days=days)
-
-    snapshots = db.query(
-        TrafficSnapshot.recorded_at,
-        TrafficSnapshot.bytes_delta,
-    ).filter(TrafficSnapshot.recorded_at >= since).all()
+    since_naive = (datetime.now(timezone.utc) - timedelta(days=days)).replace(tzinfo=None)
 
     hourly: dict[int, int] = {h: 0 for h in range(24)}
-    for snap in snapshots:
-        hour = snap.recorded_at.hour
-        hourly[hour] = hourly.get(hour, 0) + (snap.bytes_delta or 0)
+    try:
+        snapshots = db.query(
+            TrafficSnapshot.recorded_at,
+            TrafficSnapshot.bytes_delta,
+        ).filter(TrafficSnapshot.recorded_at >= since_naive).all()
+
+        for snap in snapshots:
+            hour = snap.recorded_at.hour
+            hourly[hour] = hourly.get(hour, 0) + (snap.bytes_delta or 0)
+    except Exception as _e:
+        logger.warning("analytics_hourly: %s", _e)
 
     return JSONResponse({
         "labels": [f"{h:02d}:00" for h in range(24)],
@@ -1777,7 +1844,7 @@ async def analytics_force_collect(
 
     collected = 0
     if all_stats:
-        now = datetime.now(timezone.utc)
+        now_naive = datetime.utcnow()  # naive UTC для SQLite
         keys = db.query(VPNKey).filter(VPNKey.is_active == True).all()  # noqa: E712
         for key in keys:
             if key.protocol != "vless":
@@ -1790,11 +1857,76 @@ async def analytics_force_collect(
                     vpn_key_id=key.id,
                     bytes_delta=delta,
                     total_bytes=new_total,
-                    recorded_at=now,
+                    recorded_at=now_naive,
                 ))
                 collected += 1
         if collected:
             db.commit()
 
     return JSONResponse({"ok": True, "collected": collected, "stats_available": stats_available})
+
+
+# ── Prometheus /metrics ──
+
+METRICS_TOKEN = os.getenv("METRICS_TOKEN", "")
+
+
+@router.get("/metrics")
+async def prometheus_metrics(request: Request, db: Session = Depends(get_db)):
+    """Prometheus-совместимый эндпоинт метрик.
+
+    Защищён Bearer-токеном из METRICS_TOKEN. Если токен не задан — эндпоинт закрыт.
+    """
+    from fastapi.responses import PlainTextResponse
+
+    if not METRICS_TOKEN:
+        raise HTTPException(status_code=404)
+
+    auth = request.headers.get("Authorization", "")
+    token = auth.removeprefix("Bearer ").strip()
+    if token != METRICS_TOKEN:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    all_users = db.query(User).all()
+    all_keys = db.query(VPNKey).all()
+
+    active_users = sum(1 for u in all_users if u.is_active)
+    active_keys = sum(1 for k in all_keys if k.status == "active")
+    expired_keys = sum(1 for k in all_keys if k.status == "expired")
+    disabled_keys = sum(1 for k in all_keys if k.status == "disabled")
+    limited_keys = sum(1 for k in all_keys if k.status == "limited")
+    traffic_total = sum(k.data_used or 0 for k in all_keys)
+
+    all_servers = db.query(Server).all()
+    active_servers = sum(1 for s in all_servers if s.is_active)
+    healthy_servers = sum(1 for s in all_servers if s.is_active and s.last_sync_status == "ok")
+
+    lines = [
+        "# HELP vpn_active_users Number of active users",
+        "# TYPE vpn_active_users gauge",
+        f"vpn_active_users {active_users}",
+        "# HELP vpn_active_keys Number of active VPN keys",
+        "# TYPE vpn_active_keys gauge",
+        f"vpn_active_keys {active_keys}",
+        "# HELP vpn_expired_keys Number of expired VPN keys",
+        "# TYPE vpn_expired_keys gauge",
+        f"vpn_expired_keys {expired_keys}",
+        "# HELP vpn_disabled_keys Number of manually disabled VPN keys",
+        "# TYPE vpn_disabled_keys gauge",
+        f"vpn_disabled_keys {disabled_keys}",
+        "# HELP vpn_limited_keys Number of traffic-limited VPN keys",
+        "# TYPE vpn_limited_keys gauge",
+        f"vpn_limited_keys {limited_keys}",
+        "# HELP vpn_traffic_total_bytes Total traffic used across all keys (bytes)",
+        "# TYPE vpn_traffic_total_bytes counter",
+        f"vpn_traffic_total_bytes {traffic_total}",
+        "# HELP vpn_remote_servers_total Total configured remote servers",
+        "# TYPE vpn_remote_servers_total gauge",
+        f"vpn_remote_servers_total {active_servers}",
+        "# HELP vpn_remote_servers_healthy Remote servers with last_sync_status=ok",
+        "# TYPE vpn_remote_servers_healthy gauge",
+        f"vpn_remote_servers_healthy {healthy_servers}",
+    ]
+
+    return PlainTextResponse("\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")
 

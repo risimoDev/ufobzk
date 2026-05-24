@@ -61,6 +61,19 @@ def build_xray_config(db: Session) -> dict[str, Any]:
     # Фильтруем просроченные и перелимитные
     valid_keys = [k for k in active_keys if k.status == "active"]
 
+    # Строим маппинг speed_limit_kbps → policy level
+    # Level 0 = без ограничений; 1, 2, ... = конкретные лимиты (kbps)
+    speed_limits: list[int] = sorted({
+        k.speed_limit_kbps for k in valid_keys
+        if k.speed_limit_kbps and k.speed_limit_kbps > 0
+    })
+    speed_level_map: dict[int, int] = {kbps: idx + 1 for idx, kbps in enumerate(speed_limits)}
+
+    def _level(key: VPNKey) -> int:
+        if key.speed_limit_kbps and key.speed_limit_kbps > 0:
+            return speed_level_map.get(key.speed_limit_kbps, 0)
+        return 0
+
     # Клиенты для VLESS inbound
     vless_clients = []
     for key in valid_keys:
@@ -69,7 +82,7 @@ def build_xray_config(db: Session) -> dict[str, Any]:
                 "id": key.uuid,
                 "email": key.uuid,
                 "flow": "",
-                "level": 0
+                "level": _level(key)
             })
 
     # Клиенты для VLESS REALITY
@@ -80,8 +93,32 @@ def build_xray_config(db: Session) -> dict[str, Any]:
                 "id": key.uuid,
                 "email": key.uuid,
                 "flow": "xtls-rprx-vision",
-                "level": 0
+                "level": _level(key)
             })
+
+    # Строим policy levels: 0 = без ограничений, 1+ = ограниченные
+    policy_levels: dict[str, Any] = {
+        "0": {
+            "statsUserUplink": True,
+            "statsUserDownlink": True,
+            "handshake": 8,
+            "connIdle": 300,
+            "uplinkOnly": 10,
+            "downlinkOnly": 15,
+        }
+    }
+    for kbps, lvl in speed_level_map.items():
+        # bufferSize в KB используется как маркер; реальное ограничение
+        # скорости требует OS-level tc или внешнего rate limiter.
+        policy_levels[str(lvl)] = {
+            "statsUserUplink": True,
+            "statsUserDownlink": True,
+            "handshake": 8,
+            "connIdle": 300,
+            "uplinkOnly": 10,
+            "downlinkOnly": 15,
+            "bufferSize": max(kbps // 8, 4),  # KB/s hint (не enforcement)
+        }
 
     config: dict[str, Any] = {
         "log": {
@@ -95,16 +132,7 @@ def build_xray_config(db: Session) -> dict[str, Any]:
         },
         "stats": {},
         "policy": {
-            "levels": {
-                "0": {
-                    "statsUserUplink": True,
-                    "statsUserDownlink": True,
-                    "handshake": 8,
-                    "connIdle": 300,
-                    "uplinkOnly": 10,
-                    "downlinkOnly": 15
-                }
-            },
+            "levels": policy_levels,
             "system": {
                 "statsInboundUplink": True,
                 "statsInboundDownlink": True,
@@ -775,3 +803,25 @@ def get_all_xray_stats() -> dict[str, int]:
     except Exception as e:
         logger.debug("Ошибка получения статистики Xray: %s", e)
         return {}
+
+
+def reset_xray_user_stats(uuid: str) -> bool:
+    """Сбросить счётчик трафика Xray для конкретного пользователя.
+
+    Вызывает statsquery с флагом -reset для всех счётчиков данного UUID.
+    Возвращает True если сброс прошёл успешно.
+    """
+    try:
+        result = subprocess.run(
+            ["xray", "api", "statsquery",
+             f"--server={XRAY_API_ADDR}",
+             f"-pattern=user>>>{uuid}",
+             "-reset"],
+            capture_output=True, text=True, timeout=10
+        )
+        return result.returncode == 0
+    except FileNotFoundError:
+        return False
+    except Exception as e:
+        logger.debug("Ошибка сброса статистики Xray для %s: %s", uuid, e)
+        return False

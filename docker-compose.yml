@@ -9,6 +9,11 @@ services:
     image: nginx:1.27-alpine
     container_name: ufobzk-nginx
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "80:80"
       - "443:443"
@@ -43,6 +48,11 @@ services:
   certbot:
     image: certbot/certbot:latest
     container_name: ufobzk-certbot
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
     volumes:
       - certbot-webroot:/var/www/certbot
       - certbot-certs:/etc/letsencrypt
@@ -58,6 +68,11 @@ services:
     image: teddysun/xray:latest
     container_name: ufobzk-xray
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       # REALITY порт — прямое подключение без CDN
       - "${REALITY_PORT:-2053}:443"
@@ -85,6 +100,11 @@ services:
       dockerfile: Dockerfile
     container_name: ufobzk-app
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
     expose:
       - "8000"
     env_file:

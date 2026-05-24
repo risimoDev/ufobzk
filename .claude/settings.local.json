@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(python -c \"import ast; ast.parse\\(open\\('app/routers/admin.py', encoding='utf-8'\\).read\\(\\)\\); print\\('admin.py OK'\\)\")",
-      "Bash(python -c \"import ast; ast.parse\\(open\\('app/routers/cabinet.py', encoding='utf-8'\\).read\\(\\)\\); print\\('cabinet.py OK'\\)\")"
+      "Bash(python -c \"import ast; ast.parse\\(open\\('app/routers/cabinet.py', encoding='utf-8'\\).read\\(\\)\\); print\\('cabinet.py OK'\\)\")",
+      "Bash(python -c ' *)"
     ]
   }
 }

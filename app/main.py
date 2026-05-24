@@ -34,6 +34,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     os.makedirs("data", exist_ok=True)
     from app.env_check import check_env_on_startup
     check_env_on_startup()
+    # Бэкап БД перед миграцией — защита от повреждения при неудачной миграции
+    _db_path = os.path.join("data", "vpnbzk.db")
+    if os.path.exists(_db_path):
+        import shutil as _shutil
+        from datetime import datetime as _dt
+        _backup_name = f"vpnbzk.pre-migration.{_dt.utcnow().strftime('%Y%m%d_%H%M%S')}.db"
+        _backup_path = os.path.join("data", _backup_name)
+        try:
+            _shutil.copy2(_db_path, _backup_path)
+            logger.info("DB backup before migration: %s", _backup_path)
+            # Удаляем старые pre-migration бэкапы, оставляем 3 последних
+            import glob as _glob
+            _pre_backups = sorted(_glob.glob(os.path.join("data", "vpnbzk.pre-migration.*.db")))
+            for _old in _pre_backups[:-3]:
+                try:
+                    os.remove(_old)
+                except Exception:
+                    pass
+        except Exception as _be:
+            logger.warning("Pre-migration backup failed: %s", _be)
+
     # Ensure DB schema is current before querying
     try:
         from alembic.config import Config

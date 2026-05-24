@@ -142,6 +142,23 @@ async def logout():
     return response
 
 
+def _sub_userinfo(keys) -> str:
+    """Строка Subscription-Userinfo с upload/download/total/expire.
+
+    expire — ближайший срок истечения среди ключей (UNIX timestamp).
+    Hiddify, Clash, Nekoray отображают эти данные пользователю.
+    """
+    import calendar
+    download = sum(k.data_used or 0 for k in keys)
+    total = sum(k.data_limit or 0 for k in keys)
+    expire_times = [
+        calendar.timegm(k.expire_at.timetuple())
+        for k in keys if k.expire_at
+    ]
+    expire_str = f"; expire={min(expire_times)}" if expire_times else ""
+    return f"upload=0; download={download}; total={total}{expire_str}"
+
+
 @router.get("/sub/{token}")
 async def subscription(token: str, request: Request, db: Session = Depends(get_db)):
     """Эндпоинт подписки — возвращает base64 список ссылок (все серверы)."""
@@ -155,8 +172,9 @@ async def subscription(token: str, request: Request, db: Session = Depends(get_d
     return PlainTextResponse(content, headers={
         "Content-Type": "text/plain; charset=utf-8",
         "Content-Disposition": "inline",
+        "Profile-Title": "VPNBZK",
         "Profile-Update-Interval": "12",
-        "Subscription-Userinfo": f"upload=0; download={sum(k.data_used for k in keys)}; total={sum(k.data_limit or 0 for k in keys)}",
+        "Subscription-Userinfo": _sub_userinfo(keys),
     })
 
 
@@ -187,8 +205,9 @@ async def subscription_key(key_uuid: str, request: Request, db: Session = Depend
     return PlainTextResponse(content, headers={
         "Content-Type": "text/plain; charset=utf-8",
         "Content-Disposition": "inline",
+        "Profile-Title": "VPNBZK",
         "Profile-Update-Interval": "12",
-        "Subscription-Userinfo": f"upload=0; download={key.data_used}; total={key.data_limit or 0}",
+        "Subscription-Userinfo": _sub_userinfo([key]),
     })
 
 

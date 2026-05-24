@@ -2343,6 +2343,8 @@
           // Inline edit panel
           var expDays = k.expire_at ? Math.max(0, Math.ceil((new Date(k.expire_at) - new Date()) / 86400000)) : '';
           var limGb = k.data_limit ? (k.data_limit / 1073741824).toFixed(1) : 0;
+          var speedKbps = k.speed_limit_kbps || '';
+          var notesVal = escapeHtml(k.notes || '');
           html += '<div id="edit-panel-' + k.id + '" class="mt-2 pt-3 border-t border-white/5 hidden">' +
             '<div class="grid grid-cols-3 gap-2 mb-2">' +
             '<div><label class="text-xs text-gray-600 block mb-1">Имя ключа</label>' +
@@ -2352,8 +2354,19 @@
             '<div><label class="text-xs text-gray-600 block mb-1">Дней с сейчас (0=∞)</label>' +
             '<input type="number" id="eke-' + k.id + '" placeholder="' + expDays + '" min="0" class="input-field" style="padding:.3rem .5rem;font-size:.75rem" /></div>' +
             '</div>' +
+            '<div class="grid grid-cols-2 gap-2 mb-2">' +
+            '<div><label class="text-xs text-gray-600 block mb-1">Скорость кбит/с (0=∞)</label>' +
+            '<input type="number" id="eks-' + k.id + '" value="' + speedKbps + '" min="0" step="100" class="input-field" style="padding:.3rem .5rem;font-size:.75rem" placeholder="без ограничений" /></div>' +
+            '<div><label class="text-xs text-gray-600 block mb-1">Заметки</label>' +
+            '<input type="text" id="ekno-' + k.id + '" value="' + notesVal + '" class="input-field" style="padding:.3rem .5rem;font-size:.75rem" placeholder="Для внутреннего использования" /></div>' +
+            '</div>' +
+            '<div class="flex gap-2 mb-2">' +
+            '<button onclick="extendKey(' + k.id + ', 30)" class="btn-secondary text-xs flex-1">+30 дней</button>' +
+            '<button onclick="extendKey(' + k.id + ', 90)" class="btn-secondary text-xs flex-1">+90 дней</button>' +
+            '<button onclick="extendKey(' + k.id + ', 365)" class="btn-secondary text-xs flex-1">+1 год</button>' +
+            '</div>' +
             '<div class="flex gap-2">' +
-            '<button onclick="saveKeyEdit(' + k.id + ')" class="btn-primary text-xs flex-1">✅ Сохранить</button>' +
+            '<button onclick="saveKeyEdit(' + k.id + ')" class="btn-primary text-xs flex-1">Сохранить</button>' +
             '<button onclick="toggleKeyEdit(' + k.id + ')" class="btn-secondary text-xs">Отмена</button>' +
             '</div></div>';
 
@@ -2799,12 +2812,19 @@
         var kname = document.getElementById('ekn-' + keyId);
         var klimit = document.getElementById('ekl-' + keyId);
         var kexpire = document.getElementById('eke-' + keyId);
+        var kspeed = document.getElementById('eks-' + keyId);
+        var knotes = document.getElementById('ekno-' + keyId);
         var body = {};
         if (kname) body.name = kname.value.trim() || undefined;
         var limitV = klimit ? klimit.value.trim() : '';
         body.data_limit_gb = limitV !== '' ? (parseFloat(limitV) || 0) : null;
         var expireV = kexpire ? kexpire.value.trim() : '';
         body.expire_days = expireV !== '' ? (parseInt(expireV) || 0) : null;
+        if (kspeed) {
+          var sv = parseInt(kspeed.value.trim()) || 0;
+          body.speed_limit_kbps = sv > 0 ? sv : null;
+        }
+        if (knotes) body.notes = knotes.value.trim() || null;
         try {
           var resp = await fetch('/admin/keys/' + keyId, {
             method: 'PUT',
@@ -2814,6 +2834,22 @@
           var data = await resp.json();
           if (data.ok) { showToast('Ключ обновлён', 'success'); reloadCurrentUserKeys(); }
           else { showToast(data.detail || 'Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
+      }
+
+      async function extendKey(keyId, days) {
+        try {
+          var resp = await fetch('/admin/keys/' + keyId + '/extend', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ days: days })
+          });
+          var data = await resp.json();
+          if (data.ok) {
+            var dateStr = data.expire_at ? new Date(data.expire_at).toLocaleDateString('ru') : '?';
+            showToast('Продлён до ' + dateStr, 'success');
+            reloadCurrentUserKeys();
+          } else { showToast(data.detail || 'Ошибка', 'error'); }
         } catch(e) { showToast('Ошибка сети', 'error'); }
       }
 

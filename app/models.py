@@ -153,6 +153,8 @@ class VPNKey(Base):
     data_limit = Column(BigInteger, nullable=True)
     data_used = Column(BigInteger, default=0)
     expire_at = Column(DateTime, nullable=True)
+    notes = Column(Text, nullable=True)
+    speed_limit_kbps = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="vpn_keys")
