@@ -362,22 +362,65 @@ def reload_xray() -> bool:
     """Перезагрузить Xray.
 
     Порядок попыток:
-    1. docker restart (production — xray в отдельном контейнере)
-    2. systemctl restart xray (bare metal)
-    3. killall -HUP xray (bare metal без systemd)
+    1. Docker socket API: SIGHUP — мгновенный reload конфига без обрыва соединений
+    2. Docker socket API: полный restart — надёжный fallback
+    3. docker CLI restart — если CLI установлен в контейнере
+    4. systemctl restart xray — bare metal
+    5. killall -HUP xray — bare metal без systemd
     """
+    import http.client as _http
+    import socket as _sock
+    import urllib.parse as _urlparse
+
     docker_sock = "/var/run/docker.sock"
     container_name = os.getenv("XRAY_CONTAINER_NAME", "ufobzk-xray")
 
-    # ── Попытка 1: docker CLI (есть сокет → контейнер запущен в Docker) ──
     if os.path.exists(docker_sock):
+        enc_name = _urlparse.quote(container_name, safe="")
+
+        # Создаём соединение через Unix-сокет без docker CLI
+        class _UnixConn(_http.HTTPConnection):
+            def connect(self):
+                self.sock = _sock.socket(_sock.AF_UNIX, _sock.SOCK_STREAM)
+                self.sock.settimeout(10)
+                self.sock.connect(docker_sock)
+
+        # ── Попытка 1: SIGHUP → Xray перечитывает config.json без обрыва соединений ──
+        try:
+            conn = _UnixConn("localhost")
+            conn.request("POST", f"/containers/{enc_name}/kill?signal=SIGHUP")
+            resp = conn.getresponse()
+            resp.read()
+            conn.close()
+            if resp.status == 204:
+                logger.info("Xray перечитал конфиг через Docker socket SIGHUP")
+                return True
+            logger.warning("Docker socket SIGHUP: статус %d", resp.status)
+        except Exception as e:
+            logger.debug("Docker socket SIGHUP не сработал: %s", e)
+
+        # ── Попытка 2: полный restart через Docker socket API ──
+        try:
+            conn = _UnixConn("localhost")
+            conn.request("POST", f"/containers/{enc_name}/restart?t=5")
+            resp = conn.getresponse()
+            resp.read()
+            conn.close()
+            if resp.status == 204:
+                logger.info("Xray перезагружен через Docker socket restart")
+                return True
+            logger.warning("Docker socket restart: статус %d", resp.status)
+        except Exception as e:
+            logger.debug("Docker socket restart не сработал: %s", e)
+
+        # ── Попытка 3: docker CLI (если установлен в контейнере) ──
         try:
             result = subprocess.run(
                 ["docker", "restart", "-t", "5", container_name],
                 capture_output=True, text=True, timeout=30
             )
             if result.returncode == 0:
-                logger.info("Xray перезагружен через docker restart")
+                logger.info("Xray перезагружен через docker CLI")
                 return True
             logger.warning("docker restart вернул код %s: %s", result.returncode, result.stderr.strip())
         except FileNotFoundError:
@@ -385,7 +428,7 @@ def reload_xray() -> bool:
         except Exception as e:
             logger.warning("Не удалось перезагрузить через docker restart: %s", e)
 
-    # ── Попытка 2: systemctl (bare metal) ──
+    # ── Попытка 4: systemctl (bare metal) ──
     try:
         result = subprocess.run(
             ["systemctl", "restart", "xray"],
@@ -399,7 +442,7 @@ def reload_xray() -> bool:
     except Exception as e:
         logger.debug("systemctl недоступен: %s", e)
 
-    # ── Попытка 3: killall -HUP (bare metal без systemd) ──
+    # ── Попытка 5: killall -HUP (bare metal без systemd) ──
     try:
         subprocess.run(["killall", "-HUP", "xray"], capture_output=True, timeout=5)
         logger.info("Xray получил HUP-сигнал")
