@@ -8,7 +8,7 @@ from aiogram import Bot, Dispatcher, F, Router, types
 from aiogram.filters import CommandStart
 
 from app.auth import generate_code, mark_invite_used, use_invite_key
-from app.models import SUPERADMIN_TELEGRAM_ID, SessionLocal, User, VPNKey
+from app.models import SUPERADMIN_TELEGRAM_ID, SessionLocal, User, VPNKey, _gen_uuid
 from app.xray import generate_uuid, sync_and_reload
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
@@ -69,6 +69,7 @@ async def cmd_start_with_key(message: types.Message) -> None:
             display_name=message.from_user.full_name,
             is_admin=is_admin,
             is_active=True,
+            sub_token=_gen_uuid(),
         )
         db.add(new_user)
         db.flush()

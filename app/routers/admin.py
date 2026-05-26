@@ -43,12 +43,14 @@ def _log_action(db: Session, admin_id: int, action: str, target: str = "", detai
 
 def _bg_sync_and_reload() -> None:
     """Фоновая синхронизация Xray — запускается после ответа клиенту."""
+    from app.models import SessionLocal
+    db = SessionLocal()
     try:
-        from app.dependencies import get_db as _get_db
-        db = next(_get_db())
         sync_and_reload(db)
     except Exception as e:
         logger.error("Ошибка фоновой синхронизации Xray: %s", e)
+    finally:
+        db.close()
 
 
 # ── Dashboard ──
@@ -904,6 +906,7 @@ async def admin_quick_month_payment(
 async def admin_toggle_free(
     user_id: int,
     request: Request,
+    background_tasks: BackgroundTasks,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -928,6 +931,7 @@ async def admin_toggle_free(
             key.is_active = True
 
     db.commit()
+    background_tasks.add_task(_bg_sync_and_reload)
     action = "free_on" if is_free else "free_off"
     _log_action(db, admin.id, action, str(user_id), reason or "")
     return JSONResponse({"ok": True, "is_free": is_free})
@@ -1173,7 +1177,7 @@ async def admin_edit_server(
 @router.post("/admin/api/servers/{server_id}/delete")
 async def admin_delete_server(
     server_id: int,
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     """Удалить сервер (не удаляя ключи пользователей, т.к. они могут быть перенаправлены)."""
@@ -1183,7 +1187,7 @@ async def admin_delete_server(
 
     db.delete(server)
     db.commit()
-    _log_action(db, None, "delete_server", str(server_id), server.name)
+    _log_action(db, admin.id, "delete_server", str(server_id), server.name)
     return JSONResponse({"ok": True})
 
 
@@ -1389,7 +1393,7 @@ async def admin_update_guide(
 @router.post("/admin/api/guides/{guide_id}/delete")
 async def admin_delete_guide(
     guide_id: int,
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     """Удалить гайд."""
@@ -1398,7 +1402,7 @@ async def admin_delete_guide(
         raise HTTPException(status_code=404, detail="Гайд не найден")
     db.delete(guide)
     db.commit()
-    _log_action(db, None, "delete_guide", str(guide_id), guide.slug)
+    _log_action(db, admin.id, "delete_guide", str(guide_id), guide.slug)
     return JSONResponse({"ok": True})
 
 

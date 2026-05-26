@@ -163,7 +163,11 @@ class VPNKey(Base):
     def is_expired(self) -> bool:
         if self.expire_at is None:
             return False
-        return datetime.now(timezone.utc) > self.expire_at
+        # SQLite returns naive datetimes; treat them as UTC
+        expire = self.expire_at
+        if expire.tzinfo is None:
+            expire = expire.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) > expire
 
     @property
     def is_over_limit(self) -> bool:
