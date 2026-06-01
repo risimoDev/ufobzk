@@ -905,6 +905,7 @@ async def admin_quick_month_payment(
 async def admin_toggle_free(
     user_id: int,
     request: Request,
+    background_tasks: BackgroundTasks,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -929,6 +930,7 @@ async def admin_toggle_free(
             key.is_active = True
 
     db.commit()
+    background_tasks.add_task(_bg_sync_and_reload)
     action = "free_on" if is_free else "free_off"
     _log_action(db, admin.id, action, str(user_id), reason or "")
     return JSONResponse({"ok": True, "is_free": is_free})

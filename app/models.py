@@ -163,7 +163,10 @@ class VPNKey(Base):
     def is_expired(self) -> bool:
         if self.expire_at is None:
             return False
-        expire = self.expire_at if self.expire_at.tzinfo else self.expire_at.replace(tzinfo=timezone.utc)
+        # SQLite возвращает naive datetimes — трактуем как UTC
+        expire = self.expire_at
+        if expire.tzinfo is None:
+            expire = expire.replace(tzinfo=timezone.utc)
         return datetime.now(timezone.utc) > expire
 
     @property
