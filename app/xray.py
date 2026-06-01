@@ -501,13 +501,54 @@ def reload_xray() -> bool:
         return False
 
 
+def _nginx_graceful_reload() -> None:
+    """Graceful reload nginx (SIGHUP) после перезапуска xray.
+
+    После рестарта xray старые keepalive-соединения nginx→xray закрыты.
+    SIGHUP заставляет nginx поднять новые воркеры с чистыми соединениями к xray.
+    Не разрывает существующие клиентские соединения (старые воркеры доживают).
+    """
+    nginx_name = os.getenv("NGINX_CONTAINER_NAME", "ufobzk-nginx")
+    docker_sock = "/var/run/docker.sock"
+    if not os.path.exists(docker_sock):
+        return
+    try:
+        import http.client as _hc
+        import socket as _sk
+        import urllib.parse as _up
+        import time as _t
+
+        class _UC(_hc.HTTPConnection):
+            def connect(self):
+                self.sock = _sk.socket(_sk.AF_UNIX, _sk.SOCK_STREAM)
+                self.sock.settimeout(self.timeout)
+                self.sock.connect(docker_sock)
+
+        _t.sleep(3)  # даём xray время подняться перед тем как nginx переподключится
+        conn = _UC("localhost", timeout=10)
+        conn.request("POST", f"/containers/{_up.quote(nginx_name, safe='')}/kill?signal=SIGHUP",
+                     headers={"Content-Length": "0"})
+        resp = conn.getresponse()
+        resp.read()
+        conn.close()
+        if resp.status == 204:
+            logger.info("Nginx gracefully reloaded после перезапуска Xray")
+        else:
+            logger.debug("Nginx SIGHUP: HTTP %d", resp.status)
+    except Exception as e:
+        logger.debug("Nginx reload skip: %s", e)
+
+
 def sync_and_reload(db: Session) -> bool:
     """Пересобрать конфиг и перезагрузить Xray (только если конфиг изменился)."""
     changed = write_xray_config(db)
     if not changed:
         logger.debug("Xray конфиг не изменился — перезагрузка не нужна")
         return True
-    return reload_xray()
+    reloaded = reload_xray()
+    if reloaded:
+        _nginx_graceful_reload()
+    return reloaded
 
 
 # ── Генерация ссылок подключения ──
@@ -563,15 +604,16 @@ def build_vless_grpc_link(key: VPNKey, server_domain: str, port: int = 443, rema
 
 
 def get_user_links(key: VPNKey) -> list[dict[str, str]]:
-    """Получить все ссылки подключения для ключа.
+    """Получить ссылки подключения для ключа (основной NL-сервер).
 
-    Для каскадного VPN возвращаем:
-    - RU-сервер (VLESS-WS или REALITY)
-    - NL-сервер (VLESS-WS или REALITY)
+    RU-сервер намеренно исключён: он используется только как EXIT-узел
+    каскада для российского трафика (NL→RU outbound). Прямые подключения
+    пользователей к RU-серверу не нужны и не будут работать корректно.
+    Remote серверы (Finland, NL-2, …) добавляются через get_all_links.
     """
     links = []
 
-    # Основной сервер (управляющий) — VLESS WS через CDN
+    # Основной сервер (управляющий) — WS/XHTTP/gRPC через CDN+nginx
     if DOMAIN:
         links.append({
             "name": f"🇳🇱 Европа (WS+TLS)",
@@ -588,28 +630,13 @@ def get_user_links(key: VPNKey) -> list[dict[str, str]]:
             "link": build_vless_grpc_link(key, DOMAIN, VLESS_WS_PORT, f"NL-gRPC-{key.name}"),
             "type": "vless-grpc"
         })
-    # NL сервер через REALITY
+
+    # NL сервер через REALITY (прямое подключение, обходит DPI)
     if NL_SERVER_IP and REALITY_PUBLIC_KEY:
         links.append({
             "name": f"🇳🇱 Европа (REALITY)",
             "link": build_vless_reality_link(key, NL_SERVER_IP, REALITY_PORT, f"NL-Reality-{key.name}"),
             "type": "vless-reality"
-        })
-
-    # RU сервер через REALITY
-    if RU_SERVER_IP and REALITY_PUBLIC_KEY:
-        links.append({
-            "name": f"🇷🇺 Россия (REALITY)",
-            "link": build_vless_reality_link(key, RU_SERVER_IP, REALITY_PORT, f"RU-Reality-{key.name}"),
-            "type": "vless-reality"
-        })
-
-    # RU сервер через WS (если есть домен)
-    if RU_SERVER_DOMAIN and RU_SERVER_DOMAIN != DOMAIN:
-        links.append({
-            "name": f"🇷🇺 Россия (WS+TLS)",
-            "link": build_vless_ws_link(key, RU_SERVER_DOMAIN, VLESS_WS_PORT, f"RU-{key.name}"),
-            "type": "vless-ws"
         })
 
     return links
