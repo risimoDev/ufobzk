@@ -10,6 +10,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.models import Server, VPNKey
+from app.xray import XHTTP_MODE
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +70,7 @@ def _build_remote_config(server: Server, keys: list[VPNKey]) -> dict[str, Any]:
             "streamSettings": {
                 "network": "xhttp",
                 "security": "none",
-                "xhttpSettings": {"path": "/xhttp", "mode": "stream-up", "xPaddingBytes": "100-1000"}
+                "xhttpSettings": {"path": "/xhttp", "mode": XHTTP_MODE, "xPaddingBytes": "100-1000"}
             },
             "sniffing": {"enabled": True, "destOverride": ["http", "tls", "quic"]}
         },
@@ -213,8 +214,16 @@ async def push_config_to_server(server: Server, keys: list[VPNKey]) -> bool:
                 logger.info("Config pushed and restarted on %s", server.name)
                 return True
             elif ok:
-                logger.warning("Config pushed but restart failed on %s: %s", server.name, data.get("error"))
-                return True  # config applied but restart manual
+                # Конфиг записан, но xray НЕ перезапущен. Xray читает конфиг
+                # только при старте, поэтому без рестарта новые ключи не
+                # активируются — клиенты получают timeout. Считаем это ошибкой
+                # синхронизации, чтобы админ видел проблему (а не зелёный «ok»).
+                logger.error(
+                    "Config pushed but xray NOT restarted on %s: %s — "
+                    "проверьте docker.sock и XRAY_CONTAINER_NAME на ноде",
+                    server.name, data.get("error"),
+                )
+                return False
             else:
                 logger.error("Server %s rejected config: %s", server.name, data)
                 return False

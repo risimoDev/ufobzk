@@ -45,6 +45,12 @@ REALITY_SHORT_ID = os.getenv("REALITY_SHORT_ID", "")
 # Адрес gRPC stats API Xray — в Docker xray-контейнер доступен по hostname "xray"
 XRAY_API_ADDR = os.getenv("XRAY_API_ADDR", "xray:10085")
 
+# Режим XHTTP. ВАЖНО: значение на сервере (inbound) и у клиента (ссылка/outbound)
+# должно совпадать, иначе соединение не установится. "auto" совместим с любыми
+# клиентами; "stream-up"/"packet-up" требуют, чтобы клиент явно использовал тот же
+# режим (мы пробрасываем его в ссылку параметром &mode=).
+XHTTP_MODE = os.getenv("XHTTP_MODE", "auto")
+
 GB = 1_073_741_824
 
 
@@ -184,7 +190,7 @@ def build_xray_config(db: Session) -> dict[str, Any]:
                     "security": "none",
                     "xhttpSettings": {
                         "path": "/xhttp",
-                        "mode": "stream-up",
+                        "mode": XHTTP_MODE,
                         "xPaddingBytes": "100-1000"
                     }
                 },
@@ -597,7 +603,7 @@ def build_vless_xhttp_link(key: VPNKey, server_domain: str, port: int = 443, rem
         remark = f"{key.name}@{server_domain}-xhttp"
     params = (
         f"type=xhttp&security=tls&host={server_domain}"
-        f"&path=%2Fxhttp&sni={server_domain}"
+        f"&path=%2Fxhttp&mode={XHTTP_MODE}&sni={server_domain}"
         f"&fp=chrome&alpn=h2%2Chttp%2F1.1"
     )
     return f"vless://{key.uuid}@{server_domain}:{port}?{params}#{quote(remark)}"
@@ -840,7 +846,7 @@ def _build_outbound_for_link(key: VPNKey, link_info: dict[str, Any]) -> dict[str
                 "network": "xhttp",
                 "security": "tls",
                 "tlsSettings": {"serverName": p.get("sni", server_host), "fingerprint": "chrome"},
-                "xhttpSettings": {"path": p.get("path", "/xhttp"), "mode": "auto"},
+                "xhttpSettings": {"path": p.get("path", "/xhttp"), "mode": p.get("mode", XHTTP_MODE)},
             },
         }
     elif link_info["type"] == "vless-ws":
@@ -966,20 +972,72 @@ def get_subscription_json(keys: list[VPNKey], db: Session | None = None) -> dict
     return result
 
 
+def _accumulate_user_stat(totals: dict[str, int], name: str, value: int) -> None:
+    """Добавить значение счётчика к суммарному трафику пользователя (по UUID).
+
+    Формат name: "user>>>{email}>>>traffic>>>uplink|downlink", где email = UUID.
+    """
+    parts = name.split(">>>")
+    if len(parts) >= 2:
+        uuid_part = parts[1].split("@")[0]  # на случай суффикса @tag
+        if uuid_part:
+            totals[uuid_part] = totals.get(uuid_part, 0) + value
+
+
+def _parse_xray_stats(output: str) -> dict[str, int]:
+    """Разобрать вывод `xray api statsquery` в {uuid: total_bytes}.
+
+    Поддерживает оба формата вывода Xray:
+    - JSON (современные версии): {"stat": [{"name": "...", "value": "123"}]}
+    - protobuf-text (старые версии): stat { name: "..." value: 123 }
+    """
+    import re as _re
+
+    output = (output or "").strip()
+    if not output:
+        return {}
+
+    totals: dict[str, int] = {}
+
+    # ── 1. Современный формат — JSON ──
+    if output[0] in "{[":
+        try:
+            data = json.loads(output)
+            stats = data.get("stat") if isinstance(data, dict) else data
+            for item in stats or []:
+                name = item.get("name", "")
+                # protojson сериализует int64 как строку
+                value = int(item.get("value", 0) or 0)
+                if name:
+                    _accumulate_user_stat(totals, name, value)
+            return totals
+        except (ValueError, TypeError, AttributeError) as e:
+            logger.debug("Не удалось разобрать JSON stats, пробую text-формат: %s", e)
+            totals.clear()
+
+    # ── 2. Legacy формат — protobuf text ──
+    current_name: str | None = None
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        name_m = _re.search(r'name:\s*"([^"]+)"', line)
+        if name_m:
+            current_name = name_m.group(1)
+            continue
+        value_m = _re.search(r'value:\s*(\d+)', line)
+        if value_m and current_name:
+            _accumulate_user_stat(totals, current_name, int(value_m.group(1)))
+            current_name = None
+
+    return totals
+
+
 def get_all_xray_stats() -> dict[str, int]:
     """Получить статистику трафика всех пользователей одним вызовом к Xray stats API.
 
     Возвращает {uuid: total_bytes} — суммарный трафик (uplink + downlink)
     по всем inbound тегам для каждого пользователя.
-
-    Xray выдаёт protobuf-text формат:
-        stat:  {
-          name:  "user>>>UUID@VLESS-WS>>>traffic>>>downlink"
-          value:  12345
-        }
-    UUID в поле email клиента (client.email = client.id = uuid).
+    UUID хранится в поле email клиента (client.email == client.id == uuid).
     """
-    import re as _re
     try:
         result = subprocess.run(
             ["xray", "api", "statsquery",
@@ -991,30 +1049,7 @@ def get_all_xray_stats() -> dict[str, int]:
             logger.debug("Xray statsquery вернул код %d: %s",
                          result.returncode, result.stderr[:200])
             return {}
-
-        totals: dict[str, int] = {}
-        current_name: str | None = None
-
-        for raw_line in result.stdout.splitlines():
-            line = raw_line.strip()
-
-            name_m = _re.search(r'name:\s+"([^"]+)"', line)
-            if name_m:
-                current_name = name_m.group(1)
-                continue
-
-            value_m = _re.search(r'value:\s+(\d+)', line)
-            if value_m and current_name:
-                value = int(value_m.group(1))
-                # Формат: "user>>>UUID@TAG>>>traffic>>>uplink|downlink"
-                parts = current_name.split(">>>")
-                if len(parts) >= 2:
-                    # Убираем @TAG-суффикс — берём только UUID
-                    uuid_part = parts[1].split("@")[0]
-                    totals[uuid_part] = totals.get(uuid_part, 0) + value
-                current_name = None
-
-        return totals
+        return _parse_xray_stats(result.stdout)
 
     except FileNotFoundError:
         logger.warning("Бинарник xray не найден — статистика недоступна")

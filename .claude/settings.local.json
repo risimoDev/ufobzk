@@ -13,7 +13,10 @@
       "Bash(python -m py_compile app/xray.py app/routers/admin.py)",
       "Bash(python -m py_compile app/xray.py)",
       "Bash(python -m pyflakes app/xray.py app/routers/admin.py app/main.py app/tasks.py)",
-      "Bash(python -m py_compile app/xray.py app/remote_xray.py app/routers/admin.py)"
+      "Bash(python -m py_compile app/xray.py app/remote_xray.py app/routers/admin.py)",
+      "Bash(python -c \"print\\('x'*64\\)\")",
+      "Bash(SECRET_KEY=__CMDSUB_OUTPUT__ TESTING=1 python -c ' *)",
+      "Bash(grep -c 'id=\"__TRACKED_VAR__\"' admin.html)"
     ]
   }
 }
