@@ -365,6 +365,7 @@ def _docker_restart_via_socket(container_name: str, stop_timeout: int = 5) -> bo
     """
     import http.client
     import socket as _socket
+    import urllib.parse as _up
 
     DOCKER_SOCK = "/var/run/docker.sock"
 
@@ -375,10 +376,11 @@ def _docker_restart_via_socket(container_name: str, stop_timeout: int = 5) -> bo
             self.sock.connect(DOCKER_SOCK)
 
     try:
+        enc = _up.quote(container_name, safe="")
         conn = _UnixConn("localhost", timeout=20)
         conn.request(
             "POST",
-            f"/containers/{container_name}/restart?t={stop_timeout}",
+            f"/containers/{enc}/restart?t={stop_timeout}",
             headers={"Content-Length": "0", "Content-Type": "application/json"},
         )
         resp = conn.getresponse()
@@ -415,7 +417,9 @@ def reload_xray() -> bool:
     if os.path.exists(docker_sock):
         enc_name = _urlparse.quote(container_name, safe="")
 
-        # ── Попытка 1: SIGHUP → Xray перечитывает config.json без обрыва соединений ──
+        # ── Попытка 1: SIGHUP → быстрый перезапуск через Docker socket ──
+        # Xray завершается по SIGHUP (не делает hot-reload), Docker поднимает
+        # контейнер заново по restart policy. Быстрее чем полный restart API.
         try:
             import http.client as _http
             import socket as _sock
@@ -423,16 +427,17 @@ def reload_xray() -> bool:
             class _UnixConn(_http.HTTPConnection):
                 def connect(self):
                     self.sock = _sock.socket(_sock.AF_UNIX, _sock.SOCK_STREAM)
-                    self.sock.settimeout(10)
+                    self.sock.settimeout(self.timeout)
                     self.sock.connect(docker_sock)
 
-            conn = _UnixConn("localhost")
-            conn.request("POST", f"/containers/{enc_name}/kill?signal=SIGHUP")
+            conn = _UnixConn("localhost", timeout=10)
+            conn.request("POST", f"/containers/{enc_name}/kill?signal=SIGHUP",
+                         headers={"Content-Length": "0"})
             resp = conn.getresponse()
             resp.read()
             conn.close()
             if resp.status == 204:
-                logger.info("Xray перечитал конфиг через Docker socket SIGHUP")
+                logger.info("Xray перезапущен через Docker socket SIGHUP")
                 return True
             logger.warning("Docker socket SIGHUP: статус %d", resp.status)
         except Exception as e:
