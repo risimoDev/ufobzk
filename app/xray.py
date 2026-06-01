@@ -349,13 +349,27 @@ def build_xray_config(db: Session) -> dict[str, Any]:
     return config
 
 
-def write_xray_config(db: Session) -> None:
-    """Пересобрать и записать конфиг Xray."""
+def write_xray_config(db: Session) -> bool:
+    """Пересобрать и записать конфиг Xray.
+
+    Возвращает True если конфиг изменился (нужна перезагрузка),
+    False если содержимое идентично текущему файлу.
+    """
     config = build_xray_config(db)
+    new_content = json.dumps(config, indent=2, ensure_ascii=False)
     config_path = Path(XRAY_CONFIG_PATH)
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    config_path.write_text(json.dumps(config, indent=2, ensure_ascii=False))
+
+    try:
+        if config_path.exists() and config_path.read_text(encoding="utf-8") == new_content:
+            logger.debug("Xray config не изменился — перезапись пропущена")
+            return False
+    except Exception:
+        pass
+
+    config_path.write_text(new_content, encoding="utf-8")
     logger.info("Xray config записан: %s", XRAY_CONFIG_PATH)
+    return True
 
 
 def _docker_restart_via_socket(container_name: str, stop_timeout: int = 5) -> bool:
@@ -488,8 +502,11 @@ def reload_xray() -> bool:
 
 
 def sync_and_reload(db: Session) -> bool:
-    """Пересобрать конфиг и перезагрузить Xray."""
-    write_xray_config(db)
+    """Пересобрать конфиг и перезагрузить Xray (только если конфиг изменился)."""
+    changed = write_xray_config(db)
+    if not changed:
+        logger.debug("Xray конфиг не изменился — перезагрузка не нужна")
+        return True
     return reload_xray()
 
 
