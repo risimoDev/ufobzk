@@ -193,11 +193,10 @@ class SecurityMiddleware:
         ua = request_headers.get(b"user-agent", b"").decode("latin-1", errors="replace").lower()
         path = scope.get("path", "/").lower()
 
-        xff = request_headers.get(b"x-forwarded-for", b"").decode("latin-1", errors="replace")
-        if xff:
-            client_ip = xff.split(",")[0].strip()
-        else:
-            client_ip = (scope.get("client") or ("0.0.0.0", 0))[0]
+        # Используем IP из scope["client"], который uvicorn уже обработал
+        # через ProxyHeadersMiddleware (--proxy-headers флаг).
+        # Сырой X-Forwarded-For не читаем — клиент может его подделать.
+        client_ip = (scope.get("client") or ("0.0.0.0", 0))[0]
 
         if any(kw in ua for kw in BLOCKED_UA_KEYWORDS):
             logger.warning("Блокирован сканер: UA=%s IP=%s", ua[:80], client_ip)

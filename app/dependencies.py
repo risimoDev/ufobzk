@@ -29,9 +29,10 @@ def _format_bytes(b: int) -> str:
 
 
 def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    # request.client.host is already set to the real client IP by uvicorn's
+    # ProxyHeadersMiddleware (--proxy-headers flag). Reading X-Forwarded-For
+    # directly here would allow clients to spoof their IP and bypass
+    # the brute-force guard.
     return request.client.host if request.client else "0.0.0.0"
 
 

@@ -143,7 +143,7 @@ def build_xray_config(db: Session) -> dict[str, Any]:
         "inbounds": [
             {
                 "tag": "api-inbound",
-                "listen": "127.0.0.1",
+                "listen": "0.0.0.0",
                 "port": 10085,
                 "protocol": "dokodemo-door",
                 "settings": {"address": "127.0.0.1"}
@@ -358,34 +358,79 @@ def write_xray_config(db: Session) -> None:
     logger.info("Xray config записан: %s", XRAY_CONFIG_PATH)
 
 
+def _docker_restart_via_socket(container_name: str, stop_timeout: int = 5) -> bool:
+    """Перезапустить Docker-контейнер через REST API (Unix socket) без docker CLI.
+
+    Работает в python:slim-образах без установленного docker CLI.
+    """
+    import http.client
+    import socket as _socket
+
+    DOCKER_SOCK = "/var/run/docker.sock"
+
+    class _UnixConn(http.client.HTTPConnection):
+        def connect(self):
+            self.sock = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+            self.sock.settimeout(self.timeout)
+            self.sock.connect(DOCKER_SOCK)
+
+    try:
+        conn = _UnixConn("localhost", timeout=20)
+        conn.request(
+            "POST",
+            f"/containers/{container_name}/restart?t={stop_timeout}",
+            headers={"Content-Length": "0", "Content-Type": "application/json"},
+        )
+        resp = conn.getresponse()
+        body = resp.read(300).decode("utf-8", errors="replace")
+        conn.close()
+        if resp.status == 204:
+            return True
+        # 404 = контейнер не найден, 409 = занят
+        logger.warning(
+            "Docker API restart: HTTP %d для %s — %s",
+            resp.status, container_name, body[:150],
+        )
+        return False
+    except Exception as e:
+        logger.warning("Docker socket restart failed для %s: %s", container_name, e)
+        return False
+
+
 def reload_xray() -> bool:
     """Перезагрузить Xray.
 
     Порядок попыток:
-    1. docker restart (production — xray в отдельном контейнере)
-    2. systemctl restart xray (bare metal)
-    3. killall -HUP xray (bare metal без systemd)
+    1. Docker REST API через Unix socket — основной путь в production (docker CLI не нужен)
+    2. docker CLI — fallback если вдруг установлен
+    3. systemctl restart xray — bare metal
+    4. killall -HUP xray — bare metal без systemd
     """
     docker_sock = "/var/run/docker.sock"
     container_name = os.getenv("XRAY_CONTAINER_NAME", "ufobzk-xray")
 
-    # ── Попытка 1: docker CLI (есть сокет → контейнер запущен в Docker) ──
+    # ── Попытка 1: Docker REST API через Unix socket (работает без docker CLI) ──
     if os.path.exists(docker_sock):
+        if _docker_restart_via_socket(container_name):
+            logger.info("Xray перезагружен через Docker API (socket)")
+            return True
+
+        # ── Попытка 2: docker CLI (fallback — если установлен) ──
         try:
             result = subprocess.run(
                 ["docker", "restart", "-t", "5", container_name],
                 capture_output=True, text=True, timeout=30
             )
             if result.returncode == 0:
-                logger.info("Xray перезагружен через docker restart")
+                logger.info("Xray перезагружен через docker CLI")
                 return True
-            logger.warning("docker restart вернул код %s: %s", result.returncode, result.stderr.strip())
+            logger.warning("docker restart код %s: %s", result.returncode, result.stderr.strip())
         except FileNotFoundError:
-            logger.debug("docker CLI не найден")
+            pass
         except Exception as e:
-            logger.warning("Не удалось перезагрузить через docker restart: %s", e)
+            logger.warning("docker CLI не сработал: %s", e)
 
-    # ── Попытка 2: systemctl (bare metal) ──
+    # ── Попытка 3: systemctl (bare metal) ──
     try:
         result = subprocess.run(
             ["systemctl", "restart", "xray"],
@@ -399,13 +444,13 @@ def reload_xray() -> bool:
     except Exception as e:
         logger.debug("systemctl недоступен: %s", e)
 
-    # ── Попытка 3: killall -HUP (bare metal без systemd) ──
+    # ── Попытка 4: killall -HUP (bare metal без systemd) ──
     try:
         subprocess.run(["killall", "-HUP", "xray"], capture_output=True, timeout=5)
         logger.info("Xray получил HUP-сигнал")
         return True
     except Exception as e:
-        logger.debug("killall не сработал: %s", e)
+        logger.warning("Все методы перезагрузки Xray не сработали: %s", e)
         return False
 
 
@@ -620,10 +665,27 @@ def get_subscription_content(keys: list[VPNKey], db: Session | None = None) -> s
     return base64.b64encode("\n".join(all_links).encode()).decode()
 
 
+def _parse_link_host_port(link: str, default_port: int) -> tuple[str, int]:
+    """Извлечь (host, port) из VLESS URI."""
+    try:
+        after_at = link.split("@", 1)[1]  # "host:port?params#tag"
+        host_port = after_at.split("?", 1)[0]  # "host:port"
+        # IPv6: [::1]:443
+        if host_port.startswith("["):
+            host = host_port.split("]")[0][1:]
+            port = int(host_port.split("]:")[1])
+        else:
+            parts = host_port.rsplit(":", 1)
+            host = parts[0]
+            port = int(parts[1]) if len(parts) == 2 else default_port
+        return host, port
+    except Exception:
+        return DOMAIN, default_port
+
+
 def _build_outbound_for_link(key: VPNKey, link_info: dict[str, Any]) -> dict[str, Any] | None:
     """Построить outbound JSON для одной ссылки."""
-    server_host = link_info["link"].split("@")[1].split(":")[0] if "@" in link_info["link"] else DOMAIN
-    port = VLESS_WS_PORT
+    server_host, port = _parse_link_host_port(link_info["link"], VLESS_WS_PORT)
     if link_info["type"] == "vless-ws":
         return {
             "tag": link_info["name"],

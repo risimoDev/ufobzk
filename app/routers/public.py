@@ -201,7 +201,8 @@ async def subscription_key(key_uuid: str, request: Request, db: Session = Depend
     user = db.query(User).filter(User.id == key.user_id, User.is_active == True).first()  # noqa: E712
     if not user or key.status != "active":
         raise HTTPException(status_code=404)
-    content = get_subscription_content([key])
+    # db передаётся, чтобы включить ссылки со всех remote-серверов
+    content = get_subscription_content([key], db=db)
     return PlainTextResponse(content, headers={
         "Content-Type": "text/plain; charset=utf-8",
         "Content-Disposition": "inline",

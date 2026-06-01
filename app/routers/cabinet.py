@@ -32,7 +32,9 @@ async def cabinet(request: Request, db: Session = Depends(get_db)):
     keys_data = []
     for key in user.vpn_keys:
         all_links = get_all_links(db, key)
-        ws_links = [l for l in all_links if l["type"] == "vless-ws"]
+        # Показываем все типы ссылок; WS первыми как наиболее совместимые
+        TYPE_ORDER = {"vless-ws": 0, "vless-xhttp": 1, "vless-grpc": 2, "vless-reality": 3}
+        display_links = sorted(all_links, key=lambda l: TYPE_ORDER.get(l["type"], 9))
 
         # Expiry warning: ≤7 days remaining
         days_left = None
@@ -51,7 +53,7 @@ async def cabinet(request: Request, db: Session = Depends(get_db)):
 
         keys_data.append({
             "key": key,
-            "links": ws_links,
+            "links": display_links,
             "all_links": all_links,
             "status": key.status,
             "key_sub_url": f"{webapp_url}/sub/key/{key.uuid}",

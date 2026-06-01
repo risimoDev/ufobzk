@@ -43,12 +43,14 @@ def _log_action(db: Session, admin_id: int, action: str, target: str = "", detai
 
 def _bg_sync_and_reload() -> None:
     """Фоновая синхронизация Xray — запускается после ответа клиенту."""
+    from app.models import SessionLocal as _SessionLocal
+    db = _SessionLocal()
     try:
-        from app.dependencies import get_db as _get_db
-        db = next(_get_db())
         sync_and_reload(db)
     except Exception as e:
         logger.error("Ошибка фоновой синхронизации Xray: %s", e)
+    finally:
+        db.close()
 
 
 # ── Dashboard ──
@@ -433,9 +435,8 @@ async def admin_extend_key(
         base = now
 
     key.expire_at = base + timedelta(days=days)
-    # Если ключ был отключён из-за истечения — реактивируем
-    if not key.is_active and key.status in ("expired",):
-        key.is_active = True
+    # Операция "продление" всегда означает намерение активировать ключ
+    key.is_active = True
 
     db.commit()
     background_tasks.add_task(_bg_sync_and_reload)
@@ -1173,7 +1174,7 @@ async def admin_edit_server(
 @router.post("/admin/api/servers/{server_id}/delete")
 async def admin_delete_server(
     server_id: int,
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     """Удалить сервер (не удаляя ключи пользователей, т.к. они могут быть перенаправлены)."""
@@ -1181,9 +1182,10 @@ async def admin_delete_server(
     if not server:
         raise HTTPException(status_code=404, detail="Сервер не найден")
 
+    server_name = server.name
     db.delete(server)
     db.commit()
-    _log_action(db, None, "delete_server", str(server_id), server.name)
+    _log_action(db, admin.id, "delete_server", str(server_id), server_name)
     return JSONResponse({"ok": True})
 
 
@@ -1254,7 +1256,7 @@ async def admin_check_all_servers(
             try:
                 t0 = _t.monotonic()
                 await asyncio.wait_for(
-                    asyncio.get_event_loop().run_in_executor(
+                    asyncio.get_running_loop().run_in_executor(
                         None,
                         lambda h=s.host, p=s.reality_port: _socket.create_connection((h, p), timeout=3).close()
                     ),
@@ -1389,16 +1391,17 @@ async def admin_update_guide(
 @router.post("/admin/api/guides/{guide_id}/delete")
 async def admin_delete_guide(
     guide_id: int,
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     """Удалить гайд."""
     guide = db.query(Guide).filter(Guide.id == guide_id).first()
     if not guide:
         raise HTTPException(status_code=404, detail="Гайд не найден")
+    guide_slug = guide.slug
     db.delete(guide)
     db.commit()
-    _log_action(db, None, "delete_guide", str(guide_id), guide.slug)
+    _log_action(db, admin.id, "delete_guide", str(guide_id), guide_slug)
     return JSONResponse({"ok": True})
 
 
@@ -1875,16 +1878,30 @@ METRICS_TOKEN = os.getenv("METRICS_TOKEN", "")
 async def prometheus_metrics(request: Request, db: Session = Depends(get_db)):
     """Prometheus-совместимый эндпоинт метрик.
 
-    Защищён Bearer-токеном из METRICS_TOKEN. Если токен не задан — эндпоинт закрыт.
+    Принимает авторизацию двумя способами:
+    - Bearer токен: Authorization: Bearer <METRICS_TOKEN>
+    - Admin сессия: cookie SESSION (для просмотра из браузера)
+    Если METRICS_TOKEN не задан — эндпоинт недоступен (404).
     """
     from fastapi.responses import PlainTextResponse
 
     if not METRICS_TOKEN:
         raise HTTPException(status_code=404)
 
+    # Проверяем Bearer токен
     auth = request.headers.get("Authorization", "")
-    token = auth.removeprefix("Bearer ").strip()
-    if token != METRICS_TOKEN:
+    bearer = auth.removeprefix("Bearer ").strip()
+    authed = bearer == METRICS_TOKEN
+
+    # Fallback: admin-сессия (для просмотра из браузера)
+    if not authed:
+        try:
+            admin = require_admin(request, db)
+            authed = admin.is_admin
+        except HTTPException:
+            pass
+
+    if not authed:
         raise HTTPException(status_code=403, detail="Forbidden")
 
     all_users = db.query(User).all()

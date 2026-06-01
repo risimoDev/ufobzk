@@ -346,13 +346,21 @@ else
     warn "Xray: ${XRAY_STATUS} — проверьте: docker compose logs xray"
 fi
 
-# Проверяем что Xray API отвечает (порт 10085)
-XRAY_API=$(docker compose exec -T ufo-app sh -c \
-    "nc -z xray 10085 2>/dev/null && echo OK || echo FAIL" 2>/dev/null || echo "SKIP")
-if [ "$XRAY_API" = "OK" ]; then
+# Проверяем что Xray API отвечает (порт 10085) через Python socket
+XRAY_API=$(docker compose exec -T ufo-app python3 -c "
+import socket, sys
+try:
+    s = socket.create_connection(('xray', 10085), timeout=3)
+    s.close()
+    print('OK')
+except Exception as e:
+    print('FAIL:' + str(e))
+" 2>/dev/null || echo "SKIP")
+if echo "$XRAY_API" | grep -q "^OK"; then
     ok "Xray Stats API (10085) отвечает"
 elif [ "$XRAY_API" != "SKIP" ]; then
-    warn "Xray Stats API (10085) не отвечает — статистика трафика может не работать"
+    warn "Xray Stats API (10085) не отвечает: ${XRAY_API}"
+    warn "Возможная причина: api-inbound слушает 127.0.0.1 вместо 0.0.0.0 — проверьте конфиг Xray"
 fi
 
 # ── SSL сертификат через Docker exec в certbot volume ──
