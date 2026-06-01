@@ -8,7 +8,12 @@
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(Sort-Object)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(python -m py_compile app/*.py app/routers/*.py xray-node/main.py)",
+      "Bash(python -m py_compile app/xray.py app/routers/admin.py)",
+      "Bash(python -m py_compile app/xray.py)",
+      "Bash(python -m pyflakes app/xray.py app/routers/admin.py app/main.py app/tasks.py)",
+      "Bash(python -m py_compile app/xray.py app/remote_xray.py app/routers/admin.py)"
     ]
   }
 }

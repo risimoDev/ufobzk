@@ -184,7 +184,7 @@ def build_xray_config(db: Session) -> dict[str, Any]:
                     "security": "none",
                     "xhttpSettings": {
                         "path": "/xhttp",
-                        "mode": "auto",
+                        "mode": "stream-up",
                         "xPaddingBytes": "100-1000"
                     }
                 },
@@ -417,52 +417,27 @@ def reload_xray() -> bool:
     """Перезагрузить Xray.
 
     Порядок попыток:
-    1. Docker socket API: SIGHUP — мгновенный reload конфига без обрыва соединений
-    2. Docker socket API: полный restart — надёжный fallback
-    3. docker CLI restart — если CLI установлен в контейнере
-    4. systemctl restart xray — bare metal
-    5. killall -HUP xray — bare metal без systemd
-    """
-    import urllib.parse as _urlparse
+    1. Docker socket API: полный restart контейнера — надёжное применение конфига
+    2. docker CLI restart — если CLI установлен в контейнере
+    3. systemctl restart xray — bare metal
+    4. killall -HUP xray — bare metal без systemd
 
+    Примечание: SIGHUP-«hot reload» не используется. Xray-core не умеет
+    перечитывать конфиг по сигналу и не ставит обработчик SIGHUP, а в контейнере
+    он стартует как PID 1 (`exec xray run`) — ядро Linux игнорирует сигналы без
+    обработчика, отправленные PID 1. Поэтому единственный надёжный способ
+    применить новый конфиг — перезапуск контейнера.
+    """
     docker_sock = "/var/run/docker.sock"
     container_name = os.getenv("XRAY_CONTAINER_NAME", "ufobzk-xray")
 
     if os.path.exists(docker_sock):
-        enc_name = _urlparse.quote(container_name, safe="")
-
-        # ── Попытка 1: SIGHUP → быстрый перезапуск через Docker socket ──
-        # Xray завершается по SIGHUP (не делает hot-reload), Docker поднимает
-        # контейнер заново по restart policy. Быстрее чем полный restart API.
-        try:
-            import http.client as _http
-            import socket as _sock
-
-            class _UnixConn(_http.HTTPConnection):
-                def connect(self):
-                    self.sock = _sock.socket(_sock.AF_UNIX, _sock.SOCK_STREAM)
-                    self.sock.settimeout(self.timeout)
-                    self.sock.connect(docker_sock)
-
-            conn = _UnixConn("localhost", timeout=10)
-            conn.request("POST", f"/containers/{enc_name}/kill?signal=SIGHUP",
-                         headers={"Content-Length": "0"})
-            resp = conn.getresponse()
-            resp.read()
-            conn.close()
-            if resp.status == 204:
-                logger.info("Xray перезапущен через Docker socket SIGHUP")
-                return True
-            logger.warning("Docker socket SIGHUP: статус %d", resp.status)
-        except Exception as e:
-            logger.debug("Docker socket SIGHUP не сработал: %s", e)
-
-        # ── Попытка 2: полный restart через Docker socket API ──
+        # ── Попытка 1: полный restart через Docker socket API ──
         if _docker_restart_via_socket(container_name):
             logger.info("Xray перезагружен через Docker API (socket)")
             return True
 
-        # ── Попытка 3: docker CLI (fallback — если установлен) ──
+        # ── Попытка 2: docker CLI (fallback — если установлен) ──
         try:
             result = subprocess.run(
                 ["docker", "restart", "-t", "5", container_name],
@@ -477,7 +452,7 @@ def reload_xray() -> bool:
         except Exception as e:
             logger.warning("docker CLI не сработал: %s", e)
 
-    # ── Попытка 4: systemctl (bare metal) ──
+    # ── Попытка 3: systemctl (bare metal) ──
     try:
         result = subprocess.run(
             ["systemctl", "restart", "xray"],
@@ -491,7 +466,7 @@ def reload_xray() -> bool:
     except Exception as e:
         logger.debug("systemctl недоступен: %s", e)
 
-    # ── Попытка 5: killall -HUP (bare metal без systemd) ──
+    # ── Попытка 4: killall -HUP (bare metal без systemd) ──
     try:
         subprocess.run(["killall", "-HUP", "xray"], capture_output=True, timeout=5)
         logger.info("Xray получил HUP-сигнал")
@@ -501,42 +476,92 @@ def reload_xray() -> bool:
         return False
 
 
+def _docker_exec_via_socket(container_name: str, cmd: list[str], timeout: int = 10) -> bool:
+    """Выполнить команду внутри контейнера через Docker exec API (Unix socket).
+
+    Возвращает True если команда завершилась с кодом 0.
+    """
+    import http.client as _hc
+    import json as _json
+    import socket as _sk
+    import urllib.parse as _up
+
+    DOCKER_SOCK = "/var/run/docker.sock"
+
+    class _UnixConn(_hc.HTTPConnection):
+        def connect(self):
+            self.sock = _sk.socket(_sk.AF_UNIX, _sk.SOCK_STREAM)
+            self.sock.settimeout(self.timeout)
+            self.sock.connect(DOCKER_SOCK)
+
+    enc = _up.quote(container_name, safe="")
+    try:
+        # 1. Создать exec-инстанс
+        create_body = _json.dumps({
+            "AttachStdout": True, "AttachStderr": True, "Cmd": cmd,
+        }).encode()
+        conn = _UnixConn("localhost", timeout=timeout)
+        conn.request("POST", f"/containers/{enc}/exec", body=create_body,
+                     headers={"Content-Type": "application/json",
+                              "Content-Length": str(len(create_body))})
+        resp = conn.getresponse()
+        data = resp.read()
+        conn.close()
+        if resp.status not in (200, 201):
+            logger.debug("Docker exec create: HTTP %d — %s", resp.status, data[:150])
+            return False
+        exec_id = _json.loads(data).get("Id")
+        if not exec_id:
+            return False
+
+        # 2. Запустить exec (синхронно)
+        start_body = _json.dumps({"Detach": False, "Tty": False}).encode()
+        conn = _UnixConn("localhost", timeout=timeout)
+        conn.request("POST", f"/exec/{exec_id}/start", body=start_body,
+                     headers={"Content-Type": "application/json",
+                              "Content-Length": str(len(start_body))})
+        resp = conn.getresponse()
+        resp.read()
+        conn.close()
+        if resp.status != 200:
+            logger.debug("Docker exec start: HTTP %d", resp.status)
+            return False
+
+        # 3. Проверить exit code
+        conn = _UnixConn("localhost", timeout=timeout)
+        conn.request("GET", f"/exec/{exec_id}/json", headers={"Content-Length": "0"})
+        resp = conn.getresponse()
+        inspect = resp.read()
+        conn.close()
+        if resp.status == 200:
+            return _json.loads(inspect).get("ExitCode") == 0
+        return True
+    except Exception as e:
+        logger.debug("Docker exec failed для %s: %s", container_name, e)
+        return False
+
+
 def _nginx_graceful_reload() -> None:
-    """Graceful reload nginx (SIGHUP) после перезапуска xray.
+    """Graceful reload nginx (`nginx -s reload`) после перезапуска xray.
 
     После рестарта xray старые keepalive-соединения nginx→xray закрыты.
-    SIGHUP заставляет nginx поднять новые воркеры с чистыми соединениями к xray.
-    Не разрывает существующие клиентские соединения (старые воркеры доживают).
+    `nginx -s reload` поднимает новые воркеры с чистыми соединениями к xray,
+    не разрывая существующие клиентские соединения (старые воркеры доживают).
+
+    Используется Docker exec API, а не сигнал контейнеру: в nginx-контейнере
+    PID 1 — это `sh` (nginx запущен без `exec`), поэтому сигнал контейнеру
+    до мастер-процесса nginx не дойдёт.
     """
     nginx_name = os.getenv("NGINX_CONTAINER_NAME", "ufobzk-nginx")
     docker_sock = "/var/run/docker.sock"
     if not os.path.exists(docker_sock):
         return
-    try:
-        import http.client as _hc
-        import socket as _sk
-        import urllib.parse as _up
-        import time as _t
-
-        class _UC(_hc.HTTPConnection):
-            def connect(self):
-                self.sock = _sk.socket(_sk.AF_UNIX, _sk.SOCK_STREAM)
-                self.sock.settimeout(self.timeout)
-                self.sock.connect(docker_sock)
-
-        _t.sleep(3)  # даём xray время подняться перед тем как nginx переподключится
-        conn = _UC("localhost", timeout=10)
-        conn.request("POST", f"/containers/{_up.quote(nginx_name, safe='')}/kill?signal=SIGHUP",
-                     headers={"Content-Length": "0"})
-        resp = conn.getresponse()
-        resp.read()
-        conn.close()
-        if resp.status == 204:
-            logger.info("Nginx gracefully reloaded после перезапуска Xray")
-        else:
-            logger.debug("Nginx SIGHUP: HTTP %d", resp.status)
-    except Exception as e:
-        logger.debug("Nginx reload skip: %s", e)
+    import time as _t
+    _t.sleep(3)  # даём xray время подняться перед тем как nginx переподключится
+    if _docker_exec_via_socket(nginx_name, ["nginx", "-s", "reload"]):
+        logger.info("Nginx gracefully reloaded (nginx -s reload) после перезапуска Xray")
+    else:
+        logger.debug("Nginx reload не выполнен — соединения к xray переустановятся сами")
 
 
 def sync_and_reload(db: Session) -> bool:
@@ -760,10 +785,65 @@ def _parse_link_host_port(link: str, default_port: int) -> tuple[str, int]:
         return DOMAIN, default_port
 
 
+def _parse_link_params(link: str) -> dict[str, str]:
+    """Извлечь query-параметры (sni, pbk, sid, path, flow, ...) из VLESS URI."""
+    from urllib.parse import parse_qs
+    if "?" not in link:
+        return {}
+    query = link.split("?", 1)[1].split("#", 1)[0]
+    return {k: v[0] for k, v in parse_qs(query).items()}
+
+
 def _build_outbound_for_link(key: VPNKey, link_info: dict[str, Any]) -> dict[str, Any] | None:
     """Построить outbound JSON для одной ссылки."""
     server_host, port = _parse_link_host_port(link_info["link"], VLESS_WS_PORT)
-    if link_info["type"] == "vless-ws":
+    if link_info["type"] == "vless-reality":
+        p = _parse_link_params(link_info["link"])
+        return {
+            "tag": link_info["name"],
+            "protocol": "vless",
+            "settings": {
+                "vnext": [{
+                    "address": server_host,
+                    "port": port,
+                    "users": [{
+                        "id": key.uuid,
+                        "encryption": "none",
+                        "flow": p.get("flow", "xtls-rprx-vision"),
+                    }]
+                }]
+            },
+            "streamSettings": {
+                "network": "tcp",
+                "security": "reality",
+                "realitySettings": {
+                    "serverName": p.get("sni", ""),
+                    "publicKey": p.get("pbk", ""),
+                    "shortId": p.get("sid", ""),
+                    "fingerprint": p.get("fp", "chrome"),
+                },
+            },
+        }
+    elif link_info["type"] == "vless-xhttp":
+        p = _parse_link_params(link_info["link"])
+        return {
+            "tag": link_info["name"],
+            "protocol": "vless",
+            "settings": {
+                "vnext": [{
+                    "address": server_host,
+                    "port": port,
+                    "users": [{"id": key.uuid, "encryption": "none"}]
+                }]
+            },
+            "streamSettings": {
+                "network": "xhttp",
+                "security": "tls",
+                "tlsSettings": {"serverName": p.get("sni", server_host), "fingerprint": "chrome"},
+                "xhttpSettings": {"path": p.get("path", "/xhttp"), "mode": "auto"},
+            },
+        }
+    elif link_info["type"] == "vless-ws":
         return {
             "tag": link_info["name"],
             "protocol": "vless",

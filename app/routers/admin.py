@@ -68,7 +68,7 @@ async def admin_dashboard(request: Request, admin: User = Depends(require_admin)
     expired_keys = sum(1 for k in all_keys if k.status == "expired")
     disabled_keys = sum(1 for k in all_keys if k.status == "disabled")
     limited_keys = sum(1 for k in all_keys if k.status == "limited")
-    traffic_total = sum(k.data_used for k in all_keys)
+    traffic_total = sum(k.data_used or 0 for k in all_keys)
 
     enriched_users = []
     for u in all_users:

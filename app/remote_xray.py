@@ -69,7 +69,7 @@ def _build_remote_config(server: Server, keys: list[VPNKey]) -> dict[str, Any]:
             "streamSettings": {
                 "network": "xhttp",
                 "security": "none",
-                "xhttpSettings": {"path": "/xhttp", "mode": "auto", "xPaddingBytes": "100-1000"}
+                "xhttpSettings": {"path": "/xhttp", "mode": "stream-up", "xPaddingBytes": "100-1000"}
             },
             "sniffing": {"enabled": True, "destOverride": ["http", "tls", "quic"]}
         },
