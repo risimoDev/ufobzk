@@ -1,0 +1,49 @@
+# ═══════════════════════════════════════════════════════════════════
+#  UFOBZK VPN Node — универсальный REALITY-узел (xray + node-api)
+#  Разворачивается на ЛЮБОМ сервере одной командой install.sh.
+#  Управляется с основного сервера через node-api (push конфига).
+# ═══════════════════════════════════════════════════════════════════
+
+services:
+  # ── Xray ядро (REALITY на голом IP, без nginx/TLS) ──
+  xray:
+    image: teddysun/xray:latest
+    container_name: ufobzk-node-xray
+    restart: unless-stopped
+    # host-сеть: REALITY слушает порт хоста напрямую (выглядит как HTTPS)
+    network_mode: host
+    logging:
+      driver: "json-file"
+      options: { max-size: "10m", max-file: "3" }
+    volumes:
+      - ./config:/etc/xray
+      - xray-logs:/var/log/xray
+    entrypoint:
+      - /bin/sh
+      - -c
+      - "until [ -f /etc/xray/config.json ]; do echo 'waiting for config...'; sleep 2; done; exec xray run -config /etc/xray/config.json"
+
+  # ── Node API — принимает конфиг от основного сервера и рестартует xray ──
+  # Собирается из единого источника репозитория (../xray-node), где живёт
+  # main.py с детектом изменений (не рестартует xray при идентичном конфиге).
+  node-api:
+    build: ../xray-node
+    container_name: ufobzk-node-api
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options: { max-size: "10m", max-file: "3" }
+    ports:
+      - "${NODE_API_PORT:-9090}:8080"
+    environment:
+      - XRAY_NODE_TOKEN=${XRAY_NODE_TOKEN:?XRAY_NODE_TOKEN required}
+      - XRAY_CONFIG_PATH=/etc/xray/config.json
+      - XRAY_CONTAINER_NAME=ufobzk-node-xray
+    volumes:
+      - ./config:/etc/xray
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - xray
+
+volumes:
+  xray-logs:

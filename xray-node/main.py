@@ -74,15 +74,41 @@ async def health():
 
 @app.post("/config")
 async def apply_config(request: Request, authorization: str | None = Header(None)):
-    """Получить config.json и применить к локальному Xray."""
+    """Получить config.json и применить к локальному Xray.
+
+    КРИТИЧНО: рестарт Xray выполняется ТОЛЬКО если конфиг реально изменился.
+    Основной сервер пушит конфиг каждые 5 минут безусловно; без этой проверки
+    Xray на ноде перезапускался бы каждые 5 минут, обрывая ВСЕ соединения
+    пользователей (главная причина «то работает, то нет»).
+    """
     _verify_token(authorization)
     config = await request.json()
     import json as _json
 
-    # Записываем конфиг
+    new_content = _json.dumps(config, indent=2, ensure_ascii=False, sort_keys=True)
+
+    # ── Детект изменений: если конфиг идентичен — НЕ трогаем Xray ──
+    try:
+        with open(XRAY_CONFIG_PATH, encoding="utf-8") as f:
+            current = f.read()
+        # Нормализуем текущий файл к тому же виду (sort_keys) для честного сравнения
+        try:
+            current_norm = _json.dumps(_json.loads(current), indent=2,
+                                       ensure_ascii=False, sort_keys=True)
+        except Exception:
+            current_norm = current
+        if current_norm == new_content:
+            logger.info("Config unchanged — restart skipped")
+            return JSONResponse({"ok": True, "restarted": False, "unchanged": True})
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        logger.warning("Config compare failed (will rewrite+restart): %s", e)
+
+    # Записываем конфиг (он изменился)
     with open(XRAY_CONFIG_PATH, "w", encoding="utf-8") as f:
-        _json.dump(config, f, indent=2, ensure_ascii=False)
-    logger.info("Config written to %s", XRAY_CONFIG_PATH)
+        f.write(new_content)
+    logger.info("Config changed → written to %s", XRAY_CONFIG_PATH)
 
     restart_via = None
     error_msg = None

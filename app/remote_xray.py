@@ -10,7 +10,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.models import Server, VPNKey
-from app.xray import XHTTP_MODE
+from app.xray import XHTTP_MODE, _host_is_ip
 
 logger = logging.getLogger(__name__)
 
@@ -47,47 +47,55 @@ def _build_remote_config(server: Server, keys: list[VPNKey]) -> dict[str, Any]:
                 "level": 0
             })
 
-    inbounds: list[dict[str, Any]] = [
-        {
-            "tag": "VLESS-WS",
-            "listen": "0.0.0.0",
-            "port": server.ws_port,
-            "protocol": "vless",
-            "settings": {"clients": vless_clients, "decryption": "none"},
-            "streamSettings": {
-                "network": "ws",
-                "security": "none",
-                "wsSettings": {"path": "/vless-ws", "heartbeatPeriod": 30}
+    # WS/XHTTP/gRPC работают ТОЛЬКО за nginx+TLS (домен). На голом IP-узле
+    # nginx нет — эти inbound'ы были бы plaintext-VLESS, к которым клиент по
+    # TLS-ссылкам не подключится, плюс ws_port=443 конфликтует с REALITY:443.
+    # Поэтому для IP-хоста собираем ТОЛЬКО REALITY (см. get_server_links —
+    # ссылки для IP тоже только REALITY). Для домена — полный набор.
+    is_ip = _host_is_ip(server.host)
+    inbounds: list[dict[str, Any]] = []
+    if not is_ip:
+        inbounds.extend([
+            {
+                "tag": "VLESS-WS",
+                "listen": "0.0.0.0",
+                "port": server.ws_port,
+                "protocol": "vless",
+                "settings": {"clients": vless_clients, "decryption": "none"},
+                "streamSettings": {
+                    "network": "ws",
+                    "security": "none",
+                    "wsSettings": {"path": "/vless-ws", "heartbeatPeriod": 30}
+                },
+                "sniffing": {"enabled": True, "destOverride": ["http", "tls", "quic"]}
             },
-            "sniffing": {"enabled": True, "destOverride": ["http", "tls", "quic"]}
-        },
-        {
-            "tag": "VLESS-XHTTP",
-            "listen": "0.0.0.0",
-            "port": server.xhttp_port,
-            "protocol": "vless",
-            "settings": {"clients": vless_clients, "decryption": "none"},
-            "streamSettings": {
-                "network": "xhttp",
-                "security": "none",
-                "xhttpSettings": {"path": "/xhttp", "mode": XHTTP_MODE, "xPaddingBytes": "100-1000"}
+            {
+                "tag": "VLESS-XHTTP",
+                "listen": "0.0.0.0",
+                "port": server.xhttp_port,
+                "protocol": "vless",
+                "settings": {"clients": vless_clients, "decryption": "none"},
+                "streamSettings": {
+                    "network": "xhttp",
+                    "security": "none",
+                    "xhttpSettings": {"path": "/xhttp", "mode": XHTTP_MODE, "xPaddingBytes": "100-1000"}
+                },
+                "sniffing": {"enabled": True, "destOverride": ["http", "tls", "quic"]}
             },
-            "sniffing": {"enabled": True, "destOverride": ["http", "tls", "quic"]}
-        },
-        {
-            "tag": "VLESS-gRPC",
-            "listen": "0.0.0.0",
-            "port": server.grpc_port,
-            "protocol": "vless",
-            "settings": {"clients": vless_clients, "decryption": "none"},
-            "streamSettings": {
-                "network": "grpc",
-                "security": "none",
-                "grpcSettings": {"serviceName": "VpnService", "multiMode": False}
+            {
+                "tag": "VLESS-gRPC",
+                "listen": "0.0.0.0",
+                "port": server.grpc_port,
+                "protocol": "vless",
+                "settings": {"clients": vless_clients, "decryption": "none"},
+                "streamSettings": {
+                    "network": "grpc",
+                    "security": "none",
+                    "grpcSettings": {"serviceName": "VpnService", "multiMode": False}
+                },
+                "sniffing": {"enabled": True, "destOverride": ["http", "tls", "quic"]}
             },
-            "sniffing": {"enabled": True, "destOverride": ["http", "tls", "quic"]}
-        },
-    ]
+        ])
 
     # REALITY inbound если настроен
     if server.reality_private_key and server.reality_short_id:
@@ -210,6 +218,12 @@ async def push_config_to_server(server: Server, keys: list[VPNKey]) -> bool:
             data = resp.json()
             ok = data.get("ok", False)
             restarted = data.get("restarted", False)
+            unchanged = data.get("unchanged", False)
+            if ok and unchanged:
+                # Конфиг идентичен текущему — нода ничего не трогала. Это норма
+                # (пуш раз в 5 минут), а НЕ ошибка: пользователи не обрываются.
+                logger.debug("Config unchanged on %s — restart skipped", server.name)
+                return True
             if ok and restarted:
                 logger.info("Config pushed and restarted on %s", server.name)
                 return True

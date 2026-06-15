@@ -16,7 +16,14 @@
       "Bash(python -m py_compile app/xray.py app/remote_xray.py app/routers/admin.py)",
       "Bash(python -c \"print\\('x'*64\\)\")",
       "Bash(SECRET_KEY=__CMDSUB_OUTPUT__ TESTING=1 python -c ' *)",
-      "Bash(grep -c 'id=\"__TRACKED_VAR__\"' admin.html)"
+      "Bash(grep -c 'id=\"__TRACKED_VAR__\"' admin.html)",
+      "Bash(grep -vE '\\\\.\\(pyc|png|jpg|ico|woff|woff2|ttf\\)$')",
+      "Bash(nslookup ufolabs.online 1.1.1.1)",
+      "Bash(python -m py_compile app/xray.py app/remote_xray.py xray-node/main.py)",
+      "Bash(python3 -m py_compile app/xray.py app/remote_xray.py xray-node/main.py)",
+      "Bash(bash -n scripts/12-switch-ru-cascade.sh)",
+      "Bash(bash -n node-package/install.sh)",
+      "Bash(python -m py_compile app/remote_xray.py)"
     ]
   }
 }

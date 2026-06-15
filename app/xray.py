@@ -25,8 +25,10 @@ RU_SERVER_DOMAIN = os.getenv("RU_SERVER_DOMAIN", DOMAIN)
 NL_SERVER_DOMAIN = os.getenv("NL_SERVER_DOMAIN", "")
 
 # Транзит NL → RU (сервер-сервер через REALITY)
+# RU-транзит (REALITY inbound на RU-сервере) слушает 443 — см. xray/xray-ru.json
+# и scripts/setup-ru-server.sh. Дефолт ДОЛЖЕН совпадать с remote_xray.py.
 RU_TRANSIT_UUID = os.getenv("RU_TRANSIT_UUID", "")
-RU_TRANSIT_PORT = int(os.getenv("RU_TRANSIT_PORT", "8443"))
+RU_TRANSIT_PORT = int(os.getenv("RU_TRANSIT_PORT", "443"))
 RU_TRANSIT_PUBLIC_KEY = os.getenv("RU_TRANSIT_PUBLIC_KEY", "")
 RU_TRANSIT_SHORT_ID = os.getenv("RU_TRANSIT_SHORT_ID", "aabbccdd")
 RU_TRANSIT_SN = os.getenv("RU_TRANSIT_SN", "www.google.com")
