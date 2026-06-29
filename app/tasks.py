@@ -16,8 +16,62 @@ TRAFFIC_COLLECT_INTERVAL = 300   # 5 минут
 EXPIRE_CHECK_INTERVAL = 3600     # 1 час
 REMOTE_SYNC_INTERVAL = 300       # 5 минут
 BACKUP_INTERVAL = 86400          # 24 часа
-SNAPSHOT_RETENTION_DAYS = 90     # хранить снимки трафика 90 дней
+SNAPSHOT_RETENTION_DAYS = 30     # хранить снимки трафика 30 дней (совпадает с макс. периодом аналитики)
 SNAPSHOT_CLEANUP_INTERVAL = 86400  # чистка раз в сутки
+
+# Последнее «сырое» значение счётчика Xray по UUID (в памяти процесса).
+# Нужно для корректного подсчёта дельт: счётчики Xray обнуляются при рестарте
+# контейнера, поэтому нельзя считать их вечно растущими.
+_last_raw: dict[str, int] = {}
+
+
+def collect_and_store_traffic(db, all_stats: dict[str, int]) -> int:
+    """Применить статистику Xray к data_used и записать почасовой снимок.
+
+    - Накопительный учёт: data_used += дельта (а не = текущему счётчику Xray),
+      что переживает рестарты Xray (счётчики в памяти обнуляются).
+    - Детект сброса: если raw < предыдущего — счётчик обнулён, дельта = raw.
+    - Снимок один на ключ в час (upsert в строку с recorded_at = начало часа),
+      чтобы не раздувать БД (раньше писалось каждые 5 минут).
+
+    Возвращает количество ключей, по которым был прирост.
+    """
+    keys = db.query(VPNKey).filter(VPNKey.is_active == True).all()  # noqa: E712
+    now = datetime.utcnow()  # naive UTC — совместимо с SQLite DateTime
+    hour_start = now.replace(minute=0, second=0, microsecond=0)
+    updated = 0
+    for key in keys:
+        if key.protocol != "vless":
+            continue
+        new_raw = all_stats.get(key.uuid, 0)
+        prev = _last_raw.get(key.uuid)
+        _last_raw[key.uuid] = new_raw
+        if prev is None:
+            # Первая засечка после старта процесса — задаём базовую линию,
+            # дельту не считаем (иначе можно задвоить накопленное в Xray).
+            continue
+        delta = new_raw - prev if new_raw >= prev else new_raw  # reset → дельта = raw
+        if delta <= 0:
+            continue
+        key.data_used = (key.data_used or 0) + delta
+        snap = db.query(TrafficSnapshot).filter(
+            TrafficSnapshot.vpn_key_id == key.id,
+            TrafficSnapshot.recorded_at == hour_start,
+        ).first()
+        if snap:
+            snap.bytes_delta = (snap.bytes_delta or 0) + delta
+            snap.total_bytes = key.data_used
+        else:
+            db.add(TrafficSnapshot(
+                vpn_key_id=key.id,
+                bytes_delta=delta,
+                total_bytes=key.data_used,
+                recorded_at=hour_start,
+            ))
+        updated += 1
+    if updated:
+        db.commit()
+    return updated
 
 
 async def periodic_traffic_collector() -> None:
@@ -51,25 +105,8 @@ async def periodic_traffic_collector() -> None:
 
             db = SessionLocal()
             try:
-                keys = db.query(VPNKey).filter(VPNKey.is_active == True).all()  # noqa: E712
-                updated = 0
-                now = datetime.utcnow()  # naive UTC — совместимо с SQLite DateTime
-                for key in keys:
-                    if key.protocol != "vless":
-                        continue
-                    new_total = all_stats.get(key.uuid, 0)
-                    if new_total > (key.data_used or 0):
-                        delta = new_total - (key.data_used or 0)
-                        key.data_used = new_total
-                        db.add(TrafficSnapshot(
-                            vpn_key_id=key.id,
-                            bytes_delta=delta,
-                            total_bytes=new_total,
-                            recorded_at=now,
-                        ))
-                        updated += 1
+                updated = collect_and_store_traffic(db, all_stats)
                 if updated:
-                    db.commit()
                     logger.info("Трафик обновлён для %d ключей", updated)
             finally:
                 db.close()
@@ -154,8 +191,13 @@ async def periodic_backup() -> None:
 
 
 async def periodic_snapshot_cleanup() -> None:
-    """Удаляет снимки трафика старше SNAPSHOT_RETENTION_DAYS дней."""
-    await asyncio.sleep(3600 * 2)  # первый прогон через 2 часа после старта
+    """Удаляет снимки трафика старше SNAPSHOT_RETENTION_DAYS дней и сжимает БД.
+
+    Первый прогон — через 5 минут после старта (а не 2 часа): при частых
+    рестартах долгая задержка означала, что чистка фактически не запускалась.
+    После удаления выполняется VACUUM, иначе файл SQLite не уменьшается.
+    """
+    await asyncio.sleep(300)
     while True:
         try:
             from datetime import timedelta
@@ -170,6 +212,17 @@ async def periodic_snapshot_cleanup() -> None:
                     logger.info("Удалено %d устаревших снимков трафика (старше %d дней)", deleted, SNAPSHOT_RETENTION_DAYS)
             finally:
                 db.close()
+            if deleted:
+                # VACUUM нельзя выполнять внутри транзакции — отдельное соединение
+                # в режиме AUTOCOMMIT. Освобождает место на диске после удаления.
+                try:
+                    from sqlalchemy import text as _sa_text
+                    from app.models import engine as _engine
+                    with _engine.connect().execution_options(isolation_level="AUTOCOMMIT") as _conn:
+                        _conn.execute(_sa_text("VACUUM"))
+                    logger.info("VACUUM выполнен — файл БД сжат")
+                except Exception as _ve:
+                    logger.warning("VACUUM пропущен: %s", _ve)
         except asyncio.CancelledError:
             raise
         except Exception as e:

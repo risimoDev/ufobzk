@@ -1843,30 +1843,12 @@ async def analytics_force_collect(
 ):
     """Немедленно собирает статистику трафика из Xray API (без ожидания 5 минут)."""
     from app.xray import get_all_xray_stats
+    from app.tasks import collect_and_store_traffic
 
     all_stats = await asyncio.to_thread(get_all_xray_stats)
     stats_available = bool(all_stats)
 
-    collected = 0
-    if all_stats:
-        now_naive = datetime.utcnow()  # naive UTC для SQLite
-        keys = db.query(VPNKey).filter(VPNKey.is_active == True).all()  # noqa: E712
-        for key in keys:
-            if key.protocol != "vless":
-                continue
-            new_total = all_stats.get(key.uuid, 0)
-            if new_total > (key.data_used or 0):
-                delta = new_total - (key.data_used or 0)
-                key.data_used = new_total
-                db.add(TrafficSnapshot(
-                    vpn_key_id=key.id,
-                    bytes_delta=delta,
-                    total_bytes=new_total,
-                    recorded_at=now_naive,
-                ))
-                collected += 1
-        if collected:
-            db.commit()
+    collected = collect_and_store_traffic(db, all_stats) if all_stats else 0
 
     return JSONResponse({"ok": True, "collected": collected, "stats_available": stats_available})
 

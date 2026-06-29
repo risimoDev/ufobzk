@@ -42,9 +42,9 @@ bash scripts/setup-ru-server.sh
 
 ```bash
 bash scripts/12-switch-ru-cascade.sh \
-    --ip <НОВЫЙ_RU_IP> \
-    --pubkey <RU_REALITY_PUBLIC_KEY_из_шага_1> \
-    --shortid <RU_SHORT_ID_из_шага_1> \
+    --ip 195.208.2.138 \
+    --pubkey aTJP4DIeIAVyXUjQuYv4DHBjdVCuw4SlGs4ysyEMfx8 \
+    --shortid b3cedd8dfb1068fe \
     --sn www.samsung.com
 ```
 

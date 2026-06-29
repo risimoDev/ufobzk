@@ -131,7 +131,7 @@
 ## 7. Что требуется дальше (чек-лист)
 
 ### Деплой текущих фиксов
-- [ ] Основной сервер: `git pull && docker compose up -d --build`.
+- [ ] Основной сервер: `git pull && `.
 - [ ] Существующие доп-ноды (Docker): `git pull && docker compose up -d --build`.
 - [ ] Существующие доп-ноды (systemd, скрипт 09):
       `git pull && systemctl restart xray-node`.
