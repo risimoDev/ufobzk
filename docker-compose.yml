@@ -9,6 +9,10 @@ services:
     image: nginx:1.27-alpine
     container_name: ufobzk-nginx
     restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
     logging:
       driver: "json-file"
       options:
@@ -68,6 +72,10 @@ services:
     image: teddysun/xray:latest
     container_name: ufobzk-xray
     restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
     logging:
       driver: "json-file"
       options:

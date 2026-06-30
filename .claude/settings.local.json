@@ -23,7 +23,12 @@
       "Bash(python3 -m py_compile app/xray.py app/remote_xray.py xray-node/main.py)",
       "Bash(bash -n scripts/12-switch-ru-cascade.sh)",
       "Bash(bash -n node-package/install.sh)",
-      "Bash(python -m py_compile app/remote_xray.py)"
+      "Bash(python -m py_compile app/remote_xray.py)",
+      "Bash(bash -n scripts/13-diagnose-new-server.sh)",
+      "Bash(bash -n scripts/14-diagnose-ru-cascade.sh)",
+      "Bash(python -c \"import yaml,sys; yaml.safe_load\\(open\\('docker-compose.yml'\\)\\); print\\('compose YAML OK'\\)\")",
+      "Bash(ls \"C:/Users/User/.claude/projects/c--Projects-ufobzk/memory/\" 2>/dev/null && echo \"---\" && cat \"C:/Users/User/.claude/projects/c--Projects-ufobzk/memory/MEMORY.md\" 2>/dev/null || echo \"no MEMORY.md yet\")",
+      "Read(//c/Users/User/.claude/projects/c--Projects-ufobzk/**)"
     ]
   }
 }
