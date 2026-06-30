@@ -212,17 +212,25 @@ curl -k https://localhost/admin
 Отдельный прокси специально для Telegram (FakeTLS). Контейнер `mtg` уже в
 `docker-compose.yml`, секрет генерируется из админки.
 
+Образ mtg — distroless (нет `/bin/sh`), бинарь запускается напрямую
+(`command: run /etc/mtg/config.toml`). Конфиг (секрет) пишет приложение в общий
+том `mtg-config`, поэтому **секрет генерируем ДО подъёма mtg** — иначе контейнер
+будет падать в restart-loop, пока файла нет.
+
 ```bash
 # 1. Открыть порт MTProto в firewall (дефолт 8765, см. MTPROTO_PORT в .env)
 ufw allow 8765/tcp comment 'MTProto (Telegram)'
 
-# 2. Поднять сервис (если стек уже запущен — только mtg)
-docker compose up -d mtg
+# 2. Пересоздать ufo-app под новый compose (нужен общий том mtg-config)
+docker compose up -d --build ufo-app
 
 # 3. В админке: Настройки → 🔵 MTProto прокси → «Сгенерировать секрет».
-#    Приложение запишет config.toml в volume и перезапустит контейнер mtg.
+#    Приложение запишет config.toml в том mtg-config (и попробует поднять mtg).
 
-# 4. Проверка
+# 4. Поднять/перезапустить сервис — теперь config.toml уже есть
+docker compose up -d mtg
+
+# 5. Проверка
 docker logs ufobzk-mtg          # должен слушать 0.0.0.0:3128
 docker compose ps mtg
 ```

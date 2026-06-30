@@ -123,12 +123,11 @@ services:
       - "${MTPROTO_PORT:-8765}:3128"
     volumes:
       - mtg-config:/etc/mtg
-    entrypoint:
-      [
-        "/bin/sh",
-        "-c",
-        "until [ -f /etc/mtg/config.toml ]; do echo 'Waiting for mtg config...'; sleep 2; done; exec mtg run /etc/mtg/config.toml",
-      ]
+    # Образ mtg distroless (нет /bin/sh) — запускаем бинарь напрямую.
+    # Конфиг (секрет) пишет приложение в общий том mtg-config из админки.
+    # Пока config.toml нет — контейнер падает и перезапускается (restart:
+    # unless-stopped) до появления файла; после генерации секрета стартует штатно.
+    command: ["run", "/etc/mtg/config.toml"]
     networks:
       - backend
 
