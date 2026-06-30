@@ -30,6 +30,9 @@ from app.xray import (
     DOMAIN, GB, NL_SERVER_IP, REALITY_PORT, REALITY_PUBLIC_KEY,
     RU_SERVER_IP, XRAY_CONFIG_PATH, generate_uuid, get_user_links, sync_and_reload,
 )
+from app.mtproto import (
+    DEFAULT_FAKETLS_DOMAIN, generate_mtproto_secret, get_mtproto_config, sync_mtg,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -1445,6 +1448,78 @@ async def admin_save_settings(
             saved.append(k)
     _log_action(db, admin.id, "save_settings", "", f"keys={saved}")
     return JSONResponse({"ok": True, "saved": saved})
+
+
+# ── MTProto-прокси (Telegram) ──
+
+
+def _bg_sync_mtg() -> None:
+    """Фоновая синхронизация mtg — запускается после ответа клиенту."""
+    from app.models import SessionLocal as _SessionLocal
+    db = _SessionLocal()
+    try:
+        sync_mtg(db)
+    except Exception as e:
+        logger.error("Ошибка фоновой синхронизации mtg: %s", e)
+    finally:
+        db.close()
+
+
+@router.get("/admin/mtproto")
+async def admin_get_mtproto(
+    request: Request,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Текущие настройки MTProto + готовые ссылки подключения."""
+    return JSONResponse(get_mtproto_config(db))
+
+
+@router.post("/admin/mtproto/generate")
+async def admin_generate_mtproto(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Сгенерировать новый FakeTLS-секрет, сохранить и применить (рестарт mtg)."""
+    body = await request.json()
+    domain = (body.get("domain") or get_setting(db, "mtproto_domain", DEFAULT_FAKETLS_DOMAIN)).strip()
+    if not domain:
+        domain = DEFAULT_FAKETLS_DOMAIN
+
+    secret = generate_mtproto_secret(domain)
+    set_setting(db, "mtproto_domain", domain)
+    set_setting(db, "mtproto_secret", secret)
+    # Генерация секрета сразу включает прокси.
+    set_setting(db, "mtproto_enabled", "1")
+
+    _log_action(db, admin.id, "gen_mtproto", "", f"domain={domain} secret={secret[:10]}...")
+    background_tasks.add_task(_bg_sync_mtg)
+    return JSONResponse(get_mtproto_config(db))
+
+
+@router.put("/admin/mtproto")
+async def admin_save_mtproto(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Сохранить настройки MTProto (вкл/выкл, домен, host, port) и применить."""
+    body = await request.json()
+    if "enabled" in body:
+        set_setting(db, "mtproto_enabled", "1" if body.get("enabled") else "0")
+    if "domain" in body:
+        set_setting(db, "mtproto_domain", str(body["domain"]).strip() or DEFAULT_FAKETLS_DOMAIN)
+    if "host" in body:
+        set_setting(db, "mtproto_host", str(body["host"]).strip())
+    if "port" in body:
+        set_setting(db, "mtproto_port", str(body["port"]).strip() or "8765")
+
+    _log_action(db, admin.id, "save_mtproto", "", f"enabled={get_setting(db, 'mtproto_enabled')}")
+    background_tasks.add_task(_bg_sync_mtg)
+    return JSONResponse(get_mtproto_config(db))
 
 
 # ── Миграция NL сервера ──

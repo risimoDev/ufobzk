@@ -597,6 +597,13 @@ DEFAULT_SETTINGS = {
     "app_link_windows": "https://github.com/hiddify/hiddify-app/releases/latest",
     "app_link_macos": "https://github.com/hiddify/hiddify-app/releases/latest",
     "support_text": "По вопросам обратитесь к администратору.",
+    # MTProto-прокси для Telegram (общий FakeTLS-секрет, демон mtg).
+    # Секрет генерируется в админке; host/port — для построения tg://-ссылки.
+    "mtproto_enabled": "0",
+    "mtproto_secret": "",
+    "mtproto_domain": "www.cloudflare.com",
+    "mtproto_host": "",
+    "mtproto_port": "8765",
 }
 
 

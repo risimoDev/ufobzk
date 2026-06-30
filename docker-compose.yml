@@ -102,6 +102,36 @@ services:
     networks:
       - backend
 
+  # ── mtg — MTProto-прокси для Telegram ──
+  # Конфиг (секрет) пишется приложением в общий volume mtg-config;
+  # контейнер ждёт файл и применяет его (рестарт через docker-socket из ufo-app).
+  mtg:
+    image: nineseconds/mtg:2
+    container_name: ufobzk-mtg
+    restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    ports:
+      # Публикуемый порт MTProto (контейнер слушает 3128)
+      - "${MTPROTO_PORT:-8765}:3128"
+    volumes:
+      - mtg-config:/etc/mtg
+    entrypoint:
+      [
+        "/bin/sh",
+        "-c",
+        "until [ -f /etc/mtg/config.toml ]; do echo 'Waiting for mtg config...'; sleep 2; done; exec mtg run /etc/mtg/config.toml",
+      ]
+    networks:
+      - backend
+
   # ── UFO App — FastAPI приложение ──
   ufo-app:
     build:
@@ -120,9 +150,11 @@ services:
       - .env
     environment:
       - XRAY_CONFIG_PATH=/etc/xray/config.json
+      - MTG_CONFIG_PATH=/etc/mtg/config.toml
     volumes:
       - app-data:/project/data
       - xray-config:/etc/xray
+      - mtg-config:/etc/mtg
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       xray:
@@ -154,6 +186,7 @@ volumes:
   app-data:
   xray-config:
   xray-logs:
+  mtg-config:
   certbot-webroot:
   certbot-certs:
   nginx-logs:

@@ -28,7 +28,11 @@
       "Bash(bash -n scripts/14-diagnose-ru-cascade.sh)",
       "Bash(python -c \"import yaml,sys; yaml.safe_load\\(open\\('docker-compose.yml'\\)\\); print\\('compose YAML OK'\\)\")",
       "Bash(ls \"C:/Users/User/.claude/projects/c--Projects-ufobzk/memory/\" 2>/dev/null && echo \"---\" && cat \"C:/Users/User/.claude/projects/c--Projects-ufobzk/memory/MEMORY.md\" 2>/dev/null || echo \"no MEMORY.md yet\")",
-      "Read(//c/Users/User/.claude/projects/c--Projects-ufobzk/**)"
+      "Read(//c/Users/User/.claude/projects/c--Projects-ufobzk/**)",
+      "Bash(grep -n \"mtproto\\\\|mtg\\\\|MTProto\\\\|MTPROTO\\\\|tg://\\\\|t.me/proxy\" -ri c:/Projects/ufobzk/app c:/Projects/ufobzk/docker-compose.yml c:/Projects/ufobzk/.env.example)",
+      "Bash(python -m py_compile app/routers/admin.py app/routers/cabinet.py app/mtproto.py app/models.py)",
+      "Bash(python -c \"import yaml; d=yaml.safe_load\\(open\\('docker-compose.yml',encoding='utf-8'\\)\\); print\\('services:', list\\(d['services'].keys\\(\\)\\)\\); print\\('volumes:', list\\(d['volumes'].keys\\(\\)\\)\\)\")",
+      "Bash(bash -n scripts/08-deploy-main-server.sh)"
     ]
   }
 }

@@ -249,6 +249,16 @@ ok "ufo-app healthy"
 # Nginx reload (подхватывает изменения конфига без даунтайма)
 docker compose exec -T nginx nginx -s reload 2>/dev/null && ok "Nginx перезагружен" || warn "Nginx reload пропущен"
 
+# MTProto-прокси (mtg) — идемпотентно поднимаем новый сервис, если он ещё не запущен
+# или появился в compose. --no-deps: не трогаем xray/nginx (zero-downtime сохраняется).
+# Секрет/config.toml пишет приложение из админки — здесь только гарантируем, что
+# контейнер существует и работает.
+if grep -q "^[[:space:]]*mtg:" docker-compose.yml 2>/dev/null; then
+    docker compose up -d --no-deps mtg >/dev/null 2>&1 \
+        && ok "mtg (MTProto) запущен/актуализирован" \
+        || warn "mtg не удалось поднять — проверьте: docker compose logs mtg"
+fi
+
 # ══════════════════════════════════════════
 # 7. Проверка БД и миграций
 # ══════════════════════════════════════════
@@ -305,7 +315,7 @@ fi
 sep; log "Шаг 8/9: Проверка сервисов..."
 
 # ── Контейнеры ──
-for svc in ufo-app nginx xray; do
+for svc in ufo-app nginx xray mtg; do
     SVC_STATUS=$(docker compose ps "$svc" --format '{{.Status}}' 2>/dev/null || echo "unknown")
     if echo "$SVC_STATUS" | grep -qi "running\|up\|healthy"; then
         ok "Контейнер ${svc}: ${SVC_STATUS}"

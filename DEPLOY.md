@@ -207,7 +207,31 @@ curl -k https://localhost:2053/  # должен вернуть пустой от
 curl -k https://localhost/admin
 ```
 
-### 2.6. Настройка Xray нод в админке
+### 2.6. MTProto-прокси для Telegram (mtg)
+
+Отдельный прокси специально для Telegram (FakeTLS). Контейнер `mtg` уже в
+`docker-compose.yml`, секрет генерируется из админки.
+
+```bash
+# 1. Открыть порт MTProto в firewall (дефолт 8765, см. MTPROTO_PORT в .env)
+ufw allow 8765/tcp comment 'MTProto (Telegram)'
+
+# 2. Поднять сервис (если стек уже запущен — только mtg)
+docker compose up -d mtg
+
+# 3. В админке: Настройки → 🔵 MTProto прокси → «Сгенерировать секрет».
+#    Приложение запишет config.toml в volume и перезапустит контейнер mtg.
+
+# 4. Проверка
+docker logs ufobzk-mtg          # должен слушать 0.0.0.0:3128
+docker compose ps mtg
+```
+
+Ссылка `tg://proxy` / `https://t.me/proxy` появится в админке и в кабинете
+пользователя. На главном host-порты 80/443/2053 заняты nginx/xray — поэтому
+MTProto вынесен на отдельный порт (дефолт 8765, меняется через `MTPROTO_PORT`).
+
+### 2.7. Настройка Xray нод в админке
 
 После первого запуска:
 

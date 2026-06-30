@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.auth import hash_password, verify_user_credentials
 from app.dependencies import _get_current_user, templates, verify_csrf
 from app.models import DEFAULT_SETTINGS, User, get_db, get_setting
+from app.mtproto import get_mtproto_config
 from app.xray import DOMAIN, get_all_links
 
 logger = logging.getLogger(__name__)
@@ -68,6 +69,11 @@ async def cabinet(request: Request, db: Session = Depends(get_db)):
 
     settings = {k: get_setting(db, k) or DEFAULT_SETTINGS.get(k, "") for k in DEFAULT_SETTINGS}
 
+    # MTProto-прокси для Telegram — показываем только если включён и есть ссылка
+    mtproto = get_mtproto_config(db)
+    if not (mtproto.get("enabled") and mtproto.get("tg_link")):
+        mtproto = None
+
     return templates.TemplateResponse(
         "cabinet.html",
         {
@@ -77,6 +83,7 @@ async def cabinet(request: Request, db: Session = Depends(get_db)):
             "subscription_url": subscription_url,
             "has_password": bool(user.password_hash),
             "settings": settings,
+            "mtproto": mtproto,
         },
     )
 
