@@ -28,7 +28,10 @@ services:
       - nginx-logs:/var/log/nginx
     environment:
       - DOMAIN=${DOMAIN}
-    entrypoint: "/bin/sh -c 'envsubst \"\\$$DOMAIN\" < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && nginx -g \"daemon off;\"'"
+    # Nginx кеширует сертификат в памяти при старте — после certbot renew он
+    # продолжает отдавать СТАРЫЙ (просроченный) cert до перезагрузки конфига.
+    # Фоновый цикл перечитывает сертификаты каждые 6ч.
+    entrypoint: "/bin/sh -c 'envsubst \"\\$$DOMAIN\" < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
     depends_on:
       ufo-app:
         condition: service_healthy
@@ -52,6 +55,9 @@ services:
   certbot:
     image: certbot/certbot:latest
     container_name: ufobzk-certbot
+    # Без restart-политики цикл автообновления не переживает reboot сервера и
+    # не поднимается деплой-скриптами (они делают up -d --no-deps ufo-app).
+    restart: unless-stopped
     logging:
       driver: "json-file"
       options:
