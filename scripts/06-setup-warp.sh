@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────
 # 06-setup-warp.sh — Регистрация Cloudflare WARP
-# и настройка WireGuard outbound в Xray
+# и включение WireGuard outbound в Xray.
+#
+# Зачем: гео-база Google метит наш IPv4 как RU (поведенческий сигнал — через
+# выход ходят почти только российские пользователи), хотя MaxMind/RIPE/Cloudflare
+# видят NL. Лечится только тем, что трафик google/youtube выпускается другим
+# путём. Этот скрипт заводит WARP-выход и прописывает ключи в .env; сам конфиг
+# Xray собирает приложение (app/xray.py → build_xray_config).
+#
+# Запускать на ГЛАВНОМ сервере (docker-стек ufobzk-*).
 # ─────────────────────────────────────────────────
 set -euo pipefail
 
@@ -12,10 +20,11 @@ error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 ENV_FILE="$PROJECT_DIR/.env"
-XRAY_CONFIG="$PROJECT_DIR/xray_config.json"
+APP_CONTAINER="ufobzk-app"
+XRAY_CONTAINER="ufobzk-xray"
 
 [ -f "$ENV_FILE" ] || error ".env не найден: $ENV_FILE"
-[ -f "$XRAY_CONFIG" ] || error "xray_config.json не найден: $XRAY_CONFIG"
+command -v python3 &>/dev/null || error "python3 не найден"
 
 # ─── Устанавливаем wgcf если нет ────────────────
 if ! command -v wgcf &>/dev/null; then
@@ -35,137 +44,143 @@ cd "$WARP_DIR"
 if [ ! -f wgcf-account.toml ]; then
     info "Регистрация нового аккаунта WARP..."
     wgcf register --accept-tos
+else
+    info "Используем существующий аккаунт WARP (.warp/wgcf-account.toml)"
 fi
 
 info "Генерация конфигурации WireGuard..."
-wgcf generate
+wgcf generate --profile wgcf-profile.conf >/dev/null
 [ -f wgcf-profile.conf ] || error "Не удалось сгенерировать wgcf-profile.conf"
 
 # ─── Извлекаем параметры ────────────────────────
-WARP_PRIVATE=$(grep "^PrivateKey" wgcf-profile.conf | awk '{print $3}')
-WARP_ADDRESS4=$(grep "^Address" wgcf-profile.conf | head -1 | awk '{print $3}' | cut -d/ -f1)
-WARP_ADDRESS6=$(grep "^Address" wgcf-profile.conf | tail -1 | awk '{print $3}' | cut -d/ -f1)
-WARP_PUBLIC=$(grep "^PublicKey" wgcf-profile.conf | awk '{print $3}')
-WARP_ENDPOINT=$(grep "^Endpoint" wgcf-profile.conf | awk '{print $3}')
+WARP_PRIVATE=$(awk -F' = ' '/^PrivateKey/{print $2}' wgcf-profile.conf)
+WARP_PUBLIC=$(awk -F' = ' '/^PublicKey/{print $2}' wgcf-profile.conf)
+WARP_ENDPOINT=$(awk -F' = ' '/^Endpoint/{print $2}' wgcf-profile.conf)
+WARP_ADDRESS4=$(awk -F' = ' '/^Address/{print $2}' wgcf-profile.conf | grep -m1 '\.' | cut -d/ -f1)
+WARP_ADDRESS6=$(awk -F' = ' '/^Address/{print $2}' wgcf-profile.conf | grep -m1 ':' | cut -d/ -f1)
 
-[ -n "$WARP_PRIVATE" ] || error "Не удалось извлечь PrivateKey из wgcf-profile.conf"
+[ -n "$WARP_PRIVATE"  ] || error "Не удалось извлечь PrivateKey из wgcf-profile.conf"
+[ -n "$WARP_PUBLIC"   ] || error "Не удалось извлечь PublicKey из wgcf-profile.conf"
+[ -n "$WARP_ADDRESS4" ] || error "Не удалось извлечь IPv4-адрес из wgcf-profile.conf"
+[ -n "$WARP_ENDPOINT" ] || WARP_ENDPOINT="engage.cloudflareclient.com:2408"
 
 info "WARP PrivateKey: ${WARP_PRIVATE:0:8}..."
 info "WARP Address v4: $WARP_ADDRESS4"
-info "WARP Address v6: $WARP_ADDRESS6"
+info "WARP Address v6: ${WARP_ADDRESS6:-<нет>}"
+info "WARP Endpoint:   $WARP_ENDPOINT"
 
-# ─── Генерация reserved bytes ───────────────────
-# wgcf не даёт reserved напрямую; используем API Cloudflare
-# Для простоты ставим [0,0,0] — работает в большинстве случаев
+# ─── reserved: 3 байта из client_id аккаунта ────
+# Cloudflare маршрутизирует сессию по этим байтам. Без них хендшейк обычно
+# проходит, но соединение может молча не передавать трафик — поэтому тянем
+# client_id из API и считаем честно, с откатом на [0,0,0].
 WARP_RESERVED="0,0,0"
-info "Reserved: [$WARP_RESERVED] (по умолчанию)"
+ACCESS_TOKEN=$(awk -F"'" '/^access_token/{print $2}' wgcf-account.toml 2>/dev/null || true)
+DEVICE_ID=$(awk -F"'" '/^device_id/{print $2}' wgcf-account.toml 2>/dev/null || true)
+
+if [ -n "$ACCESS_TOKEN" ] && [ -n "$DEVICE_ID" ]; then
+    REG_JSON=$(curl -fsSL --max-time 15 \
+        -H "Authorization: Bearer $ACCESS_TOKEN" \
+        -H "User-Agent: okhttp/3.12.1" \
+        -H "CF-Client-Version: a-6.10-2158" \
+        "https://api.cloudflareclient.com/v0a2158/reg/$DEVICE_ID" 2>/dev/null || true)
+
+    if [ -n "$REG_JSON" ]; then
+        COMPUTED=$(printf '%s' "$REG_JSON" | python3 -c '
+import base64, json, sys
+try:
+    cid = json.load(sys.stdin).get("config", {}).get("client_id", "")
+    raw = base64.b64decode(cid)
+    if len(raw) == 3:
+        print(",".join(str(b) for b in raw))
+except Exception:
+    pass
+' 2>/dev/null || true)
+        if [ -n "$COMPUTED" ]; then
+            WARP_RESERVED="$COMPUTED"
+            info "Reserved вычислен из client_id: [$WARP_RESERVED]"
+        else
+            warn "client_id не разобран — reserved остаётся [0,0,0]"
+        fi
+    else
+        warn "API Cloudflare недоступен — reserved остаётся [0,0,0]"
+    fi
+else
+    warn "access_token/device_id не найдены в wgcf-account.toml — reserved [0,0,0]"
+fi
 
 # ─── Обновляем .env ─────────────────────────────
-if grep -q "^WARP_PRIVATE_KEY=" "$ENV_FILE"; then
-    sed -i "s|^WARP_PRIVATE_KEY=.*|WARP_PRIVATE_KEY=$WARP_PRIVATE|" "$ENV_FILE"
-else
-    echo "WARP_PRIVATE_KEY=$WARP_PRIVATE" >> "$ENV_FILE"
-fi
+set_env() {
+    local key="$1" value="$2"
+    if grep -q "^${key}=" "$ENV_FILE"; then
+        # value может содержать / и + (base64) — используем | как разделитель
+        sed -i "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
+    else
+        echo "${key}=${value}" >> "$ENV_FILE"
+    fi
+}
 
-if grep -q "^WARP_RESERVED=" "$ENV_FILE"; then
-    sed -i "s|^WARP_RESERVED=.*|WARP_RESERVED=$WARP_RESERVED|" "$ENV_FILE"
-else
-    echo "WARP_RESERVED=$WARP_RESERVED" >> "$ENV_FILE"
-fi
+set_env WARP_PRIVATE_KEY "$WARP_PRIVATE"
+set_env WARP_PUBLIC_KEY  "$WARP_PUBLIC"
+set_env WARP_ADDRESS_V4  "$WARP_ADDRESS4"
+set_env WARP_ADDRESS_V6  "$WARP_ADDRESS6"
+set_env WARP_ENDPOINT    "$WARP_ENDPOINT"
+set_env WARP_RESERVED    "$WARP_RESERVED"
 
-info "Ключи записаны в .env"
+info "Ключи записаны в $ENV_FILE"
 
-# ─── Обновляем xray_config.json ─────────────────
-python3 - "$XRAY_CONFIG" "$WARP_PRIVATE" "$WARP_PUBLIC" "$WARP_ADDRESS4" "$WARP_ADDRESS6" "$WARP_ENDPOINT" <<'PYEOF'
-import json, sys
-
-config_path = sys.argv[1]
-private_key = sys.argv[2]
-public_key  = sys.argv[3]
-addr4       = sys.argv[4]
-addr6       = sys.argv[5]
-endpoint    = sys.argv[6]
-
-with open(config_path, "r") as f:
-    config = json.load(f)
-
-# Ищем существующий WARP outbound (любой регистр тега)
-found = False
-for outbound in config.get("outbounds", []):
-    if outbound.get("tag", "").upper() == "WARP":
-        outbound["settings"]["secretKey"] = private_key
-        outbound["settings"]["address"] = [f"{addr4}/32", f"{addr6}/128"]
-        peers = outbound.get("settings", {}).get("peers", [{}])
-        if peers:
-            peers[0]["publicKey"] = public_key
-            peers[0]["endpoint"] = endpoint
-        found = True
-
-# Если нет — добавляем WARP outbound и routing правило
-if not found:
-    warp_outbound = {
-        "tag": "WARP",
-        "protocol": "wireguard",
-        "settings": {
-            "secretKey": private_key,
-            "address": [f"{addr4}/32", f"{addr6}/128"],
-            "peers": [{
-                "publicKey": public_key,
-                "allowedIPs": ["0.0.0.0/0", "::/0"],
-                "endpoint": endpoint
-            }],
-            "reserved": [0, 0, 0],
-            "mtu": 1280
-        }
-    }
-    config["outbounds"].append(warp_outbound)
-
-    # Добавляем routing правило для стриминговых/AI доменов (перед DIRECT)
-    warp_rule = {
-        "type": "field",
-        "outboundTag": "WARP",
-        "domain": [
-            "geosite:openai",
-            "geosite:netflix",
-            "geosite:spotify",
-            "geosite:disney"
-        ]
-    }
-    rules = config.get("routing", {}).get("rules", [])
-    # Вставляем перед последним правилом (DIRECT)
-    if rules:
-        rules.insert(-1, warp_rule)
-    else:
-        rules.append(warp_rule)
-
-with open(config_path, "w") as f:
-    json.dump(config, f, indent=2, ensure_ascii=False)
-
-print(f"[OK] WARP WireGuard настроен в {config_path}")
-PYEOF
-
-# ─── Перезапуск Marzban ─────────────────────────
-info "Перезапуск Marzban..."
+# ─── Пересоздаём приложение ─────────────────────
+# Именно up -d --force-recreate, а не restart: env_file читается при СОЗДАНИИ
+# контейнера, restart новые переменные не подхватит.
 cd "$PROJECT_DIR"
-docker compose restart marzban
-sleep 3
+info "Пересоздаём $APP_CONTAINER для подхвата новых переменных..."
+docker compose up -d --force-recreate --no-deps ufo-app
+
+info "Ждём пересборку конфига Xray приложением..."
+for _ in $(seq 1 30); do
+    if docker exec "$XRAY_CONTAINER" grep -q '"tag": "WARP"' /etc/xray/config.json 2>/dev/null; then
+        break
+    fi
+    sleep 2
+done
+
+if ! docker exec "$XRAY_CONTAINER" grep -q '"tag": "WARP"' /etc/xray/config.json 2>/dev/null; then
+    error "WARP outbound не появился в /etc/xray/config.json — смотрите: docker logs $APP_CONTAINER"
+fi
+info "WARP outbound есть в конфиге Xray"
+
+sleep 5
+if ! docker ps --filter "name=$XRAY_CONTAINER" --filter "status=running" -q | grep -q .; then
+    error "Контейнер $XRAY_CONTAINER не запущен — смотрите: docker logs $XRAY_CONTAINER"
+fi
+
+if docker logs --tail 50 "$XRAY_CONTAINER" 2>&1 | grep -qi "wireguard.*\(fail\|error\|handshake\)"; then
+    warn "В логах Xray есть ошибки WireGuard:"
+    docker logs --tail 50 "$XRAY_CONTAINER" 2>&1 | grep -i wireguard || true
+    warn "Если трафик не идёт — попробуйте WARP_MTU=1420 или WARP_ENDPOINT=162.159.192.1:2408"
+fi
 
 echo ""
 echo -e "${GREEN}═══════════════════════════════════════════════════${NC}"
-echo -e "${GREEN} WARP outbound настроен!${NC}"
+echo -e "${GREEN} WARP outbound включён${NC}"
 echo -e "${GREEN}═══════════════════════════════════════════════════${NC}"
 echo ""
-echo "  Трафик к следующим сервисам пойдёт через WARP:"
-echo "  ├─ OpenAI (ChatGPT)"
-echo "  ├─ Netflix"
-echo "  ├─ Spotify"
-echo "  ├─ Disney+"
-echo "  └─ (можно добавить в xray_config.json → routing → rules)"
+echo "  Через WARP идут (WARP_DOMAINS в .env, дефолт в app/xray.py):"
+echo "  ├─ geosite:google"
+echo "  ├─ geosite:youtube"
+echo "  └─ googlevideo.com, ytimg.com, ggpht.com"
 echo ""
-echo "  WARP Address: $WARP_ADDRESS4 / $WARP_ADDRESS6"
-echo "  Endpoint:     $WARP_ENDPOINT"
+echo "  Правило стоит ВЫШЕ каскадных правил — YouTube больше не может"
+echo "  утечь в RU-хаб через geoip:ru (GGC-кэши в российских AS)."
 echo ""
-echo -e "${YELLOW}  Если нужен WARP+ (быстрее), введите лицензию:${NC}"
-echo "  wgcf update --name 'vpnbzk' --license 'XXXX-XXXX-XXXX'"
-echo "  Затем перезапустите этот скрипт."
+echo "  Address:  $WARP_ADDRESS4 / ${WARP_ADDRESS6:-—}"
+echo "  Endpoint: $WARP_ENDPOINT"
+echo "  Reserved: [$WARP_RESERVED]"
+echo ""
+echo -e "${YELLOW}  Проверка — подключитесь клиентом и откройте:${NC}"
+echo "  https://www.google.com/search?q=my+ip   → страна не должна быть RU"
+echo "  (в браузере сбросьте cookies google.com/youtube.com — иначе"
+echo "   русский интерфейс останется из-за старой сессии, а не из-за IP)"
+echo ""
+echo -e "${YELLOW}  WARP+ (быстрее, если бесплатный тормозит на 4K):${NC}"
+echo "  cd $WARP_DIR && wgcf update --license 'XXXX-XXXX-XXXX' && bash $0"
 echo ""

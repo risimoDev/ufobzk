@@ -309,7 +309,10 @@ echo ""
 # ══════════════════════════════════════════
 
 if [ "${SKIP_SSL:-false}" != true ]; then
-    CRON_CMD="0 3 * * 0 cd $PROJECT_DIR && docker compose run --rm certbot renew --quiet && docker compose exec nginx nginx -s reload"
+    # --entrypoint certbot обязателен: entrypoint сервиса в compose — это
+    # sh -c с вечным циклом, и аргументы "renew --quiet" он молча игнорирует
+    # (они уходят в $0/$1). Без override cron висит вечно и reload не наступает.
+    CRON_CMD="0 3 * * 0 cd $PROJECT_DIR && docker compose run --rm --entrypoint certbot certbot renew --quiet && docker compose exec nginx nginx -s reload"
     if ! crontab -l 2>/dev/null | grep -q "certbot renew"; then
         (crontab -l 2>/dev/null; echo "$CRON_CMD") | crontab -
         ok "Cron: обновление SSL каждое воскресенье в 03:00"

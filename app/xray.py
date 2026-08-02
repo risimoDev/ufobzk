@@ -33,6 +33,23 @@ RU_TRANSIT_PUBLIC_KEY = os.getenv("RU_TRANSIT_PUBLIC_KEY", "")
 RU_TRANSIT_SHORT_ID = os.getenv("RU_TRANSIT_SHORT_ID", "aabbccdd")
 RU_TRANSIT_SN = os.getenv("RU_TRANSIT_SN", "www.google.com")
 
+# Cloudflare WARP (WireGuard outbound) — заполняется scripts/06-setup-warp.sh.
+# Нужен потому, что гео-база Google метит наш IPv4 как RU (поведенческий сигнал:
+# через выход ходят почти только российские пользователи). Все остальные гео-базы
+# видят NL. Правится только сменой выхода для google/youtube — см. WARP_DOMAINS.
+WARP_PRIVATE_KEY = os.getenv("WARP_PRIVATE_KEY", "")
+WARP_PUBLIC_KEY = os.getenv("WARP_PUBLIC_KEY", "")
+WARP_ADDRESS_V4 = os.getenv("WARP_ADDRESS_V4", "")
+WARP_ADDRESS_V6 = os.getenv("WARP_ADDRESS_V6", "")
+WARP_ENDPOINT = os.getenv("WARP_ENDPOINT", "engage.cloudflareclient.com:2408")
+WARP_RESERVED = os.getenv("WARP_RESERVED", "0,0,0")
+WARP_MTU = int(os.getenv("WARP_MTU", "1280"))
+# Что заворачивать в WARP. Через запятую, синтаксис routing-правил Xray.
+WARP_DOMAINS = os.getenv(
+    "WARP_DOMAINS",
+    "geosite:google,geosite:youtube,domain:googlevideo.com,domain:ytimg.com,domain:ggpht.com",
+)
+
 # Порты
 VLESS_WS_PORT = int(os.getenv("VLESS_WS_PORT", "443"))
 REALITY_PORT = int(os.getenv("REALITY_PORT", "2053"))
@@ -288,6 +305,52 @@ def build_xray_config(db: Session) -> dict[str, Any]:
                 "destOverride": ["http", "tls", "quic"]
             }
         })
+
+    # Google/YouTube через Cloudflare WARP.
+    # ВАЖНО: правило должно стоять ВЫШЕ правил каскада. Google считает наш IPv4
+    # российским и отдаёт для *.googlevideo.com адреса GGC-кэшей внутри российских
+    # AS. Эти адреса матчатся на "geoip:ru" и без этого правила YouTube уходил бы
+    # в RU-хаб — то есть выходил бы в реальный российский IP.
+    if WARP_PRIVATE_KEY and WARP_PUBLIC_KEY and WARP_ADDRESS_V4:
+        warp_address = [f"{WARP_ADDRESS_V4}/32"]
+        if WARP_ADDRESS_V6:
+            warp_address.append(f"{WARP_ADDRESS_V6}/128")
+
+        try:
+            reserved = [int(x) for x in WARP_RESERVED.split(",") if x.strip() != ""]
+        except ValueError:
+            logger.warning("WARP_RESERVED=%r не парсится — использую [0,0,0]", WARP_RESERVED)
+            reserved = [0, 0, 0]
+        if len(reserved) != 3:
+            logger.warning("WARP_RESERVED=%r не 3 байта — использую [0,0,0]", WARP_RESERVED)
+            reserved = [0, 0, 0]
+
+        config["outbounds"].append({
+            "tag": "WARP",
+            "protocol": "wireguard",
+            "settings": {
+                "secretKey": WARP_PRIVATE_KEY,
+                "address": warp_address,
+                "peers": [{
+                    "publicKey": WARP_PUBLIC_KEY,
+                    "allowedIPs": ["0.0.0.0/0", "::/0"],
+                    "endpoint": WARP_ENDPOINT
+                }],
+                "reserved": reserved,
+                "mtu": WARP_MTU
+            }
+        })
+
+        warp_domains = [d.strip() for d in WARP_DOMAINS.split(",") if d.strip()]
+        if warp_domains:
+            rules = config["routing"]["rules"]
+            catchall = rules.pop()  # убираем catch-all (tcp,udp → DIRECT)
+            rules.append({
+                "type": "field",
+                "outboundTag": "WARP",
+                "domain": warp_domains
+            })
+            rules.append(catchall)
 
     # Каскад: NL → RU для российского трафика
     if RU_SERVER_IP and RU_TRANSIT_UUID and RU_TRANSIT_PUBLIC_KEY:

@@ -239,7 +239,58 @@ docker compose ps mtg
 пользователя. На главном host-порты 80/443/2053 заняты nginx/xray — поэтому
 MTProto вынесен на отдельный порт (дефолт 8765, меняется через `MTPROTO_PORT`).
 
-### 2.7. Настройка Xray нод в админке
+### 2.7. WARP-выход для Google/YouTube
+
+**Симптом:** Google и YouTube считают выход российским, хотя сервер в NL:
+
+```
+Service                 IPv4    IPv6
+Google                  RU      PL
+YouTube                 RU      PL
+Netflix                 NL      NL     ← все остальные видят NL
+maxmind.com             NL      NL
+rdap.db.ripe.net        PL      NL
+```
+
+**Причина.** Google не использует MaxMind и не читает whois — у него своя
+гео-база, и главный её источник поведенческий: устройства на Android/Chrome
+регулярно отправляют пару «GPS-координаты + текущий IP». Через наш IPv4 ходят
+почти только российские пользователи, поэтому Google обучил базу считать этот
+/24 российским. IPv6 используется мало и пока «чистый» — отсюда PL.
+
+Следствия: геофид (RFC 8805) и правка `country:` в RIPE не помогают (иначе
+Google показывал бы PL, как и RIPE), а смена IP даёт лишь отсрочку — новый
+адрес протухнет так же, как только на него сядут те же пользователи.
+
+**Решение** — выпускать google/youtube через Cloudflare WARP:
+
+```bash
+bash scripts/06-setup-warp.sh
+```
+
+Скрипт ставит `wgcf`, регистрирует аккаунт WARP, вычисляет `reserved` из
+`client_id` и пишет `WARP_*` в `.env`. Конфиг Xray собирает приложение
+(`app/xray.py` → `build_xray_config`), поэтому руками `/etc/xray/config.json`
+править нельзя — затрётся при следующем `sync_and_reload`.
+
+WARP включается, только когда заданы `WARP_PRIVATE_KEY` + `WARP_PUBLIC_KEY` +
+`WARP_ADDRESS_V4`. Список доменов — `WARP_DOMAINS` в `.env`.
+
+> **Важно:** правило WARP ставится **выше** правил каскада. Google, считая нас
+> RU, отдаёт для `*.googlevideo.com` адреса GGC-кэшей внутри российских AS —
+> они матчатся на `geoip:ru`, и без этого правила YouTube уходил бы в RU-хаб,
+> то есть выходил в реальный российский IP.
+
+Проверка после включения — подключиться клиентом и открыть
+`https://www.google.com/search?q=my+ip`. Cookies `google.com`/`youtube.com` в
+браузере сбросить: русский интерфейс может остаться из-за старой сессии и
+заголовка `Accept-Language: ru`, а не из-за IP.
+
+Если трафик не идёт — `WARP_MTU=1420` или `WARP_ENDPOINT=162.159.192.1:2408`.
+Если бесплатный WARP тормозит на 4K — лицензия WARP+:
+`cd .warp && wgcf update --license 'XXXX-XXXX-XXXX' && bash scripts/06-setup-warp.sh`
+
+### 2.8. Настройка Xray нод в админке
 
 После первого запуска:
 
@@ -434,6 +485,14 @@ bash scripts/10-update-all.sh
 | `XRAY_NODE_TOKEN`        | ❌           | Токен авторизации remote нод                |
 | `TELEGRAM_BOT_TOKEN`     | ❌           | Токен Telegram бота                         |
 | `WEBAPP_URL`             | ❌           | URL приложения (генерируется из DOMAIN)     |
+| `WARP_PRIVATE_KEY`       | ❌           | WireGuard private key WARP (см. 2.7)        |
+| `WARP_PUBLIC_KEY`        | ❌           | Public key пира WARP                        |
+| `WARP_ADDRESS_V4`        | ❌           | IPv4 внутри WARP (три вместе включают WARP) |
+| `WARP_ADDRESS_V6`        | ❌           | IPv6 внутри WARP                            |
+| `WARP_ENDPOINT`          | ❌           | `engage.cloudflareclient.com:2408`          |
+| `WARP_RESERVED`          | ❌           | 3 байта client_id, считает скрипт           |
+| `WARP_MTU`               | ❌           | `1280`; если трафик не идёт — `1420`        |
+| `WARP_DOMAINS`           | ❌           | Что заворачивать в WARP                     |
 
 ---
 
@@ -456,6 +515,27 @@ sudo ss -tlnp | grep :80
 # Повторно запросить сертификат
 docker compose restart certbot
 docker compose logs certbot
+```
+
+**Проблема**: браузер пишет `ERR_CERT_DATE_INVALID` (сертификат просрочен).
+**Решение**: обновить cert и ОБЯЗАТЕЛЬНО перезагрузить nginx — он держит
+сертификат в памяти с момента старта и сам новый файл не подхватит:
+
+```bash
+cd /opt/ufobzk
+
+# Что реально отдаётся наружу сейчас
+echo | openssl s_client -connect ${DOMAIN}:443 -servername ${DOMAIN} 2>/dev/null \
+  | openssl x509 -noout -dates
+
+# Обновить. --entrypoint certbot обязателен: без него аргументы игнорируются
+# и запускается вечный цикл вместо разового renew.
+docker compose run --rm --entrypoint certbot certbot renew
+docker compose exec nginx nginx -s reload
+
+# Цикл автообновления должен быть Up, а не Exited
+docker compose ps certbot
+docker compose up -d certbot
 ```
 
 ### Xray не синхронизируется с нодами

@@ -33,7 +33,9 @@
       "Bash(python -m py_compile app/routers/admin.py app/routers/cabinet.py app/mtproto.py app/models.py)",
       "Bash(python -c \"import yaml; d=yaml.safe_load\\(open\\('docker-compose.yml',encoding='utf-8'\\)\\); print\\('services:', list\\(d['services'].keys\\(\\)\\)\\); print\\('volumes:', list\\(d['volumes'].keys\\(\\)\\)\\)\")",
       "Bash(bash -n scripts/08-deploy-main-server.sh)",
-      "Bash(python -c \"import yaml; d=yaml.safe_load\\(open\\('docker-compose.yml',encoding='utf-8'\\)\\); print\\('mtg command:', d['services']['mtg'].get\\('command'\\)\\); print\\('mtg entrypoint:', d['services']['mtg'].get\\('entrypoint'\\)\\)\")"
+      "Bash(python -c \"import yaml; d=yaml.safe_load\\(open\\('docker-compose.yml',encoding='utf-8'\\)\\); print\\('mtg command:', d['services']['mtg'].get\\('command'\\)\\); print\\('mtg entrypoint:', d['services']['mtg'].get\\('entrypoint'\\)\\)\")",
+      "Bash(openssl s_client -connect ufolabs.online:443 -servername ufolabs.online)",
+      "Bash(openssl x509 *)"
     ]
   }
 }
