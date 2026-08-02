@@ -10,6 +10,12 @@
 # Xray собирает приложение (app/xray.py → build_xray_config).
 #
 # Запускать на ГЛАВНОМ сервере (docker-стек ufobzk-*).
+#
+#   bash scripts/06-setup-warp.sh             включить
+#   bash scripts/06-setup-warp.sh --disable   выключить (быстрый откат)
+#
+# Перед включением стоит проверить, что WARP реально пропускает трафик:
+#   bash scripts/15-diagnose-warp.sh
 # ─────────────────────────────────────────────────
 set -euo pipefail
 
@@ -25,6 +31,28 @@ XRAY_CONTAINER="ufobzk-xray"
 
 [ -f "$ENV_FILE" ] || error ".env не найден: $ENV_FILE"
 command -v python3 &>/dev/null || error "python3 не найден"
+
+# ─── Откат ──────────────────────────────────────
+if [ "${1:-}" = "--disable" ]; then
+    info "Отключаем WARP (WARP_PRIVATE_KEY=)..."
+    # Пустого PRIVATE_KEY достаточно: build_xray_config пропускает весь блок.
+    # Ключи в .env не стираем — включить обратно можно тем же скриптом.
+    if grep -q '^WARP_PRIVATE_KEY=' "$ENV_FILE"; then
+        sed -i 's|^WARP_PRIVATE_KEY=.*|WARP_PRIVATE_KEY=|' "$ENV_FILE"
+    fi
+    cd "$PROJECT_DIR"
+    # --build не нужен: код в образе уже актуален, меняется только окружение
+    docker compose up -d --force-recreate --no-deps ufo-app
+
+    for _ in $(seq 1 30); do
+        if ! docker exec "$XRAY_CONTAINER" grep -q '"tag": "WARP"' /etc/xray/config.json 2>/dev/null; then
+            info "WARP убран из конфига Xray — трафик снова идёт напрямую"
+            exit 0
+        fi
+        sleep 2
+    done
+    error "WARP всё ещё в конфиге — смотрите: docker logs $APP_CONTAINER"
+fi
 
 # ─── Устанавливаем wgcf если нет ────────────────
 # Версия на случай, если GitHub API недоступен или упёрлись в rate limit

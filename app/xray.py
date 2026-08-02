@@ -45,9 +45,16 @@ WARP_ENDPOINT = os.getenv("WARP_ENDPOINT", "engage.cloudflareclient.com:2408")
 WARP_RESERVED = os.getenv("WARP_RESERVED", "0,0,0")
 WARP_MTU = int(os.getenv("WARP_MTU", "1280"))
 # Что заворачивать в WARP. Через запятую, синтаксис routing-правил Xray.
+#
+# ВНИМАНИЕ: не добавляйте сюда "geosite:google" целиком. В эту категорию входят
+# connectivitycheck.gstatic.com, dns.google, googleapis.com и mtalk.google.com
+# (FCM-пуши). Android определяет наличие интернета запросом к connectivitycheck:
+# если WARP отвалится, телефон пометит соединение как «без доступа в интернет»
+# и приложения перестанут работать при живом туннеле. Держим список узким —
+# только то, где реально мешает гео-метка RU: поиск и YouTube.
 WARP_DOMAINS = os.getenv(
     "WARP_DOMAINS",
-    "geosite:google,geosite:youtube,domain:googlevideo.com,domain:ytimg.com,domain:ggpht.com",
+    "geosite:youtube,domain:googlevideo.com,domain:ytimg.com,domain:ggpht.com,domain:www.google.com",
 )
 
 # Порты
