@@ -88,6 +88,28 @@ trap cleanup EXIT
 TMP_DIR=$(mktemp -d)
 trap 'cleanup; rm -rf "$TMP_DIR"' EXIT
 
+# ─── Страна глазами самого YouTube ──────────────
+# Главная метрика: гео-базы (ipinfo, MaxMind) видят NL, а Google метит наш IPv4
+# как RU — расходятся именно они. Домашняя страница YouTube отдаёт свою метку
+# в INNERTUBE_CONTEXT_GL, это и есть мнение Google. Аргументы функции целиком
+# передаются в curl (например --socks5-hostname 127.0.0.1:10809).
+youtube_country() {
+    local gl attempt
+    # YouTube иногда режет частые запросы к полной странице — разовый пустой
+    # ответ не должен читаться как «страна не определилась»
+    for attempt in 1 2; do
+        gl=$(curl -fsS --max-time 25 -H 'Accept-Language: en-US,en;q=0.9' "$@" \
+            https://www.youtube.com/ 2>/dev/null \
+            | grep -o '"INNERTUBE_CONTEXT_GL":"[A-Z][A-Z]"' | head -1 | cut -d'"' -f4 || true)
+        if [ -n "$gl" ]; then
+            printf '%s' "$gl"
+            return 0
+        fi
+        [ "$attempt" -lt 2 ] && sleep 3
+    done
+    return 0
+}
+
 # ─── Базовая линия: прямой выход сервера ────────
 echo ""
 echo "═══ Базовая линия (прямой выход сервера) ═══"
@@ -95,9 +117,20 @@ DIRECT_JSON=$(curl -fsS --max-time 20 https://ipinfo.io/json 2>/dev/null || true
 if [ -n "$DIRECT_JSON" ]; then
     DIRECT_IP=$(printf '%s' "$DIRECT_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("ip",""))' 2>/dev/null || true)
     DIRECT_CC=$(printf '%s' "$DIRECT_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("country",""))' 2>/dev/null || true)
-    ok "Прямой выход: $DIRECT_IP ($DIRECT_CC)"
+    ok "Прямой выход: $DIRECT_IP ($DIRECT_CC по данным ipinfo)"
 else
     warn "Не удалось получить прямой IP (ipinfo.io недоступен?)"
+fi
+
+DIRECT_GL=$(youtube_country)
+if [ -n "$DIRECT_GL" ]; then
+    if [ "$DIRECT_GL" = "RU" ]; then
+        fail "Прямой выход: YouTube считает страну RU — это и есть проблема"
+    else
+        warn "Прямой выход: YouTube считает страну $DIRECT_GL (не RU — возможно, чинить уже нечего)"
+    fi
+else
+    warn "Не удалось определить страну YouTube для прямого выхода"
 fi
 
 # ─── Тест одной конфигурации WARP ───────────────
@@ -160,7 +193,7 @@ PYEOF
         "$XRAY_IMAGE" run -config /etc/xray/config.json >/dev/null 2>&1 \
         || { fail "$label — не удалось запустить тестовый контейнер"; return 1; }
 
-    sleep 4
+    sleep 5
 
     if ! docker ps --filter "name=$TEST_CONTAINER" --filter "status=running" -q | grep -q .; then
         fail "$label — тестовый xray упал:"
@@ -168,12 +201,22 @@ PYEOF
         return 1
     fi
 
-    local json ip cc
-    json=$(curl -fsS --max-time 25 --socks5-hostname "127.0.0.1:${TEST_PORT}" \
-        https://ipinfo.io/json 2>/dev/null || true)
+    # Xray поднимает сессию WireGuard лениво — на первом же пакете. Первый запрос
+    # часто уходит в никуда, пока идёт handshake, поэтому греем туннель и
+    # повторяем: одна попытка сразу после старта ничего не доказывает.
+    curl -fsS --max-time 15 --socks5-hostname "127.0.0.1:${TEST_PORT}" \
+        https://cloudflare.com/cdn-cgi/trace -o /dev/null 2>/dev/null || true
+
+    local json="" ip cc attempt
+    for attempt in 1 2 3; do
+        json=$(curl -fsS --max-time 25 --socks5-hostname "127.0.0.1:${TEST_PORT}" \
+            https://ipinfo.io/json 2>/dev/null || true)
+        [ -n "$json" ] && break
+        [ "$attempt" -lt 3 ] && sleep 4
+    done
 
     if [ -z "$json" ]; then
-        fail "$label — трафик через WARP НЕ идёт"
+        fail "$label — трафик через WARP НЕ идёт (3 попытки)"
         echo "      Логи тестового xray:"
         docker logs "$TEST_CONTAINER" 2>&1 | grep -iE "wireguard|handshake|fail|error" | tail -10 \
             || docker logs "$TEST_CONTAINER" 2>&1 | tail -10 || true
@@ -185,7 +228,6 @@ PYEOF
     cc=$(printf '%s' "$json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("country",""))' 2>/dev/null || true)
     ok "$label — работает: $ip ($cc)"
 
-    # Проверяем то, ради чего всё затевалось
     local gcc
     gcc=$(curl -fsS --max-time 25 --socks5-hostname "127.0.0.1:${TEST_PORT}" \
         "https://www.google.com/generate_204" -o /dev/null -w '%{http_code}' 2>/dev/null || true)
@@ -193,6 +235,18 @@ PYEOF
         ok "$label — google.com отвечает через WARP"
     else
         warn "$label — google.com через WARP вернул '$gcc' (ожидался 204)"
+    fi
+
+    # Главное: что о стране думает САМ YouTube, а не гео-базы вроде ipinfo.
+    # Именно эта метка ломала выдачу, и только она подтверждает, что стало лучше.
+    local gl
+    gl=$(youtube_country --socks5-hostname "127.0.0.1:${TEST_PORT}")
+    if [ -z "$gl" ]; then
+        warn "$label — не удалось определить страну YouTube"
+    elif [ "$gl" = "RU" ]; then
+        fail "$label — YouTube всё равно считает выход российским (GL=RU)"
+    else
+        ok "$label — YouTube определяет страну как $gl"
     fi
 
     WORKING_RESERVED="$reserved"
@@ -272,6 +326,11 @@ if [ "$SUCCESS" = "1" ]; then
     echo ""
     echo "  Если они отличаются от текущих — пропишите в .env и включите:"
     echo "    bash scripts/06-setup-warp.sh"
+    echo ""
+    echo "  Прогоните скрипт ещё раз перед включением: WireGuard поднимает"
+    echo "  сессию лениво, и разница между вариантами может оказаться просто"
+    echo "  прогревом туннеля, а не параметром. Если с первого варианта всё"
+    echo "  зелёное — параметры менять не нужно."
 else
     echo -e "${RED} WARP НЕ пропускает трафик — включать нельзя${NC}"
     echo "═══════════════════════════════════════════════════"

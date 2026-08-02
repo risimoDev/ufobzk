@@ -212,12 +212,21 @@ set_env() {
     fi
 }
 
+# Для настраиваемых вручную ключей: не затираем то, что подобрал админ
+set_env_if_absent() {
+    local key="$1" value="$2"
+    grep -q "^${key}=" "$ENV_FILE" || echo "${key}=${value}" >> "$ENV_FILE"
+}
+
 set_env WARP_PRIVATE_KEY "$WARP_PRIVATE"
 set_env WARP_PUBLIC_KEY  "$WARP_PUBLIC"
 set_env WARP_ADDRESS_V4  "$WARP_ADDRESS4"
 set_env WARP_ADDRESS_V6  "$WARP_ADDRESS6"
 set_env WARP_ENDPOINT    "$WARP_ENDPOINT"
 set_env WARP_RESERVED    "$WARP_RESERVED"
+
+# Ручные ручки — пишем один раз, чтобы их было видно в .env, и больше не трогаем
+set_env_if_absent WARP_MTU "1280"
 
 info "Ключи записаны в $ENV_FILE"
 
