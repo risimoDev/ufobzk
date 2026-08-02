@@ -85,11 +85,44 @@ wgcf generate --profile wgcf-profile.conf >/dev/null
 [ -f wgcf-profile.conf ] || error "Не удалось сгенерировать wgcf-profile.conf"
 
 # ─── Извлекаем параметры ────────────────────────
-WARP_PRIVATE=$(awk -F' = ' '/^PrivateKey/{print $2}' wgcf-profile.conf)
-WARP_PUBLIC=$(awk -F' = ' '/^PublicKey/{print $2}' wgcf-profile.conf)
-WARP_ENDPOINT=$(awk -F' = ' '/^Endpoint/{print $2}' wgcf-profile.conf)
-WARP_ADDRESS4=$(awk -F' = ' '/^Address/{print $2}' wgcf-profile.conf | grep -m1 '\.' | cut -d/ -f1)
-WARP_ADDRESS6=$(awk -F' = ' '/^Address/{print $2}' wgcf-profile.conf | grep -m1 ':' | cut -d/ -f1)
+# Разбираем питоном, а не awk/grep: значение отделяется ПЕРВЫМ '=' (в base64-ключах
+# есть padding '='), а адреса wgcf может писать и отдельными строками, и одной
+# строкой через запятую — v4/v6 различаем по наличию ':'.
+mapfile -t WGCF_PARSED < <(python3 - wgcf-profile.conf <<'PYEOF'
+import sys
+
+values = {"PrivateKey": "", "PublicKey": "", "Endpoint": ""}
+v4 = v6 = ""
+
+with open(sys.argv[1], encoding="utf-8") as fh:
+    for line in fh:
+        if "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip()
+        if key in values and not values[key]:
+            values[key] = value
+        elif key == "Address":
+            for addr in value.split(","):
+                addr = addr.strip().split("/")[0]
+                if ":" in addr and not v6:
+                    v6 = addr
+                elif "." in addr and not v4:
+                    v4 = addr
+
+print(values["PrivateKey"])
+print(values["PublicKey"])
+print(values["Endpoint"])
+print(v4)
+print(v6)
+PYEOF
+)
+
+WARP_PRIVATE="${WGCF_PARSED[0]:-}"
+WARP_PUBLIC="${WGCF_PARSED[1]:-}"
+WARP_ENDPOINT="${WGCF_PARSED[2]:-}"
+WARP_ADDRESS4="${WGCF_PARSED[3]:-}"
+WARP_ADDRESS6="${WGCF_PARSED[4]:-}"
 
 [ -n "$WARP_PRIVATE"  ] || error "Не удалось извлечь PrivateKey из wgcf-profile.conf"
 [ -n "$WARP_PUBLIC"   ] || error "Не удалось извлечь PublicKey из wgcf-profile.conf"
@@ -160,12 +193,14 @@ set_env WARP_RESERVED    "$WARP_RESERVED"
 
 info "Ключи записаны в $ENV_FILE"
 
-# ─── Пересоздаём приложение ─────────────────────
-# Именно up -d --force-recreate, а не restart: env_file читается при СОЗДАНИИ
-# контейнера, restart новые переменные не подхватит.
+# ─── Пересобираем и пересоздаём приложение ──────
+# --build обязателен: Dockerfile делает `COPY . .`, код приложения запечён в
+# образ, и без пересборки контейнер поднимется со старым app/xray.py (без блока
+# WARP). --force-recreate обязателен отдельно: env_file читается при СОЗДАНИИ
+# контейнера, обычный restart новые переменные не подхватит.
 cd "$PROJECT_DIR"
-info "Пересоздаём $APP_CONTAINER для подхвата новых переменных..."
-docker compose up -d --force-recreate --no-deps ufo-app
+info "Пересобираем и пересоздаём $APP_CONTAINER..."
+docker compose up -d --build --force-recreate --no-deps ufo-app
 
 info "Ждём пересборку конфига Xray приложением..."
 for _ in $(seq 1 30); do
@@ -176,7 +211,12 @@ for _ in $(seq 1 30); do
 done
 
 if ! docker exec "$XRAY_CONTAINER" grep -q '"tag": "WARP"' /etc/xray/config.json 2>/dev/null; then
-    error "WARP outbound не появился в /etc/xray/config.json — смотрите: docker logs $APP_CONTAINER"
+    warn "WARP outbound не появился в /etc/xray/config.json. Логи $APP_CONTAINER:"
+    docker logs --tail 40 "$APP_CONTAINER" 2>&1 || true
+    echo ""
+    warn "Проверьте, что WARP_* есть в окружении контейнера:"
+    docker exec "$APP_CONTAINER" printenv | grep '^WARP_' || true
+    error "WARP не включился"
 fi
 info "WARP outbound есть в конфиге Xray"
 

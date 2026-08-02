@@ -313,8 +313,11 @@ def build_xray_config(db: Session) -> dict[str, Any]:
     # в RU-хаб — то есть выходил бы в реальный российский IP.
     if WARP_PRIVATE_KEY and WARP_PUBLIC_KEY and WARP_ADDRESS_V4:
         warp_address = [f"{WARP_ADDRESS_V4}/32"]
-        if WARP_ADDRESS_V6:
+        if ":" in WARP_ADDRESS_V6:
             warp_address.append(f"{WARP_ADDRESS_V6}/128")
+        elif WARP_ADDRESS_V6:
+            # Битый .env (например v4-адрес в поле v6) не должен ломать outbound
+            logger.warning("WARP_ADDRESS_V6=%r не похож на IPv6 — пропускаю", WARP_ADDRESS_V6)
 
         try:
             reserved = [int(x) for x in WARP_RESERVED.split(",") if x.strip() != ""]
