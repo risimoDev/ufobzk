@@ -122,31 +122,38 @@ else
     warn "Не удалось получить прямой IP (ipinfo.io недоступен?)"
 fi
 
-DIRECT_GL=$(youtube_country)
-if [ -n "$DIRECT_GL" ]; then
-    if [ "$DIRECT_GL" = "RU" ]; then
-        fail "Прямой выход: YouTube считает страну RU — это и есть проблема"
-    else
-        warn "Прямой выход: YouTube считает страну $DIRECT_GL (не RU — возможно, чинить уже нечего)"
-    fi
+# Меряем v4 и v6 отдельно: без -4 curl уходит по IPv6, и метка получается не та,
+# из-за которой всё затевалось. Проблемный путь у нас именно IPv4.
+DIRECT_GL4=$(youtube_country -4)
+DIRECT_GL6=$(youtube_country -6)
+
+if [ -z "$DIRECT_GL4" ]; then
+    warn "Прямой выход IPv4: страну YouTube определить не удалось"
+elif [ "$DIRECT_GL4" = "RU" ]; then
+    fail "Прямой выход IPv4: YouTube считает страну RU — это и есть проблема"
 else
-    warn "Не удалось определить страну YouTube для прямого выхода"
+    warn "Прямой выход IPv4: YouTube считает страну $DIRECT_GL4 (не RU — возможно, чинить уже нечего)"
 fi
+[ -n "$DIRECT_GL6" ] && info "Прямой выход IPv6: YouTube считает страну $DIRECT_GL6 (для сравнения)"
 
 # ─── Тест одной конфигурации WARP ───────────────
-# $1 — человекочитаемое имя, $2 — reserved, $3 — mtu, $4 — endpoint
+# $1 — имя, $2 — reserved, $3 — mtu, $4 — endpoint, $5 — использовать IPv6 (0/1)
 test_warp() {
-    local label="$1" reserved="$2" mtu="$3" endpoint="$4"
+    local label="$1" reserved="$2" mtu="$3" endpoint="$4" use_v6="${5:-0}"
 
     python3 - "$TMP_DIR/config.json" "$WARP_PRIVATE_KEY" "$WARP_PUBLIC_KEY" \
-        "$WARP_ADDRESS_V4" "$WARP_ADDRESS_V6" "$endpoint" "$reserved" "$mtu" <<'PYEOF'
+        "$WARP_ADDRESS_V4" "$WARP_ADDRESS_V6" "$endpoint" "$reserved" "$mtu" "$use_v6" <<'PYEOF'
 import json, sys
 
-path, priv, pub, v4, v6, endpoint, reserved, mtu = sys.argv[1:9]
+path, priv, pub, v4, v6, endpoint, reserved, mtu, use_v6 = sys.argv[1:10]
 
+# IPv6 в туннеле по умолчанию выключен: docker-сеть без IPv6, и Xray уходит
+# резолвить домены через 2606:4700:4700::1001 внутри туннеля — i/o timeout
 address = [f"{v4}/32"]
-if ":" in v6:
+allowed_ips = ["0.0.0.0/0"]
+if use_v6 == "1" and ":" in v6:
     address.append(f"{v6}/128")
+    allowed_ips.append("::/0")
 
 try:
     reserved_bytes = [int(x) for x in reserved.split(",")]
@@ -172,7 +179,7 @@ config = {
             "address": address,
             "peers": [{
                 "publicKey": pub,
-                "allowedIPs": ["0.0.0.0/0", "::/0"],
+                "allowedIPs": allowed_ips,
                 "endpoint": endpoint
             }],
             "reserved": reserved_bytes,
@@ -252,9 +259,25 @@ PYEOF
     WORKING_RESERVED="$reserved"
     WORKING_MTU="$mtu"
     WORKING_ENDPOINT="$endpoint"
+    WORKING_V6="$use_v6"
     docker rm -f "$TEST_CONTAINER" >/dev/null 2>&1 || true
     return 0
 }
+
+# Эндпоинт приводим к IPv4-литералу: по AAAA-записи отправка падает с
+# "network is unreachable" — в docker-сети IPv6 нет
+EP_HOST="${WARP_ENDPOINT%:*}"
+EP_PORT="${WARP_ENDPOINT##*:}"
+if ! printf '%s' "$EP_HOST" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+    EP_IP=$(python3 -c '
+import socket, sys
+print(socket.getaddrinfo(sys.argv[1], None, socket.AF_INET)[0][4][0])
+' "$EP_HOST" 2>/dev/null || true)
+    if [ -n "$EP_IP" ]; then
+        info "Эндпоинт $EP_HOST → $EP_IP (фиксируем IPv4)"
+        WARP_ENDPOINT="${EP_IP}:${EP_PORT}"
+    fi
+fi
 
 echo ""
 echo "═══ Проверка WARP-выхода ═══"
@@ -263,22 +286,24 @@ info "Endpoint: $WARP_ENDPOINT | reserved: [$WARP_RESERVED] | address: $WARP_ADD
 WORKING_RESERVED=""
 WORKING_MTU=""
 WORKING_ENDPOINT=""
+WORKING_V6=""
 SUCCESS=0
 
-if test_warp "текущая конфигурация" "$WARP_RESERVED" "1280" "$WARP_ENDPOINT"; then
+if test_warp "IPv4-only (рабочая схема)" "$WARP_RESERVED" "1280" "$WARP_ENDPOINT" 0; then
     SUCCESS=1
 else
     echo ""
     warn "Основная конфигурация не работает — перебираем варианты"
 
     for variant in \
-        "reserved [0,0,0]|0,0,0|1280|$WARP_ENDPOINT" \
-        "MTU 1420|$WARP_RESERVED|1420|$WARP_ENDPOINT" \
-        "endpoint 162.159.192.1:2408|$WARP_RESERVED|1280|162.159.192.1:2408" \
-        "endpoint 162.159.193.10:2408|$WARP_RESERVED|1280|162.159.193.10:2408"
+        "reserved [0,0,0]|0,0,0|1280|$WARP_ENDPOINT|0" \
+        "MTU 1420|$WARP_RESERVED|1420|$WARP_ENDPOINT|0" \
+        "endpoint 162.159.192.1:2408|$WARP_RESERVED|1280|162.159.192.1:2408|0" \
+        "endpoint 162.159.193.10:2408|$WARP_RESERVED|1280|162.159.193.10:2408|0" \
+        "с IPv6 в туннеле (обычно НЕ работает)|$WARP_RESERVED|1280|$WARP_ENDPOINT|1"
     do
-        IFS='|' read -r vlabel vres vmtu vep <<<"$variant"
-        if test_warp "$vlabel" "$vres" "$vmtu" "$vep"; then
+        IFS='|' read -r vlabel vres vmtu vep vv6 <<<"$variant"
+        if test_warp "$vlabel" "$vres" "$vmtu" "$vep" "$vv6"; then
             SUCCESS=1
             break
         fi
@@ -323,6 +348,7 @@ if [ "$SUCCESS" = "1" ]; then
     echo "    WARP_RESERVED=$WORKING_RESERVED"
     echo "    WARP_MTU=$WORKING_MTU"
     echo "    WARP_ENDPOINT=$WORKING_ENDPOINT"
+    echo "    WARP_IPV6=$WORKING_V6"
     echo ""
     echo "  Если они отличаются от текущих — пропишите в .env и включите:"
     echo "    bash scripts/06-setup-warp.sh"

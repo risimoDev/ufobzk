@@ -41,9 +41,16 @@ WARP_PRIVATE_KEY = os.getenv("WARP_PRIVATE_KEY", "")
 WARP_PUBLIC_KEY = os.getenv("WARP_PUBLIC_KEY", "")
 WARP_ADDRESS_V4 = os.getenv("WARP_ADDRESS_V4", "")
 WARP_ADDRESS_V6 = os.getenv("WARP_ADDRESS_V6", "")
-WARP_ENDPOINT = os.getenv("WARP_ENDPOINT", "engage.cloudflareclient.com:2408")
+WARP_ENDPOINT = os.getenv("WARP_ENDPOINT", "162.159.192.1:2408")
 WARP_RESERVED = os.getenv("WARP_RESERVED", "0,0,0")
 WARP_MTU = int(os.getenv("WARP_MTU", "1280"))
+# IPv6 внутри туннеля WARP. По умолчанию ВЫКЛЮЧЕН и включать не нужно.
+# Контейнер xray живёт в docker-сети backend, где IPv6 нет. Если объявить
+# адрес /128 и allowedIPs ::/0, Xray резолвит домены через IPv6-резолвер
+# 2606:4700:4700::1001 внутри туннеля и получает i/o timeout, а при AAAA-записи
+# эндпоинта — "sendto: network is unreachable". Внешне это выглядит так, будто
+# WARP молча не пропускает трафик.
+WARP_IPV6 = os.getenv("WARP_IPV6", "0").strip().lower() in ("1", "true", "yes", "on")
 # Что заворачивать в WARP. Через запятую, синтаксис routing-правил Xray.
 #
 # ВНИМАНИЕ: не добавляйте сюда "geosite:google" целиком. В эту категорию входят
@@ -319,12 +326,16 @@ def build_xray_config(db: Session) -> dict[str, Any]:
     # AS. Эти адреса матчатся на "geoip:ru" и без этого правила YouTube уходил бы
     # в RU-хаб — то есть выходил бы в реальный российский IP.
     if WARP_PRIVATE_KEY and WARP_PUBLIC_KEY and WARP_ADDRESS_V4:
+        # По умолчанию туннель строго IPv4 — см. комментарий у WARP_IPV6
         warp_address = [f"{WARP_ADDRESS_V4}/32"]
-        if ":" in WARP_ADDRESS_V6:
-            warp_address.append(f"{WARP_ADDRESS_V6}/128")
-        elif WARP_ADDRESS_V6:
-            # Битый .env (например v4-адрес в поле v6) не должен ломать outbound
-            logger.warning("WARP_ADDRESS_V6=%r не похож на IPv6 — пропускаю", WARP_ADDRESS_V6)
+        warp_allowed_ips = ["0.0.0.0/0"]
+        if WARP_IPV6:
+            if ":" in WARP_ADDRESS_V6:
+                warp_address.append(f"{WARP_ADDRESS_V6}/128")
+                warp_allowed_ips.append("::/0")
+            elif WARP_ADDRESS_V6:
+                # Битый .env (например v4-адрес в поле v6) не должен ломать outbound
+                logger.warning("WARP_ADDRESS_V6=%r не похож на IPv6 — пропускаю", WARP_ADDRESS_V6)
 
         try:
             reserved = [int(x) for x in WARP_RESERVED.split(",") if x.strip() != ""]
@@ -343,7 +354,7 @@ def build_xray_config(db: Session) -> dict[str, Any]:
                 "address": warp_address,
                 "peers": [{
                     "publicKey": WARP_PUBLIC_KEY,
-                    "allowedIPs": ["0.0.0.0/0", "::/0"],
+                    "allowedIPs": warp_allowed_ips,
                     "endpoint": WARP_ENDPOINT
                 }],
                 "reserved": reserved,

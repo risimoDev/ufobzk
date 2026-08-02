@@ -157,6 +157,24 @@ WARP_ADDRESS6="${WGCF_PARSED[4]:-}"
 [ -n "$WARP_ADDRESS4" ] || error "Не удалось извлечь IPv4-адрес из wgcf-profile.conf"
 [ -n "$WARP_ENDPOINT" ] || WARP_ENDPOINT="engage.cloudflareclient.com:2408"
 
+# Фиксируем IPv4-литерал эндпоинта. Контейнер xray в docker-сети backend без
+# IPv6: если engage.cloudflareclient.com отрезолвится в AAAA, отправка пакетов
+# падает с "sendto: network is unreachable", и WARP молча не работает.
+EP_HOST="${WARP_ENDPOINT%:*}"
+EP_PORT="${WARP_ENDPOINT##*:}"
+if ! printf '%s' "$EP_HOST" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+    EP_IP=$(python3 -c '
+import socket, sys
+print(socket.getaddrinfo(sys.argv[1], None, socket.AF_INET)[0][4][0])
+' "$EP_HOST" 2>/dev/null || true)
+    if [ -n "$EP_IP" ]; then
+        info "Эндпоинт $EP_HOST → $EP_IP (фиксируем IPv4)"
+        WARP_ENDPOINT="${EP_IP}:${EP_PORT}"
+    else
+        warn "Не удалось отрезолвить $EP_HOST в IPv4 — оставляем как есть"
+    fi
+fi
+
 info "WARP PrivateKey: ${WARP_PRIVATE:0:8}..."
 info "WARP Address v4: $WARP_ADDRESS4"
 info "WARP Address v6: ${WARP_ADDRESS6:-<нет>}"
@@ -227,6 +245,7 @@ set_env WARP_RESERVED    "$WARP_RESERVED"
 
 # Ручные ручки — пишем один раз, чтобы их было видно в .env, и больше не трогаем
 set_env_if_absent WARP_MTU "1280"
+set_env_if_absent WARP_IPV6 "0"
 
 info "Ключи записаны в $ENV_FILE"
 

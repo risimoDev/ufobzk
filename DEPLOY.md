@@ -293,6 +293,13 @@ bash scripts/06-setup-warp.sh --disable
 WARP включается, только когда заданы `WARP_PRIVATE_KEY` + `WARP_PUBLIC_KEY` +
 `WARP_ADDRESS_V4`. Список доменов — `WARP_DOMAINS` в `.env`.
 
+> **Туннель WARP должен быть строго IPv4** (`WARP_IPV6=0`, эндпоинт — IPv4-литерал).
+> Контейнер `ufobzk-xray` живёт в docker-сети `backend`, где IPv6 нет. Если
+> объявить в туннеле адрес `/128` и `allowedIPs: ::/0`, Xray начинает резолвить
+> домены через IPv6-резолвер `2606:4700:4700::1001` внутри туннеля и получает
+> `i/o timeout`, а при AAAA-записи эндпоинта — `sendto: network is unreachable`.
+> Наружу это выглядит так, будто WARP просто молча не пропускает трафик.
+
 > **Не добавляйте в `WARP_DOMAINS` категорию `geosite:google` целиком.** В неё
 > входят `connectivitycheck.gstatic.com`, `dns.google`, `googleapis.com` и
 > `mtalk.google.com` (FCM-пуши). Android определяет наличие интернета запросом
@@ -514,9 +521,10 @@ bash scripts/10-update-all.sh
 | `WARP_PUBLIC_KEY`        | ❌           | Public key пира WARP                        |
 | `WARP_ADDRESS_V4`        | ❌           | IPv4 внутри WARP (три вместе включают WARP) |
 | `WARP_ADDRESS_V6`        | ❌           | IPv6 внутри WARP                            |
-| `WARP_ENDPOINT`          | ❌           | `engage.cloudflareclient.com:2408`          |
+| `WARP_ENDPOINT`          | ❌           | `162.159.192.1:2408` — только IPv4-литерал  |
 | `WARP_RESERVED`          | ❌           | 3 байта client_id, считает скрипт           |
 | `WARP_MTU`               | ❌           | `1280`; если трафик не идёт — `1420`        |
+| `WARP_IPV6`              | ❌           | `0`. Включать нельзя — см. 2.7              |
 | `WARP_DOMAINS`           | ❌           | Что заворачивать в WARP                     |
 
 ---
@@ -618,9 +626,15 @@ bash scripts/15-diagnose-warp.sh          # проверить, живой ли 
 ```
 
 Диагностика перебирает варианты (`reserved [0,0,0]`, `MTU 1420`, другие
-endpoint'ы) и печатает рабочие параметры для `.env`. Если не заработал ни один —
-скорее всего хостер режет UDP 2408 (`nc -zvu 162.159.192.1 2408`) либо аккаунт
-WARP забанен для этого IP. Тогда вместо WARP используйте цепочку на свою ноду.
+endpoint'ы, IPv6 в туннеле) и печатает рабочие параметры для `.env`.
+
+Самая частая причина — IPv6 в туннеле при docker-сети без IPv6; в логах видно
+`sendto: network is unreachable` или `lookup ... on 2606:4700:4700::1001: i/o
+timeout`. Лечится `WARP_IPV6=0` и IPv4-литералом в `WARP_ENDPOINT`.
+
+Если не заработал ни один вариант — скорее всего хостер режет UDP 2408
+(`nc -zvu 162.159.192.1 2408`) либо аккаунт WARP забанен для этого IP. Тогда
+вместо WARP используйте цепочку на свою ноду.
 
 ---
 
