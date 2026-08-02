@@ -27,12 +27,44 @@ XRAY_CONTAINER="ufobzk-xray"
 command -v python3 &>/dev/null || error "python3 не найден"
 
 # ─── Устанавливаем wgcf если нет ────────────────
+# Версия на случай, если GitHub API недоступен или упёрлись в rate limit
+WGCF_FALLBACK_VERSION="2.2.32"
+
 if ! command -v wgcf &>/dev/null; then
     info "Устанавливаем wgcf..."
     ARCH=$(dpkg --print-architecture 2>/dev/null || echo "amd64")
-    WGCF_URL="https://github.com/ViRb3/wgcf/releases/latest/download/wgcf_linux_${ARCH}"
-    curl -fsSL "$WGCF_URL" -o /usr/local/bin/wgcf
+
+    # Имя ассета содержит версию (wgcf_2.2.32_linux_amd64), поэтому путь
+    # /releases/latest/download/wgcf_linux_amd64 отдаёт 404 — резолвим через API.
+    WGCF_API=$(curl -fsSL --max-time 20 \
+        https://api.github.com/repos/ViRb3/wgcf/releases/latest 2>/dev/null || true)
+
+    WGCF_URL=""
+    if [ -n "$WGCF_API" ]; then
+        WGCF_URL=$(printf '%s' "$WGCF_API" | python3 -c '
+import json, sys
+arch = sys.argv[1]
+data = json.load(sys.stdin)
+want = "wgcf_%s_linux_%s" % (data["tag_name"].lstrip("v"), arch)
+for asset in data.get("assets", []):
+    if asset["name"] == want:
+        print(asset["browser_download_url"])
+        break
+' "$ARCH" 2>/dev/null || true)
+    fi
+
+    if [ -z "$WGCF_URL" ]; then
+        warn "GitHub API не ответил — ставим закреплённую версию $WGCF_FALLBACK_VERSION"
+        WGCF_URL="https://github.com/ViRb3/wgcf/releases/download/v${WGCF_FALLBACK_VERSION}/wgcf_${WGCF_FALLBACK_VERSION}_linux_${ARCH}"
+    fi
+
+    info "Качаем: $WGCF_URL"
+    curl -fsSL "$WGCF_URL" -o /usr/local/bin/wgcf \
+        || error "Не удалось скачать wgcf: $WGCF_URL"
     chmod +x /usr/local/bin/wgcf
+
+    /usr/local/bin/wgcf --help >/dev/null 2>&1 \
+        || error "wgcf скачан, но не запускается (архитектура $ARCH?)"
     info "wgcf установлен"
 fi
 
