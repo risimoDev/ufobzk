@@ -255,16 +255,40 @@ info "Ключи записаны в $ENV_FILE"
 # WARP). --force-recreate обязателен отдельно: env_file читается при СОЗДАНИИ
 # контейнера, обычный restart новые переменные не подхватит.
 cd "$PROJECT_DIR"
+
+# Запоминаем конфиг ДО пересоздания. Проверять просто наличие тега WARP нельзя:
+# при повторном запуске он уже есть с прошлого раза, условие выполняется мгновенно,
+# и дальше читается устаревший конфиг — например, без только что добавленного
+# домена. Ждём либо изменения файла, либо готовности приложения.
+CONFIG_BEFORE=$(docker exec "$XRAY_CONTAINER" md5sum /etc/xray/config.json 2>/dev/null | awk '{print $1}' || true)
+
 info "Пересобираем и пересоздаём $APP_CONTAINER..."
 docker compose up -d --build --force-recreate --no-deps ufo-app
 
 info "Ждём пересборку конфига Xray приложением..."
-for _ in $(seq 1 30); do
-    if docker exec "$XRAY_CONTAINER" grep -q '"tag": "WARP"' /etc/xray/config.json 2>/dev/null; then
+CONFIG_CHANGED=0
+for _ in $(seq 1 60); do
+    CONFIG_NOW=$(docker exec "$XRAY_CONTAINER" md5sum /etc/xray/config.json 2>/dev/null | awk '{print $1}' || true)
+    if [ -n "$CONFIG_NOW" ] && [ "$CONFIG_NOW" != "$CONFIG_BEFORE" ]; then
+        CONFIG_CHANGED=1
+        info "Конфиг перегенерирован"
+        break
+    fi
+    # Конфиг мог и не измениться (повторный запуск без правок) — тогда критерий
+    # готовности один: приложение прошло healthcheck, значит старт завершён
+    HEALTH=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' \
+        "$APP_CONTAINER" 2>/dev/null || true)
+    if [ "$HEALTH" = "healthy" ]; then
+        info "Приложение готово, конфиг не изменился"
         break
     fi
     sleep 2
 done
+
+if [ "$CONFIG_CHANGED" = "0" ] && [ "${HEALTH:-}" != "healthy" ]; then
+    warn "Не дождались ни изменения конфига, ни healthy у $APP_CONTAINER —"
+    warn "показанное ниже может быть устаревшим. Логи: docker logs $APP_CONTAINER"
+fi
 
 if ! docker exec "$XRAY_CONTAINER" grep -q '"tag": "WARP"' /etc/xray/config.json 2>/dev/null; then
     warn "WARP outbound не появился в /etc/xray/config.json. Логи $APP_CONTAINER:"
