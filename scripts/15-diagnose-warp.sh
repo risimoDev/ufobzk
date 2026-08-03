@@ -256,6 +256,25 @@ PYEOF
         ok "$label — YouTube определяет страну как $gl"
     fi
 
+    # Gemini: без авторизации отвечает редиректом на accounts.google.com, поэтому
+    # тут проверяется только сетевая доступность — что выход не отбит на уровне
+    # сети и не упёрся в страничку «сервис недоступен в вашей стране».
+    local gem_code gem_body
+    gem_code=$(curl -sS --max-time 25 --socks5-hostname "127.0.0.1:${TEST_PORT}" \
+        -H 'Accept-Language: en-US,en;q=0.9' \
+        -o "$TMP_DIR/gemini.html" -w '%{http_code}' \
+        https://gemini.google.com/ 2>/dev/null || true)
+    gem_body=$(grep -ciE 'not available in your (country|region)|isn.t available in your' \
+        "$TMP_DIR/gemini.html" 2>/dev/null || true)
+
+    if [ -z "$gem_code" ] || [ "$gem_code" = "000" ]; then
+        fail "$label — gemini.google.com недоступен через WARP"
+    elif [ "${gem_body:-0}" != "0" ]; then
+        fail "$label — gemini.google.com отвечает «недоступно в вашей стране»"
+    else
+        ok "$label — gemini.google.com отвечает через WARP (HTTP $gem_code)"
+    fi
+
     WORKING_RESERVED="$reserved"
     WORKING_MTU="$mtu"
     WORKING_ENDPOINT="$endpoint"
