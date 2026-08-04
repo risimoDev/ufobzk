@@ -295,10 +295,20 @@ WARP включается, только когда заданы `WARP_PRIVATE_KE
 `app/xray.py` покрывает YouTube, поиск (`www.google.com`), Gemini
 (`gemini.google.com`) и Antigravity (`antigravity.google` + `codeium.com`).
 
-Про Antigravity: сайт и вход живут на `antigravity.google`, но рабочие запросы
-IDE идут на `*.codeium.com` — он построен на технологии Windsurf/Codeium.
-Заворачивать нужно оба, иначе сервис останется недоступен при внешне корректном
-маршруте.
+Про Antigravity — трафик расходится по трём направлениям, и заворачивать нужно
+все:
+
+| Куда | Что это |
+| --- | --- |
+| `antigravity.google` | сайт и вход |
+| `codeium.com` | служебные запросы IDE (построен на Windsurf/Codeium) |
+| `cloudcode-pa` / `cloudaicompanion` / `generativelanguage` `.googleapis.com` | сами вызовы модели |
+
+Если не завёрнуты последние, IDE подключается, но агент падает с
+`HTTP 400 FAILED_PRECONDITION: User location is not supported for the API use`.
+Признак того, что дело именно в них — заголовок `X-Cloudaicompanion-Trace-Id` в
+ответе. Эндпоинты перечислены поимённо: `googleapis.com` целиком заворачивать
+нельзя, туда попадают пуши и служебные каналы Android.
 
 Какие домены сервис использует на самом деле, гадать не нужно — они видны в
 access.log Xray:

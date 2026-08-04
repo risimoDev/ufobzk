@@ -63,9 +63,14 @@ WARP_DOMAINS = os.getenv(
     "WARP_DOMAINS",
     "geosite:youtube,domain:googlevideo.com,domain:ytimg.com,domain:ggpht.com,"
     "domain:www.google.com,domain:gemini.google.com,"
-    # Antigravity построен на технологии Windsurf/Codeium: сайт и вход живут на
-    # antigravity.google, а рабочие запросы IDE идут на *.codeium.com
-    "domain:antigravity.google,domain:codeium.com",
+    # Antigravity: сайт и вход на antigravity.google, служебные запросы IDE на
+    # *.codeium.com (построен на технологии Windsurf/Codeium), а сами вызовы
+    # модели — в Google Cloud AI Companion. Без последних IDE отвечает
+    # "User location is not supported for the API use" (FAILED_PRECONDITION).
+    # Перечислены поимённо: заворачивать googleapis.com целиком нельзя.
+    "domain:antigravity.google,domain:codeium.com,"
+    "domain:cloudcode-pa.googleapis.com,domain:cloudaicompanion.googleapis.com,"
+    "domain:generativelanguage.googleapis.com",
 )
 
 # Порты
