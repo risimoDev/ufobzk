@@ -62,7 +62,7 @@ WARP_IPV6 = os.getenv("WARP_IPV6", "0").strip().lower() in ("1", "true", "yes", 
 WARP_DOMAINS = os.getenv(
     "WARP_DOMAINS",
     "geosite:youtube,domain:googlevideo.com,domain:ytimg.com,domain:ggpht.com,"
-    "domain:www.google.com,domain:gemini.google.com",
+    "domain:www.google.com,domain:gemini.google.com,domain:antigravity.google",
 )
 
 # Порты

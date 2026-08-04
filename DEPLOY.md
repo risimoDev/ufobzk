@@ -292,8 +292,20 @@ bash scripts/06-setup-warp.sh --disable
 
 WARP включается, только когда заданы `WARP_PRIVATE_KEY` + `WARP_PUBLIC_KEY` +
 `WARP_ADDRESS_V4`. Список доменов — `WARP_DOMAINS` в `.env`; дефолт в
-`app/xray.py` покрывает YouTube, поиск (`www.google.com`) и Gemini
-(`gemini.google.com`).
+`app/xray.py` покрывает YouTube, поиск (`www.google.com`), Gemini
+(`gemini.google.com`) и Antigravity (`antigravity.google`).
+
+Какие домены сервис использует на самом деле, гадать не нужно — они видны в
+access.log Xray:
+
+```bash
+bash scripts/16-warp-candidates.sh --watch 120
+```
+
+Скрипт собирает трафик указанное время (откройте нужный сервис на клиенте) и
+показывает, какие google-домены ушли в `DIRECT`, а какие уже идут через `WARP`,
+с готовыми строками для `WARP_DOMAINS`. Клиентские IP и email из лога не
+выводятся. Без `--watch` разбирает весь накопленный лог.
 
 Про Gemini отдельно: он гейтит доступ не только по IP запроса, но и по стране
 самого Google-аккаунта. Страна аккаунта считается по длительной истории
