@@ -71,6 +71,7 @@ GOOGLE_HINTS = (
 direct = Counter()
 via_warp = Counter()
 other_tags = Counter()
+direct_rest = Counter()
 
 with open(sys.argv[1], encoding="utf-8", errors="replace") as fh:
     for line in fh:
@@ -80,6 +81,11 @@ with open(sys.argv[1], encoding="utf-8", errors="replace") as fh:
         domain, tag = match.group(1), match.group(2)
         low = domain.lower()
         if not any(hint in low for hint in GOOGLE_HINTS):
+            # Бэкенд сервиса может жить где угодно — Antigravity, например,
+            # построен на технологии Windsurf/Codeium. Поэтому всё остальное,
+            # что ушло мимо WARP, тоже показываем, а не молча отбрасываем.
+            if tag == "DIRECT":
+                direct_rest[domain] += 1
             continue
         if tag == "WARP":
             via_warp[domain] += 1
@@ -104,6 +110,8 @@ show("═══ Google-домены МИМО WARP (-> DIRECT) — кандида
 show("═══ Уже идут через WARP ═══", via_warp)
 if other_tags:
     show("═══ Ушли в другой outbound (проверьте, так ли надо) ═══", other_tags)
+show("═══ Остальные домены мимо WARP (топ-30) ═══", direct_rest, limit=30)
+print("    Бэкенд нужного сервиса может быть здесь, а не среди google-доменов.")
 
 if direct:
     print()
