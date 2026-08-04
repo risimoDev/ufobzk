@@ -68,6 +68,19 @@ GOOGLE_HINTS = (
     "gvt1.com", "gvt2.com",
 )
 
+# Это в WARP заворачивать нельзя или бессмысленно, поэтому в готовые строки для
+# .env они не попадают. connectivitycheck/dns/mtalk/android.clients — служебные
+# каналы Android (проверка связности, пуши): если WARP просядет, телефон решит,
+# что интернета нет. Остальное — реклама, аналитика и телеметрия, гео-гейта на
+# них нет, и лишний крюк через WARP только добавит задержку.
+NEVER_SUGGEST = (
+    "connectivitycheck.gstatic.com", "dns.google", "mtalk.google.com",
+    "android.clients.google.com", "clients3.google.com", "clients4.google.com",
+    "google-analytics.com", "doubleclick.net", "googleads",
+    "firebaseremoteconfig.googleapis.com", "content-autofill.googleapis.com",
+    "notifications-pa.googleapis.com", "app-measurement.com",
+)
+
 direct = Counter()
 via_warp = Counter()
 other_tags = Counter()
@@ -113,15 +126,25 @@ if other_tags:
 show("═══ Остальные домены мимо WARP (топ-30) ═══", direct_rest, limit=30)
 print("    Бэкенд нужного сервиса может быть здесь, а не среди google-доменов.")
 
-if direct:
+suggested = [d for d, _ in direct.most_common(40)
+             if not any(bad in d.lower() for bad in NEVER_SUGGEST)]
+skipped = [d for d, _ in direct.most_common(40)
+           if any(bad in d.lower() for bad in NEVER_SUGGEST)]
+
+if skipped:
+    print()
+    print("═══ Намеренно НЕ предлагаются (служебное/реклама/телеметрия) ═══")
+    for name in skipped:
+        print(f"    {name}")
+
+if suggested:
     print()
     print("Строки для WARP_DOMAINS (добавляйте только нужные, через запятую):")
     print()
-    for name, _ in direct.most_common(40):
+    for name in suggested:
         print(f"    domain:{name}")
     print()
-    print("ВНИМАНИЕ: не заворачивайте в WARP всё подряд. connectivitycheck.gstatic.com,")
-    print("dns.google, mtalk.google.com и общий googleapis.com нужны Android для")
-    print("проверки связности и пушей — если WARP просядет, телефоны сочтут, что")
-    print("интернета нет, при живом туннеле.")
+    print("Всё подряд не заворачивайте: гео-гейт есть только у самих сервисов")
+    print("(поиск, YouTube, Gemini, Antigravity). CDN статики и аватарки в WARP")
+    print("не нуждаются — это лишняя задержка без единой выгоды.")
 PYEOF

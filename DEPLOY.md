@@ -293,7 +293,12 @@ bash scripts/06-setup-warp.sh --disable
 WARP включается, только когда заданы `WARP_PRIVATE_KEY` + `WARP_PUBLIC_KEY` +
 `WARP_ADDRESS_V4`. Список доменов — `WARP_DOMAINS` в `.env`; дефолт в
 `app/xray.py` покрывает YouTube, поиск (`www.google.com`), Gemini
-(`gemini.google.com`) и Antigravity (`antigravity.google`).
+(`gemini.google.com`) и Antigravity (`antigravity.google` + `codeium.com`).
+
+Про Antigravity: сайт и вход живут на `antigravity.google`, но рабочие запросы
+IDE идут на `*.codeium.com` — он построен на технологии Windsurf/Codeium.
+Заворачивать нужно оба, иначе сервис останется недоступен при внешне корректном
+маршруте.
 
 Какие домены сервис использует на самом деле, гадать не нужно — они видны в
 access.log Xray:
