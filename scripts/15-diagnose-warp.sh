@@ -257,15 +257,17 @@ else
 fi
 
 # ─── Тест одной конфигурации WARP ───────────────
-# $1 — имя, $2 — reserved, $3 — mtu, $4 — endpoint, $5 — использовать IPv6 (0/1)
+# $1 — имя, $2 — reserved, $3 — mtu, $4 — endpoint, $5 — IPv6 (0/1), $6 — как
+# лечим DNS внутри туннеля: "" | forceipv4 | dnsv4
 test_warp() {
-    local label="$1" reserved="$2" mtu="$3" endpoint="$4" use_v6="${5:-0}"
+    local label="$1" reserved="$2" mtu="$3" endpoint="$4" use_v6="${5:-0}" dns_mode="${6:-}"
 
     python3 - "$TMP_DIR/config.json" "$WARP_PRIVATE_KEY" "$WARP_PUBLIC_KEY" \
-        "$WARP_ADDRESS_V4" "$WARP_ADDRESS_V6" "$endpoint" "$reserved" "$mtu" "$use_v6" <<'PYEOF'
+        "$WARP_ADDRESS_V4" "$WARP_ADDRESS_V6" "$endpoint" "$reserved" "$mtu" "$use_v6" \
+        "$dns_mode" <<'PYEOF'
 import json, sys
 
-path, priv, pub, v4, v6, endpoint, reserved, mtu, use_v6 = sys.argv[1:10]
+path, priv, pub, v4, v6, endpoint, reserved, mtu, use_v6, dns_mode = sys.argv[1:11]
 
 # IPv6 в туннеле по умолчанию выключен: docker-сеть без IPv6, и Xray уходит
 # резолвить домены через 2606:4700:4700::1001 внутри туннеля — i/o timeout
@@ -307,6 +309,16 @@ config = {
         }
     }]
 }
+
+# Лечение DNS внутри туннеля. Xray резолвит домены сам, изнутри WireGuard-
+# аутбаунда, и по умолчанию может выбрать IPv6-резолвер 2606:4700:4700::1001 —
+# при IPv4-только туннеле это "network is unreachable" и молчаливо мёртвый WARP.
+if dns_mode == "forceipv4":
+    # Заставляем сам аутбаунд резолвить только A-записи
+    config["outbounds"][0]["settings"]["domainStrategy"] = "ForceIPv4"
+elif dns_mode == "dnsv4":
+    # Глобально запрещаем Xray спрашивать AAAA
+    config["dns"] = {"servers": ["1.1.1.1", "8.8.8.8"], "queryStrategy": "UseIPv4"}
 
 with open(path, "w", encoding="utf-8") as fh:
     json.dump(config, fh, indent=2)
@@ -407,6 +419,7 @@ PYEOF
     WORKING_MTU="$mtu"
     WORKING_ENDPOINT="$endpoint"
     WORKING_V6="$use_v6"
+    WORKING_DNS="$dns_mode"
     docker rm -f "$TEST_CONTAINER" >/dev/null 2>&1 || true
     return 0
 }
@@ -434,23 +447,31 @@ WORKING_RESERVED=""
 WORKING_MTU=""
 WORKING_ENDPOINT=""
 WORKING_V6=""
+WORKING_DNS=""
 SUCCESS=0
 
-if test_warp "IPv4-only (рабочая схема)" "$WARP_RESERVED" "1280" "$WARP_ENDPOINT" 0; then
+# Первым проверяем ровно то, что стоит в проде — чтобы понимать его состояние
+if test_warp "IPv4-only (как в проде)" "$WARP_RESERVED" "1280" "$WARP_ENDPOINT" 0 ""; then
     SUCCESS=1
 else
     echo ""
-    warn "Основная конфигурация не работает — перебираем варианты"
+    warn "Конфигурация как в проде не работает — перебираем варианты"
 
+    # Сначала два лечения DNS: именно на него указывает
+    # "lookup ... on 2606:4700:4700::1001: network is unreachable"
     for variant in \
-        "reserved [0,0,0]|0,0,0|1280|$WARP_ENDPOINT|0" \
-        "MTU 1420|$WARP_RESERVED|1420|$WARP_ENDPOINT|0" \
-        "endpoint 162.159.192.1:2408|$WARP_RESERVED|1280|162.159.192.1:2408|0" \
-        "endpoint 162.159.193.10:2408|$WARP_RESERVED|1280|162.159.193.10:2408|0" \
-        "с IPv6 в туннеле (обычно НЕ работает)|$WARP_RESERVED|1280|$WARP_ENDPOINT|1"
+        "DNS только IPv4 (queryStrategy)|$WARP_RESERVED|1280|$WARP_ENDPOINT|0|dnsv4" \
+        "domainStrategy ForceIPv4|$WARP_RESERVED|1280|$WARP_ENDPOINT|0|forceipv4" \
+        "DNS только IPv4 + MTU 1420|$WARP_RESERVED|1420|$WARP_ENDPOINT|0|dnsv4" \
+        "reserved [0,0,0] + DNS IPv4|0,0,0|1280|$WARP_ENDPOINT|0|dnsv4" \
+        "reserved [0,0,0]|0,0,0|1280|$WARP_ENDPOINT|0|" \
+        "MTU 1420|$WARP_RESERVED|1420|$WARP_ENDPOINT|0|" \
+        "endpoint 162.159.192.1:2408|$WARP_RESERVED|1280|162.159.192.1:2408|0|" \
+        "endpoint 162.159.193.10:2408|$WARP_RESERVED|1280|162.159.193.10:2408|0|" \
+        "с IPv6 в туннеле (обычно НЕ работает)|$WARP_RESERVED|1280|$WARP_ENDPOINT|1|"
     do
-        IFS='|' read -r vlabel vres vmtu vep vv6 <<<"$variant"
-        if test_warp "$vlabel" "$vres" "$vmtu" "$vep" "$vv6"; then
+        IFS='|' read -r vlabel vres vmtu vep vv6 vdns <<<"$variant"
+        if test_warp "$vlabel" "$vres" "$vmtu" "$vep" "$vv6" "$vdns"; then
             SUCCESS=1
             break
         fi
@@ -496,6 +517,12 @@ if [ "$SUCCESS" = "1" ]; then
     echo "    WARP_MTU=$WORKING_MTU"
     echo "    WARP_ENDPOINT=$WORKING_ENDPOINT"
     echo "    WARP_IPV6=$WORKING_V6"
+    if [ -n "$WORKING_DNS" ]; then
+        echo ""
+        echo -e "${YELLOW}    Понадобилось лечение DNS: $WORKING_DNS${NC}"
+        echo "    Это НЕ переменная .env — нужна правка генератора конфига."
+        echo "    Пришлите этот вывод, добавлю в app/xray.py."
+    fi
     echo ""
     echo "  Если они отличаются от текущих — пропишите в .env и включите:"
     echo "    bash scripts/06-setup-warp.sh"
