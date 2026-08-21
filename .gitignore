@@ -4,6 +4,7 @@ __pycache__/
 .env
 .env.marzban
 .warp/
+.warp-test/
 data/
 *.db
 .idea/

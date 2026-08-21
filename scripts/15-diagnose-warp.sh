@@ -82,6 +82,97 @@ fi
 [ -n "$WARP_ENDPOINT" ] || WARP_ENDPOINT="engage.cloudflareclient.com:2408"
 [ -n "$WARP_RESERVED" ] || WARP_RESERVED="0,0,0"
 
+# ─── Отдельный аккаунт, если WARP включён в проде ──
+# Нельзя поднимать тестовый туннель с тем же приватным ключом, который уже держит
+# прод: Cloudflare увидит два пира с одним ключом, handshake пройдёт у обоих, а
+# сессия достанется рукопожавшемуся последним. Тест при этом покажет «трафик не
+# идёт» на полностью исправном WARP, а заодно собьёт прод. Поэтому для теста
+# заводим свой аккаунт.
+PROD_WARP_ON=0
+if docker exec "$XRAY_CONTAINER" grep -q '"tag": "WARP"' /etc/xray/config.json 2>/dev/null; then
+    PROD_WARP_ON=1
+fi
+
+if [ "$PROD_WARP_ON" = "1" ]; then
+    warn "WARP включён в проде — тем же ключом тестировать нельзя (конфликт сессий)"
+    if ! command -v wgcf &>/dev/null; then
+        warn "wgcf не установлен, отдельный аккаунт не завести."
+        warn "Результат ниже будет НЕДОСТОВЕРЕН. Поставьте wgcf (scripts/06-setup-warp.sh)"
+        warn "или временно выключите прод: bash scripts/06-setup-warp.sh --disable"
+    else
+        TEST_WARP_DIR="$PROJECT_DIR/.warp-test"
+        mkdir -p "$TEST_WARP_DIR"
+        (
+            cd "$TEST_WARP_DIR"
+            if [ ! -f wgcf-account.toml ]; then
+                info "Регистрирую отдельный аккаунт WARP для тестов (.warp-test)..."
+                wgcf register --accept-tos >/dev/null 2>&1 || true
+            fi
+            [ -f wgcf-account.toml ] && wgcf generate --profile wgcf-profile.conf >/dev/null 2>&1 || true
+        )
+
+        if [ -f "$TEST_WARP_DIR/wgcf-profile.conf" ]; then
+            mapfile -t T < <(python3 - "$TEST_WARP_DIR/wgcf-profile.conf" <<'PYEOF'
+import sys
+values = {"PrivateKey": "", "PublicKey": "", "Endpoint": ""}
+v4 = v6 = ""
+with open(sys.argv[1], encoding="utf-8") as fh:
+    for line in fh:
+        if "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip()
+        if key in values and not values[key]:
+            values[key] = value
+        elif key == "Address":
+            for addr in value.split(","):
+                addr = addr.strip().split("/")[0]
+                if ":" in addr and not v6:
+                    v6 = addr
+                elif "." in addr and not v4:
+                    v4 = addr
+print(values["PrivateKey"]); print(values["PublicKey"])
+print(values["Endpoint"]); print(v4); print(v6)
+PYEOF
+)
+            if [ -n "${T[0]:-}" ]; then
+                WARP_PRIVATE_KEY="${T[0]}"
+                WARP_PUBLIC_KEY="${T[1]:-}"
+                WARP_ENDPOINT="${T[2]:-$WARP_ENDPOINT}"
+                WARP_ADDRESS_V4="${T[3]:-}"
+                WARP_ADDRESS_V6="${T[4]:-}"
+                # reserved у отдельного аккаунта свой — прод-значение не подойдёт
+                WARP_RESERVED="0,0,0"
+                TEST_TOKEN=$(awk -F"'" '/^access_token/{print $2}' "$TEST_WARP_DIR/wgcf-account.toml" 2>/dev/null || true)
+                TEST_DEVICE=$(awk -F"'" '/^device_id/{print $2}' "$TEST_WARP_DIR/wgcf-account.toml" 2>/dev/null || true)
+                if [ -n "$TEST_TOKEN" ] && [ -n "$TEST_DEVICE" ]; then
+                    REG=$(curl -fsSL --max-time 15 \
+                        -H "Authorization: Bearer $TEST_TOKEN" \
+                        -H "User-Agent: okhttp/3.12.1" \
+                        -H "CF-Client-Version: a-6.10-2158" \
+                        "https://api.cloudflareclient.com/v0a2158/reg/$TEST_DEVICE" 2>/dev/null || true)
+                    COMPUTED=$(printf '%s' "$REG" | python3 -c '
+import base64, json, sys
+try:
+    cid = json.load(sys.stdin).get("config", {}).get("client_id", "")
+    raw = base64.b64decode(cid)
+    if len(raw) == 3:
+        print(",".join(str(b) for b in raw))
+except Exception:
+    pass
+' 2>/dev/null || true)
+                    [ -n "$COMPUTED" ] && WARP_RESERVED="$COMPUTED"
+                fi
+                info "Тестирую отдельным аккаунтом (.warp-test), прод не затрагивается"
+            else
+                warn "Не удалось разобрать тестовый профиль — результат может быть недостоверен"
+            fi
+        else
+            warn "Не удалось завести тестовый аккаунт — результат может быть недостоверен"
+        fi
+    fi
+fi
+
 cleanup() { docker rm -f "$TEST_CONTAINER" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
@@ -417,7 +508,15 @@ else
     echo -e "${RED} WARP НЕ пропускает трафик — включать нельзя${NC}"
     echo "═══════════════════════════════════════════════════"
     echo ""
+    if [ "$PROD_WARP_ON" = "1" ] && [ ! -f "${TEST_WARP_DIR:-/nonexistent}/wgcf-profile.conf" ]; then
+        echo -e "${YELLOW}  ВНИМАНИЕ: WARP включён в проде, а отдельный тестовый аккаунт завести${NC}"
+        echo -e "${YELLOW}  не удалось. Скорее всего это конфликт сессий по одному ключу, а не${NC}"
+        echo -e "${YELLOW}  поломка WARP. Проверьте прод по access.log перед любыми действиями:${NC}"
+        echo "    docker exec $XRAY_CONTAINER tail -200 /var/log/xray/access.log | grep 'WARP]'"
+        echo ""
+    fi
     echo "  Ни один вариант не заработал. Вероятные причины:"
+    echo "  ├─ конфликт сессий: тот же ключ уже используется прод-туннелем"
     echo "  ├─ UDP 2408 наружу режется хостером/файрволом"
     echo "  ├─ аккаунт WARP забанен для этого IP (Cloudflare это делает)"
     echo "  └─ версия Xray в образе без поддержки wireguard-аутбаунда"
