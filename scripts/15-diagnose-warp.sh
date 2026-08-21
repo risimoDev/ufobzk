@@ -110,6 +110,26 @@ youtube_country() {
     return 0
 }
 
+# TikTok отдаёт свою метку региона в HTML главной страницы ("region":"XX").
+# Гео у него собственное и с гугловым не связано — меряем отдельно.
+# Нужен браузерный User-Agent, иначе отдаётся другая страница без метки.
+tiktok_country() {
+    local cc attempt
+    for attempt in 1 2; do
+        cc=$(curl -fsS --max-time 30 \
+            -H 'Accept-Language: en-US,en;q=0.9' \
+            -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36' \
+            "$@" https://www.tiktok.com/ 2>/dev/null \
+            | grep -o '"region":"[A-Z][A-Z]"' | head -1 | cut -d'"' -f4 || true)
+        if [ -n "$cc" ]; then
+            printf '%s' "$cc"
+            return 0
+        fi
+        [ "$attempt" -lt 2 ] && sleep 3
+    done
+    return 0
+}
+
 # ─── Базовая линия: прямой выход сервера ────────
 echo ""
 echo "═══ Базовая линия (прямой выход сервера) ═══"
@@ -135,6 +155,15 @@ else
     warn "Прямой выход IPv4: YouTube считает страну $DIRECT_GL4 (не RU — возможно, чинить уже нечего)"
 fi
 [ -n "$DIRECT_GL6" ] && info "Прямой выход IPv6: YouTube считает страну $DIRECT_GL6 (для сравнения)"
+
+DIRECT_TT=$(tiktok_country -4)
+if [ -z "$DIRECT_TT" ]; then
+    warn "Прямой выход IPv4: регион TikTok определить не удалось"
+elif [ "$DIRECT_TT" = "RU" ]; then
+    fail "Прямой выход IPv4: TikTok считает регион RU"
+else
+    info "Прямой выход IPv4: TikTok считает регион $DIRECT_TT (не RU — по IP претензий нет)"
+fi
 
 # ─── Тест одной конфигурации WARP ───────────────
 # $1 — имя, $2 — reserved, $3 — mtu, $4 — endpoint, $5 — использовать IPv6 (0/1)
@@ -273,6 +302,14 @@ PYEOF
         fail "$label — gemini.google.com отвечает «недоступно в вашей стране»"
     else
         ok "$label — gemini.google.com отвечает через WARP (HTTP $gem_code)"
+    fi
+
+    local tt
+    tt=$(tiktok_country --socks5-hostname "127.0.0.1:${TEST_PORT}")
+    if [ -z "$tt" ]; then
+        warn "$label — регион TikTok определить не удалось"
+    else
+        ok "$label — TikTok считает регион $tt"
     fi
 
     WORKING_RESERVED="$reserved"
