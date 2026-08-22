@@ -25,6 +25,12 @@ RU_TRANSIT_PUBLIC_KEY = os.getenv("RU_TRANSIT_PUBLIC_KEY", "")
 RU_TRANSIT_SHORT_ID = os.getenv("RU_TRANSIT_SHORT_ID", "aabbccdd")
 RU_TRANSIT_SN = os.getenv("RU_TRANSIT_SN", "www.yandex.ru")
 
+# Транзит главный → нода для гео-чувствительных доменов (GEO-EXIT в app/xray.py).
+# Этот UUID добавляется в клиенты REALITY-инбаунда КАЖДОЙ ноды: какая из них
+# выбрана выходом, решает GEO_NODE_NAME на главном, а лишний клиент на остальных
+# безвреден и позволяет переключить ноду без пересинхронизации.
+GEO_TRANSIT_UUID = os.getenv("GEO_TRANSIT_UUID", "")
+
 
 def _build_remote_config(server: Server, keys: list[VPNKey]) -> dict[str, Any]:
     """Собрать Xray config для remote сервера (только inbound + minimal outbound)."""
@@ -46,6 +52,15 @@ def _build_remote_config(server: Server, keys: list[VPNKey]) -> dict[str, Any]:
                 "flow": "xtls-rprx-vision",
                 "level": 0
             })
+
+    # Транзитный клиент для GEO-EXIT — без него нода отобьёт цепочку с главного
+    if GEO_TRANSIT_UUID and not any(c["id"] == GEO_TRANSIT_UUID for c in reality_clients):
+        reality_clients.append({
+            "id": GEO_TRANSIT_UUID,
+            "email": "geo-transit",
+            "flow": "xtls-rprx-vision",
+            "level": 0
+        })
 
     # WS/XHTTP/gRPC работают ТОЛЬКО за nginx+TLS (домен). На голом IP-узле
     # nginx нет — эти inbound'ы были бы plaintext-VLESS, к которым клиент по

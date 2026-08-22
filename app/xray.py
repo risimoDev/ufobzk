@@ -56,22 +56,33 @@ WARP_IPV6 = os.getenv("WARP_IPV6", "0").strip().lower() in ("1", "true", "yes", 
 # ВНИМАНИЕ: не добавляйте сюда "geosite:google" целиком. В эту категорию входят
 # connectivitycheck.gstatic.com, dns.google, googleapis.com и mtalk.google.com
 # (FCM-пуши). Android определяет наличие интернета запросом к connectivitycheck:
-# если WARP отвалится, телефон пометит соединение как «без доступа в интернет»
+# если выход отвалится, телефон пометит соединение как «без доступа в интернет»
 # и приложения перестанут работать при живом туннеле. Держим список узким —
-# только то, где реально мешает гео-метка RU: поиск и YouTube.
-WARP_DOMAINS = os.getenv(
-    "WARP_DOMAINS",
+# только то, где реально мешает гео-метка RU.
+#
+# Antigravity: сайт и вход на antigravity.google, служебные запросы IDE на
+# *.codeium.com (построен на технологии Windsurf/Codeium), а сами вызовы модели —
+# в Google Cloud AI Companion. Без последних IDE отвечает "User location is not
+# supported for the API use" (FAILED_PRECONDITION). Эндпоинты перечислены
+# поимённо: заворачивать googleapis.com целиком нельзя.
+#
+# Старое имя WARP_DOMAINS поддержано, чтобы не ломать существующие .env.
+_GEO_DOMAINS_DEFAULT = (
     "geosite:youtube,domain:googlevideo.com,domain:ytimg.com,domain:ggpht.com,"
     "domain:www.google.com,domain:gemini.google.com,"
-    # Antigravity: сайт и вход на antigravity.google, служебные запросы IDE на
-    # *.codeium.com (построен на технологии Windsurf/Codeium), а сами вызовы
-    # модели — в Google Cloud AI Companion. Без последних IDE отвечает
-    # "User location is not supported for the API use" (FAILED_PRECONDITION).
-    # Перечислены поимённо: заворачивать googleapis.com целиком нельзя.
     "domain:antigravity.google,domain:codeium.com,"
     "domain:cloudcode-pa.googleapis.com,domain:cloudaicompanion.googleapis.com,"
-    "domain:generativelanguage.googleapis.com",
+    "domain:generativelanguage.googleapis.com"
 )
+GEO_DOMAINS = os.getenv("GEO_DOMAINS", os.getenv("WARP_DOMAINS", _GEO_DOMAINS_DEFAULT))
+
+# Своя нода как чистый выход для гео-чувствительных доменов — приоритетнее WARP.
+# GEO_NODE_NAME — поле name строки в таблице servers (как в админке); host, порт
+# и ключи REALITY берутся оттуда же, дублировать их в .env не нужно.
+# GEO_TRANSIT_UUID должен попасть в клиенты REALITY-инбаунда этой ноды —
+# см. app/remote_xray.py, иначе нода отобьёт подключение.
+GEO_NODE_NAME = os.getenv("GEO_NODE_NAME", "")
+GEO_TRANSIT_UUID = os.getenv("GEO_TRANSIT_UUID", "")
 
 # Порты
 VLESS_WS_PORT = int(os.getenv("VLESS_WS_PORT", "443"))
@@ -329,12 +340,61 @@ def build_xray_config(db: Session) -> dict[str, Any]:
             }
         })
 
-    # Google/YouTube через Cloudflare WARP.
-    # ВАЖНО: правило должно стоять ВЫШЕ правил каскада. Google считает наш IPv4
-    # российским и отдаёт для *.googlevideo.com адреса GGC-кэшей внутри российских
-    # AS. Эти адреса матчатся на "geoip:ru" и без этого правила YouTube уходил бы
-    # в RU-хаб — то есть выходил бы в реальный российский IP.
-    if WARP_PRIVATE_KEY and WARP_PUBLIC_KEY and WARP_ADDRESS_V4:
+    # ── Выход для гео-чувствительных доменов ──
+    # Приоритет: своя нода (GEO-EXIT) → Cloudflare WARP. Нода надёжнее: WARP
+    # раздаёт общие адреса Cloudflare и режет их для серверных диапазонов —
+    # handshake проходит, а трафик молча выбрасывается.
+    geo_outbound_tag = None
+
+    if GEO_NODE_NAME and GEO_TRANSIT_UUID:
+        geo_node = db.query(Server).filter(
+            Server.name == GEO_NODE_NAME,
+            Server.is_active == True  # noqa: E712
+        ).first()
+
+        if geo_node is None:
+            logger.warning(
+                "GEO_NODE_NAME=%r не найден среди активных серверов — GEO-EXIT выключен",
+                GEO_NODE_NAME,
+            )
+        elif not (geo_node.reality_public_key and geo_node.reality_short_id):
+            logger.warning(
+                "У сервера %r не заполнены ключи REALITY — GEO-EXIT выключен", GEO_NODE_NAME
+            )
+        else:
+            geo_sn = (geo_node.reality_server_names or "www.samsung.com").split(",")[0].strip()
+            config["outbounds"].append({
+                "tag": "GEO-EXIT",
+                "protocol": "vless",
+                "settings": {
+                    "vnext": [{
+                        "address": geo_node.host,
+                        "port": geo_node.reality_port,
+                        "users": [{
+                            "id": GEO_TRANSIT_UUID,
+                            "encryption": "none",
+                            "flow": "xtls-rprx-vision"
+                        }]
+                    }]
+                },
+                "streamSettings": {
+                    "network": "tcp",
+                    "security": "reality",
+                    "realitySettings": {
+                        "show": False,
+                        "fingerprint": "chrome",
+                        "serverName": geo_sn,
+                        "publicKey": geo_node.reality_public_key,
+                        "shortId": geo_node.reality_short_id
+                    }
+                },
+                "mux": {"enabled": False}
+            })
+            geo_outbound_tag = "GEO-EXIT"
+            logger.info("GEO-EXIT: гео-домены идут через ноду %s (%s)",
+                        geo_node.name, geo_node.host)
+
+    if geo_outbound_tag is None and WARP_PRIVATE_KEY and WARP_PUBLIC_KEY and WARP_ADDRESS_V4:
         # По умолчанию туннель строго IPv4 — см. комментарий у WARP_IPV6
         warp_address = [f"{WARP_ADDRESS_V4}/32"]
         warp_allowed_ips = ["0.0.0.0/0"]
@@ -370,15 +430,21 @@ def build_xray_config(db: Session) -> dict[str, Any]:
                 "mtu": WARP_MTU
             }
         })
+        geo_outbound_tag = "WARP"
 
-        warp_domains = [d.strip() for d in WARP_DOMAINS.split(",") if d.strip()]
-        if warp_domains:
+    # ВАЖНО: правило стоит ВЫШЕ правил каскада. Google считает наш IPv4
+    # российским и отдаёт для *.googlevideo.com адреса GGC-кэшей внутри
+    # российских AS. Эти адреса матчатся на "geoip:ru", и без этого правила
+    # YouTube уходил бы в RU-хаб — то есть выходил бы в реальный российский IP.
+    if geo_outbound_tag:
+        geo_domains = [d.strip() for d in GEO_DOMAINS.split(",") if d.strip()]
+        if geo_domains:
             rules = config["routing"]["rules"]
             catchall = rules.pop()  # убираем catch-all (tcp,udp → DIRECT)
             rules.append({
                 "type": "field",
-                "outboundTag": "WARP",
-                "domain": warp_domains
+                "outboundTag": geo_outbound_tag,
+                "domain": geo_domains
             })
             rules.append(catchall)
 
