@@ -345,8 +345,11 @@ def build_xray_config(db: Session) -> dict[str, Any]:
     # раздаёт общие адреса Cloudflare и режет их для серверных диапазонов —
     # handshake проходит, а трафик молча выбрасывается.
     geo_outbound_tag = None
+    # Если нода выбрана явно, отката на WARP быть не должно: при опечатке в
+    # имени тихо уехать на другой выход хуже, чем остаться на DIRECT.
+    geo_node_requested = bool(GEO_NODE_NAME and GEO_TRANSIT_UUID)
 
-    if GEO_NODE_NAME and GEO_TRANSIT_UUID:
+    if geo_node_requested:
         geo_node = db.query(Server).filter(
             Server.name == GEO_NODE_NAME,
             Server.is_active == True  # noqa: E712
@@ -394,7 +397,8 @@ def build_xray_config(db: Session) -> dict[str, Any]:
             logger.info("GEO-EXIT: гео-домены идут через ноду %s (%s)",
                         geo_node.name, geo_node.host)
 
-    if geo_outbound_tag is None and WARP_PRIVATE_KEY and WARP_PUBLIC_KEY and WARP_ADDRESS_V4:
+    if (geo_outbound_tag is None and not geo_node_requested
+            and WARP_PRIVATE_KEY and WARP_PUBLIC_KEY and WARP_ADDRESS_V4):
         # По умолчанию туннель строго IPv4 — см. комментарий у WARP_IPV6
         warp_address = [f"{WARP_ADDRESS_V4}/32"]
         warp_allowed_ips = ["0.0.0.0/0"]
