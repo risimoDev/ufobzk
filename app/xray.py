@@ -74,7 +74,23 @@ _GEO_DOMAINS_DEFAULT = (
     "domain:cloudcode-pa.googleapis.com,domain:cloudaicompanion.googleapis.com,"
     "domain:generativelanguage.googleapis.com"
 )
-GEO_DOMAINS = os.getenv("GEO_DOMAINS", os.getenv("WARP_DOMAINS", _GEO_DOMAINS_DEFAULT))
+# Для IPv6-выхода список ДРУГОЙ: домен без AAAA-записи туда класть нельзя —
+# соединение оборвётся. Проверено: у antigravity.google и codeium.com AAAA нет,
+# поэтому их здесь нет. Модельные вызовы Antigravity идут в cloudaicompanion /
+# cloudcode-pa, у которых AAAA есть, так что он всё равно попадает под правило.
+_GEO_V6_DOMAINS_DEFAULT = (
+    "domain:gemini.google.com,"
+    "domain:cloudcode-pa.googleapis.com,domain:cloudaicompanion.googleapis.com,"
+    "domain:generativelanguage.googleapis.com"
+)
+
+# Пусто = взять дефолт под выбранный выход (у IPv6 он свой)
+GEO_DOMAINS = os.getenv("GEO_DOMAINS", os.getenv("WARP_DOMAINS", ""))
+
+# Выпускать гео-домены через IPv6 главного сервера. Работает потому, что Google
+# метит как RU только наш IPv4: по IPv6 тот же сервер определяется как PL.
+# ТРЕБУЕТ IPv6 внутри docker-сети backend — иначе "network is unreachable".
+GEO_IPV6 = os.getenv("GEO_IPV6", "0").strip().lower() in ("1", "true", "yes", "on")
 
 # Своя нода как чистый выход для гео-чувствительных доменов — приоритетнее WARP.
 # GEO_NODE_NAME — поле name строки в таблице servers (как в админке); host, порт
@@ -397,7 +413,17 @@ def build_xray_config(db: Session) -> dict[str, Any]:
             logger.info("GEO-EXIT: гео-домены идут через ноду %s (%s)",
                         geo_node.name, geo_node.host)
 
-    if (geo_outbound_tag is None and not geo_node_requested
+    # IPv6 главного сервера. Никаких внешних зависимостей: тот же сервер, но
+    # Google метит как RU только его IPv4, а IPv6 видит как PL.
+    if geo_outbound_tag is None and not geo_node_requested and GEO_IPV6:
+        config["outbounds"].append({
+            "tag": "GEO-V6",
+            "protocol": "freedom",
+            "settings": {"domainStrategy": "UseIPv6"}
+        })
+        geo_outbound_tag = "GEO-V6"
+
+    if (geo_outbound_tag is None and not geo_node_requested and not GEO_IPV6
             and WARP_PRIVATE_KEY and WARP_PUBLIC_KEY and WARP_ADDRESS_V4):
         # По умолчанию туннель строго IPv4 — см. комментарий у WARP_IPV6
         warp_address = [f"{WARP_ADDRESS_V4}/32"]
@@ -441,7 +467,12 @@ def build_xray_config(db: Session) -> dict[str, Any]:
     # российских AS. Эти адреса матчатся на "geoip:ru", и без этого правила
     # YouTube уходил бы в RU-хаб — то есть выходил бы в реальный российский IP.
     if geo_outbound_tag:
-        geo_domains = [d.strip() for d in GEO_DOMAINS.split(",") if d.strip()]
+        # У IPv6-выхода свой дефолтный список — только домены с AAAA
+        default_domains = (
+            _GEO_V6_DOMAINS_DEFAULT if geo_outbound_tag == "GEO-V6" else _GEO_DOMAINS_DEFAULT
+        )
+        geo_domains_raw = GEO_DOMAINS or default_domains
+        geo_domains = [d.strip() for d in geo_domains_raw.split(",") if d.strip()]
         if geo_domains:
             rules = config["routing"]["rules"]
             catchall = rules.pop()  # убираем catch-all (tcp,udp → DIRECT)

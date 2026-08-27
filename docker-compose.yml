@@ -183,8 +183,13 @@ services:
 networks:
   frontend:
     driver: bridge
+  # backend с IPv6: нужен для GEO_IPV6 — выхода гео-доменов через IPv6 главного
+  # сервера (Google метит как RU только его IPv4, IPv6 видит как PL). Без этого
+  # freedom-аутбаунд с domainStrategy UseIPv6 падает с "network is unreachable".
+  # Требует Docker 26+ (в более старых нужен "ipv6": true в /etc/docker/daemon.json).
   backend:
     driver: bridge
+    enable_ipv6: true
 
 # ── Тома ──
 volumes:
