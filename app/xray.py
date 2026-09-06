@@ -81,7 +81,12 @@ _GEO_DOMAINS_DEFAULT = (
 _GEO_V6_DOMAINS_DEFAULT = (
     "domain:gemini.google.com,"
     "domain:cloudcode-pa.googleapis.com,domain:cloudaicompanion.googleapis.com,"
-    "domain:generativelanguage.googleapis.com"
+    "domain:generativelanguage.googleapis.com,"
+    # Vertex AI: keyword, а не domain. У Xray "domain:aiplatform.googleapis.com"
+    # НЕ матчит us-central1-aiplatform.googleapis.com — это не поддомен, а другой
+    # первый лейбл. keyword ловит и apex, и все региональные эндпоинты; AAAA
+    # проверена и там, и там.
+    "keyword:aiplatform.googleapis.com"
 )
 
 # Пусто = взять дефолт под выбранный выход (у IPv6 он свой)

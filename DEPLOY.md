@@ -292,6 +292,49 @@ WARP.
 getent ahostsv6 gemini.google.com
 ```
 
+Замеренное состояние AAAA по сервисам (проверено 28.08.2026 через DoH):
+
+| Домен | AAAA | Годен для GEO-V6 |
+| --- | --- | --- |
+| `gemini.google.com` | есть | да |
+| `cloudcode-pa` / `cloudaicompanion.googleapis.com` | есть | да |
+| `generativelanguage.googleapis.com` | есть | да |
+| `aiplatform.googleapis.com` и `*-aiplatform.googleapis.com` | есть | да |
+| `antigravity.google`, `www.antigravity.google` | нет | нет |
+| `codeium.com` | нет | нет |
+| `gemini.gstatic.com` | нет | нет (и не нужен — CDN без гео-гейта) |
+| **все домены TikTok и ByteDance** | **нет** | **нет** |
+
+`*-aiplatform.googleapis.com` заводится через `keyword:aiplatform.googleapis.com`,
+а не `domain:` — у Xray `domain:aiplatform.googleapis.com` не матчит
+`us-central1-aiplatform.googleapis.com`, потому что это не поддомен, а другой
+первый лейбл.
+
+**TikTok через GEO-V6 невозможен.** Ни `tiktok.com`, ни `tiktokv.com`, ни
+`tiktokw.us`/`tiktokv.us`, ни `musical.ly`, ни CDN (`tiktokcdn.com`,
+`tiktokcdn-us.com`, `byteoversea.com/.net`, `ibytedtos.com`, `byteimg.com`,
+`bytefcdn-oversea.com`), ни инфраструктура ByteDance (`bytedance.com/.net`,
+`sgsnssdk.com`, `ttdns2.com`) не имеют AAAA-записей — вся сеть TikTok
+IPv4-only. Добавление любого из них в `GEO_DOMAINS` при `GEO_IPV6=1` просто
+оборвёт TikTok. Для него нужен IPv4-выход: цепочка на ноду (GEO-EXIT) либо
+другой адрес у хостера.
+
+### Готовые rule-set базы вместо ручных списков
+
+Перечислять домены руками не нужно — Xray умеет `geosite:`, данные берутся из
+[v2fly/domain-list-community](https://github.com/v2fly/domain-list-community)
+и уже лежат в образе:
+
+| Категория | Записей | Комментарий |
+| --- | --- | --- |
+| `geosite:tiktok` | ~36 | Полнее ручного списка: есть `tiktokcdn-eu`, `ttwstatic`, `ttcdn-us`, `ttlivecdn`, алиасы `*.edgesuite.net` / `*.akamaized.net` |
+| `geosite:bytedance` | ~375 | **Слишком широко.** Через `include:` тянет Douyin, Feishu/Lark, Juejin, Volcengine — китайские сервисы, которые заворачивать не нужно |
+| `geosite:youtube`, `geosite:google`, `geosite:openai` | — | `geosite:google` целиком заворачивать нельзя, см. предупреждение выше |
+
+Категории `geosite:google-ai` в апстриме нет, поэтому AI-эндпоинты Google
+(`gemini`, `cloudaicompanion`, `cloudcode-pa`, `generativelanguage`,
+`aiplatform`) перечислены поимённо.
+
 > **WARP ненадёжен на серверных адресах.** Cloudflare режет свои общие диапазоны
 > для датацентров: handshake проходит (`Received handshake response`), а трафик
 > молча выбрасывается. Выглядит как исправный туннель без единого байта данных,
