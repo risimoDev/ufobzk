@@ -67,7 +67,8 @@ def require_admin(request: Request, db: Session = Depends(get_db)) -> User:
     return user
 
 
-def verify_csrf(request: Request, token: str | None) -> None:
-    if not validate_csrf_token(token):
+def verify_csrf(request: Request, token: str | None = None) -> None:
+    csrf_token = token or request.headers.get("x-csrf-token") or request.headers.get("X-CSRF-Token")
+    if not validate_csrf_token(csrf_token):
         logger.warning("CSRF validation failed from %s", _client_ip(request))
         raise HTTPException(status_code=403, detail="Недействительный CSRF-токен. Перезагрузите страницу.")

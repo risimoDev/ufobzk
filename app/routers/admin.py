@@ -16,7 +16,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Re
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from sqlalchemy import func as sa_func
+from sqlalchemy import func as sa_func, text
 from sqlalchemy.orm import Session
 
 from app.auth import generate_csrf_token, generate_invite_key, hash_password, list_invite_keys, delete_invite_key
@@ -24,7 +24,8 @@ from app.bruteforce import admin_guard, api_guard, login_guard
 from app.dependencies import _format_bytes, require_admin, templates, verify_csrf, _client_ip
 from app.models import (
     AppSetting, AuditLog, DEFAULT_SETTINGS, Guide, Payment, Server,
-    TrafficSnapshot, User, VPNKey, get_db, get_setting, set_setting,
+    SUPERADMIN_TELEGRAM_ID, TrafficSnapshot, User, VPNKey, engine, get_db,
+    get_setting, set_setting,
 )
 from app.xray import (
     DOMAIN, GB, NL_SERVER_IP, REALITY_PORT, REALITY_PUBLIC_KEY,
@@ -302,15 +303,22 @@ async def admin_edit_user(
         raise HTTPException(status_code=404, detail="Пользователь не найден")
 
     body = await request.json()
+    verify_csrf(request, body.get("csrf_token"))
 
     need_reload = False
     if "display_name" in body:
         target.display_name = str(body["display_name"]).strip()[:100] or None
     if "is_active" in body:
-        target.is_active = bool(body["is_active"])
+        new_active = bool(body["is_active"])
+        if target.id == admin.id and not new_active:
+            raise HTTPException(status_code=400, detail="Нельзя заблокировать собственный аккаунт")
+        target.is_active = new_active
         need_reload = True
     if "is_admin" in body:
-        target.is_admin = bool(body["is_admin"])
+        new_admin = bool(body["is_admin"])
+        if target.id == admin.id and not new_admin:
+            raise HTTPException(status_code=400, detail="Нельзя снять права администратора с самого себя")
+        target.is_admin = new_admin
     if "username" in body:
         new_username = str(body["username"]).strip()[:64] or None
         if new_username and new_username != target.username:
@@ -459,9 +467,15 @@ async def admin_delete_user(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    verify_csrf(request)
     target = db.query(User).filter(User.id == user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    if target.id == admin.id:
+        raise HTTPException(status_code=400, detail="Нельзя удалить собственный аккаунт")
+    if SUPERADMIN_TELEGRAM_ID and target.telegram_id and str(target.telegram_id) == str(SUPERADMIN_TELEGRAM_ID):
+        raise HTTPException(status_code=400, detail="Нельзя удалить аккаунт главного администратора")
 
     target_info = f"tg={target.telegram_id}"
     db.delete(target)  # cascade удалит и ключи
@@ -603,6 +617,7 @@ async def admin_unban_ip(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    verify_csrf(request)
     body = await request.json()
     ip = body.get("ip", "").strip()
     if not ip:
@@ -1580,11 +1595,7 @@ async def admin_migrate_nl(
 # ── Диагностика сервера ──
 
 
-@router.get("/admin/diagnostics")
-async def admin_diagnostics(
-    request: Request,
-    _: User = Depends(require_admin),
-):
+def _compute_diagnostics() -> dict[str, Any]:
     results: dict[str, Any] = {}
 
     # ── 1. Системные ресурсы ──
@@ -1638,7 +1649,7 @@ async def admin_diagnostics(
         results["uptime"] = None
 
     # ── 2. TCP-connectivity тесты ──
-    def tcp_check(host: str, port: int, timeout: float = 3.0) -> dict:
+    def tcp_check(host: str, port: int, timeout: float = 2.0) -> dict:
         t0 = _time.monotonic()
         try:
             sock = socket.create_connection((host, port), timeout=timeout)
@@ -1651,7 +1662,7 @@ async def admin_diagnostics(
 
     results["xray_ws"] = tcp_check("xray", 8443)
     results["xray_xhttp"] = tcp_check("xray", 8444)
-    results["reality"] = tcp_check("127.0.0.1", 443, timeout=3.0)
+    results["reality"] = tcp_check("127.0.0.1", 443, timeout=2.0)
     results["app_self"] = tcp_check("127.0.0.1", 8000)
 
     # ── 3. DNS resolution ──
@@ -1738,7 +1749,156 @@ async def admin_diagnostics(
     except Exception as e:
         results["cert"] = {"ok": False, "error": str(e)[:100]}
 
+    return results
+
+
+@router.get("/admin/diagnostics")
+async def admin_diagnostics(
+    request: Request,
+    _: User = Depends(require_admin),
+):
+    """Диагностика сервера: не блокирует event loop благодаря asyncio.to_thread."""
+    results = await asyncio.to_thread(_compute_diagnostics)
     return JSONResponse(results)
+
+
+# ── Инструменты самовосстановления (Quick Repair) ──
+
+
+@router.post("/admin/api/repair/nginx-reload")
+async def admin_repair_nginx_reload(
+    request: Request,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Мягкая перезагрузка Nginx для сброса залипших воркеров."""
+    verify_csrf(request)
+    from app.xray import _docker_exec_via_socket
+    nginx_name = os.getenv("NGINX_CONTAINER_NAME", "ufobzk-nginx")
+    reloaded = False
+    detail = ""
+    try:
+        reloaded = _docker_exec_via_socket(nginx_name, ["nginx", "-s", "reload"])
+        if reloaded:
+            detail = f"Контейнер {nginx_name} успешно перезагружен (nginx -s reload)"
+        else:
+            res = subprocess.run(["nginx", "-s", "reload"], capture_output=True, text=True, timeout=5)
+            reloaded = (res.returncode == 0)
+            detail = res.stdout or res.stderr or "Системный nginx перезагружен"
+    except Exception as e:
+        detail = str(e)
+
+    _log_action(db, admin.id, "repair_nginx_reload", "", f"ok={reloaded} {detail}")
+    return JSONResponse({"ok": reloaded, "detail": detail})
+
+
+@router.post("/admin/api/repair/sync-nodes")
+async def admin_repair_sync_nodes(
+    request: Request,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Синхронизация конфигурации и ключей на главный сервер и все активные ноды."""
+    verify_csrf(request)
+    from app.remote_xray import sync_all_servers
+    local_ok = sync_and_reload(db)
+    node_results = await sync_all_servers(db)
+    _log_action(db, admin.id, "repair_sync_nodes", "", f"local={local_ok} nodes={node_results}")
+    return JSONResponse({
+        "ok": True,
+        "local": local_ok,
+        "nodes": node_results,
+    })
+
+
+@router.post("/admin/api/repair/unban-all")
+async def admin_repair_unban_all(
+    request: Request,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Сброс всех блокировок IP по брутфорсу."""
+    verify_csrf(request)
+    c1 = login_guard.unban_all()
+    c2 = admin_guard.unban_all()
+    c3 = api_guard.unban_all()
+    total = c1 + c2 + c3
+    _log_action(db, admin.id, "repair_unban_all", "", f"unbanned_count={total}")
+    return JSONResponse({
+        "ok": True,
+        "unbanned_total": total,
+        "login": c1,
+        "admin": c2,
+        "api": c3,
+    })
+
+
+@router.post("/admin/api/repair/check-db")
+async def admin_repair_check_db(
+    request: Request,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Проверка целостности базы данных SQLite (PRAGMA integrity_check)."""
+    verify_csrf(request)
+
+    def _check():
+        with engine.connect() as conn:
+            res = conn.execute(text("PRAGMA integrity_check")).fetchall()
+            quick = conn.execute(text("PRAGMA quick_check")).fetchall()
+            journal = conn.execute(text("PRAGMA journal_mode")).scalar()
+            page_count = conn.execute(text("PRAGMA page_count")).scalar() or 0
+            page_size = conn.execute(text("PRAGMA page_size")).scalar() or 4096
+            db_size_mb = round((page_count * page_size) / (1024 * 1024), 2)
+            return {
+                "integrity": [r[0] for r in res],
+                "quick": [r[0] for r in quick],
+                "journal_mode": str(journal),
+                "db_size_mb": db_size_mb,
+            }
+
+    data = await asyncio.to_thread(_check)
+    is_ok = data["integrity"] == ["ok"]
+    _log_action(db, admin.id, "repair_check_db", "", f"ok={is_ok}")
+    return JSONResponse({"ok": is_ok, **data})
+
+
+@router.get("/admin/api/realtime-status")
+async def admin_realtime_status(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Сводный статус для виджета мониторинга в реальном времени."""
+    banned_ips = (
+        login_guard.get_stats()["banned_ips"]
+        + admin_guard.get_stats()["banned_ips"]
+        + api_guard.get_stats()["banned_ips"]
+    )
+    active_users = db.query(sa_func.count(User.id)).filter(User.is_active == True).scalar() or 0
+    active_keys = db.query(sa_func.count(VPNKey.id)).filter(VPNKey.is_active == True).scalar() or 0
+    servers_count = db.query(sa_func.count(Server.id)).scalar() or 0
+
+    disk_free_gb = 0.0
+    disk_pct = 0
+    try:
+        st = os.statvfs("/")
+        total = st.f_blocks * st.f_frsize
+        free = st.f_bavail * st.f_frsize
+        disk_free_gb = round(free / 1e9, 1)
+        disk_pct = round((total - free) / total * 100) if total else 0
+    except Exception:
+        pass
+
+    return JSONResponse({
+        "ok": True,
+        "active_users": active_users,
+        "active_keys": active_keys,
+        "banned_ips": banned_ips,
+        "servers_count": servers_count,
+        "disk_free_gb": disk_free_gb,
+        "disk_pct": disk_pct,
+        "timestamp": datetime.now(timezone.utc).strftime("%H:%M:%S"),
+    })
 
 
 # ── Analytics API ──

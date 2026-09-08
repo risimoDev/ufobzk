@@ -1,6 +1,7 @@
 """Публичные роуты: главная, логин, логаут, подписки, health."""
 
 import logging
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
@@ -13,6 +14,7 @@ from app.auth import (
     SESSION_COOKIE,
     create_session_token,
     generate_csrf_token,
+    load_magic_token,
     verify_admin_password,
     verify_code_and_get_user,
     verify_user_credentials,
@@ -28,6 +30,12 @@ router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 
 
+@router.get("/robots.txt", response_class=PlainTextResponse)
+async def robots_txt():
+    """Запретить всем поисковикам индексировать любые страницы."""
+    return PlainTextResponse("User-agent: *\nDisallow: /\n", media_type="text/plain")
+
+
 @router.get("/health")
 async def health(db: Session = Depends(get_db)):
     result: dict = {"status": "ok", "db": "ok"}
@@ -38,6 +46,35 @@ async def health(db: Session = Depends(get_db)):
         result["status"] = "degraded"
     code = 200 if result["status"] == "ok" else 503
     return JSONResponse(result, status_code=code)
+
+
+@router.get("/login/magic")
+async def login_magic(token: str, db: Session = Depends(get_db)):
+    """Вход по одноразовой подписанной ссылке из Telegram без ручного ввода кода."""
+    user_id = load_magic_token(token)
+    if not user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Ссылка для входа устарела или недействительна. Запросите новую в Telegram-боте.",
+        )
+    user = db.query(User).filter(User.id == user_id, User.is_active == True).first()  # noqa: E712
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден или заблокирован.")
+
+    user.last_login = datetime.now(timezone.utc)
+    db.commit()
+
+    redirect_url = "/admin" if user.is_admin else "/cabinet"
+    response = RedirectResponse(url=redirect_url, status_code=303)
+    response.set_cookie(
+        SESSION_COOKIE,
+        create_session_token(user.id),
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=86400,
+    )
+    return response
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -150,7 +187,14 @@ def _sub_userinfo(keys) -> str:
     """
     import calendar
     download = sum(k.data_used or 0 for k in keys)
-    total = sum(k.data_limit or 0 for k in keys)
+    # Если лимит не задан хотя бы для одного ключа (безлимит), выставляем большой запас (10 ТБ),
+    # чтобы клиенты (Hiddify/Clash) не показывали ложное предупреждение «Лимит исчерпан» при total=0.
+    has_unlimited = any(k.data_limit is None or k.data_limit <= 0 for k in keys)
+    if has_unlimited:
+        total = 10 * 1024 * 1024 * 1024 * 1024  # 10 TB
+    else:
+        total = sum(k.data_limit for k in keys if k.data_limit)
+
     expire_times = [
         calendar.timegm(k.expire_at.timetuple())
         for k in keys if k.expire_at
@@ -172,7 +216,7 @@ async def subscription(token: str, request: Request, db: Session = Depends(get_d
     return PlainTextResponse(content, headers={
         "Content-Type": "text/plain; charset=utf-8",
         "Content-Disposition": "inline",
-        "Profile-Title": "VPNBZK",
+        "Profile-Title": "SecureAccess",
         "Profile-Update-Interval": "12",
         "Subscription-Userinfo": _sub_userinfo(keys),
     })
@@ -206,7 +250,7 @@ async def subscription_key(key_uuid: str, request: Request, db: Session = Depend
     return PlainTextResponse(content, headers={
         "Content-Type": "text/plain; charset=utf-8",
         "Content-Disposition": "inline",
-        "Profile-Title": "VPNBZK",
+        "Profile-Title": "SecureAccess",
         "Profile-Update-Interval": "12",
         "Subscription-Userinfo": _sub_userinfo([key]),
     })

@@ -116,13 +116,36 @@ class BruteForceGuard:
             remaining = rec.banned_until - time.monotonic()
             return max(0, int(remaining))
 
+    def unban_all(self) -> int:
+        """Разблокировать все IP. Возвращает количество разблокированных."""
+        now = time.monotonic()
+        count = 0
+        with self._lock:
+            for rec in self._records.values():
+                if rec.banned_until > now:
+                    rec.banned_until = 0.0
+                    rec.attempts.clear()
+                    count += 1
+            self._records.clear()
+        return count
+
+    def get_banned_ips(self) -> list[dict]:
+        """Возвращает список текущих заблокированных IP."""
+        now = time.monotonic()
+        result = []
+        with self._lock:
+            for ip, rec in self._records.items():
+                if rec.banned_until > now:
+                    result.append({"ip": ip, "remaining": int(rec.banned_until - now)})
+        return result
+
     def get_stats(self) -> dict:
         """Статистика для мониторинга."""
         now = time.monotonic()
         with self._lock:
             banned = sum(1 for r in self._records.values() if r.banned_until > now)
             tracked = len(self._records)
-        return {"tracked_ips": tracked, "banned_ips": banned}
+        return {"tracked_ips": tracked, "banned_ips": banned, "banned_list": self.get_banned_ips()}
 
 
 # ── Глобальные экземпляры ──

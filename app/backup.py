@@ -2,8 +2,8 @@
 
 import logging
 import os
-import shutil
-from datetime import datetime
+import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
@@ -19,17 +19,22 @@ SUPERADMIN_CHAT_ID = os.getenv("SUPERADMIN_TELEGRAM_ID", "")
 
 
 def create_local_backup() -> Path:
-    """Копирует vpnbzk.db → data/backups/vpnbzk_YYYYMMDD_HHMMSS.db.
+    """Безопасно копирует SQLite БД в WAL-режиме через sqlite3.backup API.
 
     Возвращает путь к созданному файлу. Хранит последние KEEP_BACKUPS копий.
     """
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     dst = BACKUP_DIR / f"vpnbzk_{ts}.db"
-    shutil.copy2(DB_PATH, dst)
+
+    # Использование SQLite Online Backup API предотвращает повреждение базы при активном WAL
+    with sqlite3.connect(str(DB_PATH)) as src:
+        with sqlite3.connect(str(dst)) as dst_conn:
+            src.backup(dst_conn)
+
     _cleanup_old_backups()
     size_mb = dst.stat().st_size / 1_048_576
-    logger.info("Backup created: %s (%.2f MB)", dst.name, size_mb)
+    logger.info("Safe WAL backup created: %s (%.2f MB)", dst.name, size_mb)
     return dst
 
 
@@ -52,7 +57,7 @@ async def send_backup_to_telegram(filepath: Path) -> bool:
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument"
     caption = (
         f"🗄 Бэкап БД\n"
-        f"📅 {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC\n"
+        f"📅 {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC\n"
         f"📦 {filepath.stat().st_size / 1_048_576:.2f} MB"
     )
     try:

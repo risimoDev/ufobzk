@@ -11,7 +11,13 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
-from app.auth import hash_password, verify_user_credentials
+from app.auth import (
+    create_tg_link_token,
+    generate_tg_link_code,
+    hash_password,
+    verify_user_credentials,
+)
+from app.bot import TELEGRAM_BOT_USERNAME
 from app.dependencies import _get_current_user, templates, verify_csrf
 from app.models import DEFAULT_SETTINGS, User, get_db, get_setting
 from app.mtproto import get_mtproto_config
@@ -74,6 +80,13 @@ async def cabinet(request: Request, db: Session = Depends(get_db)):
     if not (mtproto.get("enabled") and mtproto.get("tg_link")):
         mtproto = None
 
+    tg_link_url = ""
+    tg_link_code = ""
+    if not user.telegram_id and TELEGRAM_BOT_USERNAME:
+        tg_token = create_tg_link_token(user.id)
+        tg_link_url = f"https://t.me/{TELEGRAM_BOT_USERNAME}?start=link_{tg_token}"
+        tg_link_code = generate_tg_link_code(user.id)
+
     return templates.TemplateResponse(
         "cabinet.html",
         {
@@ -84,6 +97,9 @@ async def cabinet(request: Request, db: Session = Depends(get_db)):
             "has_password": bool(user.password_hash),
             "settings": settings,
             "mtproto": mtproto,
+            "bot_username": TELEGRAM_BOT_USERNAME,
+            "tg_link_url": tg_link_url,
+            "tg_link_code": tg_link_code,
         },
     )
 
@@ -101,20 +117,42 @@ async def cabinet_change_password(
     old_pw = str(body.get("old_password", "")).strip()
     new_pw = str(body.get("new_password", "")).strip()
 
-    if not user.password_hash:
-        raise HTTPException(status_code=400, detail="У вашего аккаунта нет пароля (вход через Telegram). Обратитесь к администратору.")
-    if not old_pw:
-        raise HTTPException(status_code=400, detail="Введите текущий пароль")
-    if not verify_user_credentials(db, user.username or "", old_pw):
-        raise HTTPException(status_code=400, detail="Неверный текущий пароль")
     if len(new_pw) < 4:
         raise HTTPException(status_code=400, detail="Новый пароль минимум 4 символа")
-    if old_pw == new_pw:
-        raise HTTPException(status_code=400, detail="Новый пароль совпадает со старым")
+
+    if user.password_hash:
+        if not old_pw:
+            raise HTTPException(status_code=400, detail="Введите текущий пароль")
+        if not verify_user_credentials(db, user.username or "", old_pw):
+            raise HTTPException(status_code=400, detail="Неверный текущий пароль")
+        if old_pw == new_pw:
+            raise HTTPException(status_code=400, detail="Новый пароль совпадает со старым")
 
     user.password_hash = hash_password(new_pw)
     db.commit()
     return JSONResponse({"ok": True})
+
+
+@router.post("/cabinet/unlink-telegram")
+@limiter.limit("5/minute")
+async def cabinet_unlink_telegram(
+    request: Request,
+    csrf_token: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Отвязывает Telegram аккаунт."""
+    user = _get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=302, headers={"Location": "/login"})
+    verify_csrf(request, csrf_token)
+    if not user.password_hash:
+        raise HTTPException(
+            status_code=400,
+            detail="Нельзя отвязать Telegram: у вас не задан пароль для входа. Сначала установите пароль в кабинете."
+        )
+    user.telegram_id = None
+    db.commit()
+    return RedirectResponse(url="/cabinet", status_code=303)
 
 
 @router.post("/cabinet/rotate-sub-token")

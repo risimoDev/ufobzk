@@ -35,11 +35,21 @@ if not SECRET_KEY or SECRET_KEY.startswith("change-me"):
 
 _serializer = URLSafeTimedSerializer(SECRET_KEY)
 _csrf_serializer = URLSafeTimedSerializer(SECRET_KEY + ":csrf")
+_magic_serializer = URLSafeTimedSerializer(SECRET_KEY + ":magic")
+_tg_link_serializer = URLSafeTimedSerializer(SECRET_KEY + ":tg_link")
+
+MAGIC_MAX_AGE = 300  # 5 минут на переход по ссылке
+TG_LINK_MAX_AGE = 900  # 15 минут на привязку аккаунта
 
 # ── In-memory хранилище кодов: {code: (telegram_id, expires_at)} ──
 
 _codes: dict[str, tuple[int, float]] = {}
 _codes_lock = threading.Lock()
+
+# ── In-memory хранилище кодов привязки Telegram: {code: (user_id, expires_at)} ──
+
+_link_codes: dict[str, tuple[int, float]] = {}
+_link_codes_lock = threading.Lock()
 
 
 def _cleanup_expired() -> None:
@@ -108,6 +118,73 @@ def load_session_token(token: str) -> int | None:
         return data.get("uid")
     except (BadSignature, Exception):
         return None
+
+
+# ── Magic Link токены для входа без ввода кода ──
+
+
+def create_magic_token(user_id: int) -> str:
+    """Создаёт одноразовый подписанный токен для входа по ссылке (5 минут)."""
+    return _magic_serializer.dumps({"uid": user_id, "nonce": secrets.token_hex(6)})
+
+
+def load_magic_token(token: str) -> int | None:
+    """Проверяет magic-токен и возвращает user_id или None."""
+    try:
+        data = _magic_serializer.loads(token, max_age=MAGIC_MAX_AGE)
+        return data.get("uid")
+    except (BadSignature, Exception):
+        return None
+
+
+# ── Привязка Telegram к существующему аккаунту ──
+
+
+def create_tg_link_token(user_id: int) -> str:
+    """Создаёт подписанный токен для привязки Telegram через deep-link бота."""
+    return _tg_link_serializer.dumps({"uid": user_id, "nonce": secrets.token_hex(6)})
+
+
+def load_tg_link_token(token: str) -> int | None:
+    """Проверяет токен привязки Telegram и возвращает user_id или None."""
+    try:
+        data = _tg_link_serializer.loads(token, max_age=TG_LINK_MAX_AGE)
+        return data.get("uid")
+    except (BadSignature, Exception):
+        return None
+
+
+def generate_tg_link_code(user_id: int) -> str:
+    """Генерирует 6-значный код для ручной привязки через бота (/link 123456)."""
+    code = str(secrets.randbelow(900000) + 100000)
+    expires = time.time() + TG_LINK_MAX_AGE
+    with _link_codes_lock:
+        now = time.time()
+        expired = [c for c, (_, exp) in _link_codes.items() if exp <= now]
+        for c in expired:
+            del _link_codes[c]
+        stale = [c for c, (uid, _) in _link_codes.items() if uid == user_id]
+        for c in stale:
+            del _link_codes[c]
+        _link_codes[code] = (user_id, expires)
+    return code
+
+
+def verify_tg_link_code(code: str) -> int | None:
+    """Проверяет 6-значный код привязки. Возвращает user_id или None."""
+    clean_code = str(code).strip()
+    with _link_codes_lock:
+        now = time.time()
+        expired = [c for c, (_, exp) in _link_codes.items() if exp <= now]
+        for c in expired:
+            del _link_codes[c]
+        entry = _link_codes.pop(clean_code, None)
+    if entry is None:
+        return None
+    uid, expires = entry
+    if time.time() > expires:
+        return None
+    return uid
 
 
 # ── CSRF-токены (подписанные, stateless) ──

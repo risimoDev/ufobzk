@@ -213,16 +213,17 @@ async def periodic_snapshot_cleanup() -> None:
             finally:
                 db.close()
             if deleted:
-                # VACUUM нельзя выполнять внутри транзакции — отдельное соединение
-                # в режиме AUTOCOMMIT. Освобождает место на диске после удаления.
+                # В WAL-режиме удалённые страницы повторно используются для новых записей.
+                # Вместо блокирующего монопольного VACUUM используем PRAGMA optimize и passive checkpoint.
                 try:
                     from sqlalchemy import text as _sa_text
                     from app.models import engine as _engine
                     with _engine.connect().execution_options(isolation_level="AUTOCOMMIT") as _conn:
-                        _conn.execute(_sa_text("VACUUM"))
-                    logger.info("VACUUM выполнен — файл БД сжат")
+                        _conn.execute(_sa_text("PRAGMA optimize"))
+                        _conn.execute(_sa_text("PRAGMA wal_checkpoint(PASSIVE)"))
+                    logger.debug("Оптимизация SQLite и checkpoint выполнены успешно")
                 except Exception as _ve:
-                    logger.warning("VACUUM пропущен: %s", _ve)
+                    logger.warning("Оптимизация SQLite пропущена: %s", _ve)
         except asyncio.CancelledError:
             raise
         except Exception as e:

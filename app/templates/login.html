@@ -3,30 +3,28 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Вход — НИИАЯ </title>
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet" />
+  <title>Авторизация — Личный кабинет</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     html, body { background: #080818; min-height: 100vh; color: #d1d5db; }
     .stars {
       position: fixed; inset: 0; z-index: 0; pointer-events: none;
       background-image:
-        radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,.7), transparent),
-        radial-gradient(1px 1px at 55% 15%, rgba(255,255,255,.5), transparent),
-        radial-gradient(1px 1px at 88% 40%, rgba(255,255,255,.6), transparent),
-        radial-gradient(1px 1px at 30% 65%, rgba(0,255,200,.25), transparent),
-        radial-gradient(1px 1px at 72% 80%, rgba(255,255,255,.4), transparent),
-        radial-gradient(1px 1px at 20% 85%, rgba(0,255,200,.15), transparent);
+        radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,.5), transparent),
+        radial-gradient(1px 1px at 55% 15%, rgba(255,255,255,.3), transparent),
+        radial-gradient(1px 1px at 88% 40%, rgba(255,255,255,.4), transparent),
+        radial-gradient(1px 1px at 30% 65%, rgba(0,255,200,.15), transparent),
+        radial-gradient(1px 1px at 72% 80%, rgba(255,255,255,.3), transparent);
       background-size: 300px 300px;
-      animation: twinkle 6s ease-in-out infinite alternate;
     }
-    @keyframes twinkle { from { opacity:.4 } to { opacity:1 } }
     .glass {
       background: rgba(255,255,255,.03);
-      border: 1px solid rgba(255,255,255,.09);
+      border: 1px solid rgba(255,255,255,.08);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
-      border-radius: 1.5rem;
-      box-shadow: 0 0 30px rgba(0,255,200,.04), inset 0 1px 0 rgba(255,255,255,.03);
+      border-radius: 1.25rem;
+      box-shadow: 0 0 30px rgba(0,255,200,.03), inset 0 1px 0 rgba(255,255,255,.03);
     }
     .input-field {
       width: 100%; padding: .75rem 1rem;
@@ -39,18 +37,21 @@
     .input-field:focus { border-color: rgba(0,255,200,.35); box-shadow: 0 0 0 2px rgba(0,255,200,.06); }
     .btn-submit {
       width: 100%; padding: .875rem;
-      background: rgba(0,255,200,.1); color: #00ffc8;
-      border: 1px solid rgba(0,255,200,.25); border-radius: .875rem;
+      background: rgba(0,255,200,.12); color: #00ffc8;
+      border: 1px solid rgba(0,255,200,.25); border-radius: .75rem;
       font-size: .95rem; font-weight: 600; cursor: pointer; transition: all .2s;
     }
-    .btn-submit:hover { background: rgba(0,255,200,.18); box-shadow: 0 0 20px rgba(0,255,200,.12); }
-    .glow-text { text-shadow: 0 0 20px rgba(0,255,200,.45); }
-    body::after {
-      content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
-      background-image:
-        linear-gradient(rgba(0,255,200,.008) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0,255,200,.008) 1px, transparent 1px);
-      background-size: 64px 64px;
+    .btn-submit:hover { background: rgba(0,255,200,.2); box-shadow: 0 0 20px rgba(0,255,200,.12); }
+    .tab-toggle {
+      display: flex; gap: 0.5rem; background: rgba(0,0,0,0.3); padding: 0.25rem; border-radius: 0.75rem;
+      border: 1px solid rgba(255,255,255,0.06); margin-bottom: 1.25rem;
+    }
+    .tab-btn {
+      flex: 1; text-align: center; padding: 0.4rem 0.5rem; font-size: 0.8rem; font-weight: 500;
+      border-radius: 0.5rem; cursor: pointer; transition: all 0.2s; color: #9ca3af;
+    }
+    .tab-btn.active {
+      background: rgba(0,255,200,0.12); color: #00ffc8; border: 1px solid rgba(0,255,200,0.25);
     }
   </style>
 </head>
@@ -59,11 +60,11 @@
 
   <div class="relative z-10 w-full" style="max-width:420px">
 
-    <div class="text-center mb-8">
-      <a href="/" class="inline-flex items-center gap-2">
-        <span style="font-size:2rem">&#x1f6e1;&#xfe0f;</span>
-        <span class="glow-text font-bold" style="font-size:1.5rem;color:#00ffc8">Вход в НИИАЯ</span>
-      </a>
+    <div class="text-center mb-6">
+      <div class="inline-flex items-center gap-2">
+        <span style="font-size:1.75rem">&#x1f512;</span>
+        <span class="font-bold text-lg" style="color:#00ffc8">Личный кабинет</span>
+      </div>
     </div>
 
     {% if error %}
@@ -73,27 +74,76 @@
     {% endif %}
 
     <div class="glass p-8">
-      <h1 class="text-xl font-bold text-center mb-1" style="color:#00ffc8">Авторизация</h1>
-      <p class="text-center text-xs mb-7" style="color:#4b5563">Введите логин и пароль, выданные администратором</p>
+      <h1 class="text-lg font-bold text-center mb-1" style="color:#e5e7eb">Вход в систему</h1>
+      <p class="text-center text-xs mb-5" style="color:#6b7280">Авторизация для управления доступом</p>
 
-      <form method="POST" action="/login" style="display:flex;flex-direction:column;gap:1.2rem">
+      <div class="tab-toggle">
+        <div id="tab-pw-btn" class="tab-btn active" onclick="switchTab('password')">Логин и пароль</div>
+        <div id="tab-code-btn" class="tab-btn" onclick="switchTab('code')">Код доступа</div>
+      </div>
+
+      <!-- Форма: Логин и пароль -->
+      <form id="form-password" method="POST" action="/login" style="display:flex;flex-direction:column;gap:1.1rem">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
         <input type="hidden" name="code" value="" />
         <div>
           <label for="username" style="display:block;font-size:.8rem;color:#9ca3af;margin-bottom:.4rem">Логин</label>
-          <input type="text" id="username" name="username" autocomplete="username" placeholder="your_login" class="input-field" />
+          <input type="text" id="username" name="username" autocomplete="username" placeholder="Имя пользователя" class="input-field" required />
         </div>
         <div>
           <label for="password" style="display:block;font-size:.8rem;color:#9ca3af;margin-bottom:.4rem">Пароль</label>
-          <input type="password" id="password" name="password" autocomplete="current-password" placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;" class="input-field" />
+          <input type="password" id="password" name="password" autocomplete="current-password" placeholder="••••••••" class="input-field" required />
         </div>
-        <button type="submit" class="btn-submit">&#x1f513; Войти</button>
+        <button type="submit" class="btn-submit">Войти</button>
+      </form>
+
+      <!-- Форма: Одноразовый код или мастер-пароль -->
+      <form id="form-code" method="POST" action="/login" style="display:none;flex-direction:column;gap:1.1rem">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <input type="hidden" name="username" value="" />
+        <input type="hidden" name="password" value="" />
+        <div>
+          <label for="code" style="display:block;font-size:.8rem;color:#9ca3af;margin-bottom:.4rem">Код из Telegram или пароль администратора</label>
+          <input type="password" id="code" name="code" autocomplete="one-time-code" placeholder="6-значный код или пароль" class="input-field" />
+        </div>
+        <p class="text-xs text-gray-500 text-center">Код можно получить в боте, отправив команду <code>/start</code></p>
+        <button type="submit" class="btn-submit">Подтвердить вход</button>
       </form>
     </div>
 
-    <div class="text-center mt-6">
-      <a href="/" style="color:#4b5563;font-size:.875rem;text-decoration:none" onmouseover="this.style.color='#9ca3af'" onmouseout="this.style.color='#4b5563'">&#x2190; На главную</a>
-    </div>
+    <script>
+      function switchTab(mode) {
+        var pwTab = document.getElementById('form-password');
+        var codeTab = document.getElementById('form-code');
+        var pwBtn = document.getElementById('tab-pw-btn');
+        var codeBtn = document.getElementById('tab-code-btn');
+        var uInput = document.getElementById('username');
+        var pInput = document.getElementById('password');
+        var cInput = document.getElementById('code');
+
+        if (mode === 'password') {
+          pwTab.style.display = 'flex';
+          codeTab.style.display = 'none';
+          pwBtn.classList.add('active');
+          codeBtn.classList.remove('active');
+          if (uInput) uInput.setAttribute('required', 'required');
+          if (pInput) pInput.setAttribute('required', 'required');
+          if (cInput) cInput.removeAttribute('required');
+        } else {
+          pwTab.style.display = 'none';
+          codeTab.style.display = 'flex';
+          pwBtn.classList.remove('active');
+          codeBtn.classList.add('active');
+          if (uInput) uInput.removeAttribute('required');
+          if (pInput) pInput.removeAttribute('required');
+          if (cInput) {
+            cInput.setAttribute('required', 'required');
+            cInput.focus();
+          }
+        }
+      }
+    </script>
+  </div>
 
   </div>
 </body>

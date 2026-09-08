@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet" />
     <title>Личный кабинет</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="/static/qrcode.min.js"></script>
@@ -231,12 +232,11 @@
         class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between"
       >
         <div class="flex items-center gap-2">
-          <span>&#x1f6e1;&#xfe0f;</span>
+          <span>🛡️</span>
           <span
             class="text-sm font-bold"
             style="color: #00ffc8; text-shadow: 0 0 20px rgba(0, 255, 200, 0.4)"
-            >&#x041a;&#x0430;&#x0441;&#x043a;&#x0430;&#x0434;&#x043d;&#x044b;&#x0439;
-            VPN</span
+            >Личный кабинет</span
           >
         </div>
         <div class="flex items-center gap-2">
@@ -245,11 +245,11 @@
             href="/admin"
             class="btn-ghost"
             style="color: #fbbf24; border-color: rgba(251, 191, 36, 0.2)"
-            >&#x0410;&#x0434;&#x043c;&#x0438;&#x043d;</a
+            >Админ</a
           >
           {% endif %}
           <a href="/logout" class="btn-ghost"
-            >&#x0412;&#x044b;&#x0445;&#x043e;&#x0434;</a
+            >Выход</a
           >
         </div>
       </div>
@@ -261,15 +261,12 @@
     >
       {% if not keys_data %}
       <div class="glass p-12 text-center">
-        <div class="text-4xl mb-4" style="opacity: 0.3">&#x1f511;</div>
+        <div class="text-4xl mb-4" style="opacity: 0.3">🔑</div>
         <p class="text-sm font-medium" style="color: #d1d5db">
-          VPN-&#x043a;&#x043b;&#x044e;&#x0447;&#x0438; &#x043d;&#x0435;
-          &#x0441;&#x043e;&#x0437;&#x0434;&#x0430;&#x043d;&#x044b;
+          Ключи доступа не созданы
         </p>
         <p class="text-xs mt-1" style="color: #4b5563">
-          &#x041e;&#x0431;&#x0440;&#x0430;&#x0442;&#x0438;&#x0442;&#x0435;&#x0441;&#x044c;
-          &#x043a;
-          &#x0430;&#x0434;&#x043c;&#x0438;&#x043d;&#x0438;&#x0441;&#x0442;&#x0440;&#x0430;&#x0442;&#x043e;&#x0440;&#x0443;.
+          Обратитесь к администратору.
         </p>
       </div>
 
@@ -281,16 +278,10 @@
               class="text-xs font-semibold uppercase tracking-widest mb-0.5"
               style="color: #d1d5db"
             >
-              &#x421;&#x441;&#x044b;&#x043b;&#x043a;&#x0430;
-              &#x043f;&#x043e;&#x0434;&#x043f;&#x0438;&#x0441;&#x043a;&#x0438;
+              Ссылка подписки
             </p>
             <p class="text-xs" style="color: #4b5563">
-              &#x0412;&#x0441;&#x0442;&#x0430;&#x0432;&#x044c;&#x0442;&#x0435;
-              &#x0432;
-              &#x043f;&#x0440;&#x0438;&#x043b;&#x043e;&#x0436;&#x0435;&#x043d;&#x0438;&#x0435;
-              &mdash; &#x0441;&#x0435;&#x0440;&#x0432;&#x0435;&#x0440;&#x044b;
-              &#x0434;&#x043e;&#x0431;&#x0430;&#x0432;&#x044f;&#x0442;&#x0441;&#x044f;
-              &#x0430;&#x0432;&#x0442;&#x043e;&#x043c;&#x0430;&#x0442;&#x0438;&#x0447;&#x0435;&#x0441;&#x043a;&#x0438;
+              Вставьте в приложение &mdash; серверы добавятся автоматически
             </p>
           </div>
           <div class="flex flex-col gap-2 items-end">
@@ -298,12 +289,12 @@
               onclick='copyText({{ subscription_url | tojson }})'
               class="btn-acid"
             >
-              &#x1f4cb; &#x041a;&#x043e;&#x043f;&#x0438;&#x0440;&#x043e;&#x0432;&#x0430;&#x0442;&#x044c;
+              📋 Копировать
             </button>
             <form method="POST" action="/cabinet/rotate-sub-token" onsubmit="return confirm('Старая ссылка подписки перестанет работать. Продолжить?')">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="text-xs px-3 py-1.5 rounded-lg border border-yellow-500/40 text-yellow-400 hover:bg-yellow-500/10 transition-colors">
-                &#x1f504; &#x41e;&#x431;&#x43d;&#x43e;&#x432;&#x438;&#x442;&#x44c; &#x441;&#x441;&#x44b;&#x43b;&#x43a;&#x443;
+                🔄 Обновить ссылку
               </button>
             </form>
           </div>
@@ -314,11 +305,38 @@
         >
           {{ subscription_url }}
         </div>
-        <div class="flex justify-center">
+        <div class="flex justify-center mb-4">
           <div
             id="qrcode-sub"
             class="bg-white rounded-xl p-2.5 inline-block"
           ></div>
+        </div>
+
+        <!-- Быстрый импорт в клиенты -->
+        <div class="pt-3" style="border-top: 1px solid rgba(255, 255, 255, 0.05)">
+          <p class="text-xs uppercase tracking-wider mb-2.5" style="color: #9ca3af; font-size: 0.68rem; font-weight: 600;">
+            Импорт в 1 клик
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <a href="karing://install-sub?url={{ subscription_url | urlencode }}&name=SecureAccess" class="btn-acid text-xs" title="Импорт в Karing">
+              ⚡ Karing
+            </a>
+            <a href="hiddify://install-sub?url={{ subscription_url | urlencode }}#SecureAccess" class="btn-acid text-xs" title="Импорт в Hiddify">
+              🚀 Hiddify
+            </a>
+            <a href="streisand://import/{{ subscription_url }}" class="btn-acid text-xs" title="Импорт в Streisand">
+              🛡️ Streisand
+            </a>
+            <a href="sing-box://import-remote-profile?url={{ subscription_url | urlencode }}#SecureAccess" class="btn-acid text-xs" title="Импорт в Sing-box">
+              📦 Sing-box
+            </a>
+            <a href="clash://install-config?url={{ subscription_url | urlencode }}&name=SecureAccess" class="btn-acid text-xs" title="Импорт в Clash">
+              🐱 Clash
+            </a>
+            <a href="v2rayng://install-config?url={{ subscription_url | urlencode }}" class="btn-acid text-xs" title="Импорт в v2rayNG">
+              📡 v2rayNG
+            </a>
+          </div>
         </div>
       </div>
       {% endif %}
@@ -362,6 +380,64 @@
         </div>
       </div>
       {% endif %}
+
+      <!-- Telegram-аккаунт -->
+      <div class="glass p-5">
+        <div class="flex items-start justify-between gap-3 mb-2">
+          <div>
+            <p
+              class="text-xs font-semibold uppercase tracking-widest mb-0.5"
+              style="color: #d1d5db"
+            >
+              ✈️ Telegram-уведомления и вход
+            </p>
+            <p class="text-xs" style="color: #9ca3af">
+              {% if user.telegram_id %}
+                Аккаунт привязан к Telegram (ID: {{ user.telegram_id }}). Вы можете входить без пароля и получать уведомления о статусе.
+              {% else %}
+                Привяжите Telegram для входа в 1 клик без пароля и получения уведомлений об окончании подписки.
+              {% endif %}
+            </p>
+          </div>
+          {% if user.telegram_id and has_password %}
+          <form method="POST" action="/cabinet/unlink-telegram" onsubmit="return confirm('Отвязать Telegram от вашего аккаунта?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn-ghost" style="color: #f87171; border-color: rgba(239, 68, 68, 0.25)">
+              Отвязать
+            </button>
+          </form>
+          {% endif %}
+        </div>
+
+        {% if not user.telegram_id %}
+        <div class="mt-3 pt-3 grid gap-3 sm:grid-cols-2" style="border-top: 1px solid rgba(255, 255, 255, 0.05)">
+          {% if tg_link_url %}
+          <div class="p-3.5 rounded-xl flex flex-col justify-between" style="background: rgba(0, 0, 0, 0.3)">
+            <div>
+              <p class="text-xs font-semibold text-gray-200 mb-1">Способ 1: В один клик</p>
+              <p class="text-xs text-gray-400 mb-3">Нажмите кнопку — бот привяжет аккаунт автоматически:</p>
+            </div>
+            <a href="{{ tg_link_url }}" target="_blank" class="btn-acid justify-center py-2 text-center">
+              ✈️ Открыть бота и привязать
+            </a>
+          </div>
+          {% endif %}
+          {% if tg_link_code %}
+          <div class="p-3.5 rounded-xl flex flex-col justify-between" style="background: rgba(0, 0, 0, 0.3)">
+            <div>
+              <p class="text-xs font-semibold text-gray-200 mb-1">Способ 2: Через команду в боте</p>
+              <p class="text-xs text-gray-400 mb-2">Отправьте нашему боту команду с кодом:</p>
+            </div>
+            <div class="mono-box flex items-center justify-between" onclick='copyText("/link {{ tg_link_code }}")' title="Нажмите чтобы скопировать команду">
+              <span>/link {{ tg_link_code }}</span>
+              <span class="text-xs text-emerald-400">📋</span>
+            </div>
+            <p class="text-[10px] text-gray-500 mt-1.5">Код действителен 15 минут.</p>
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
 
       <div class="glass p-4">
         <p
@@ -600,23 +676,28 @@
           {{ settings.support_text }}
         </p>
       </div>
-      {% endif %} {% if has_password %}
+      {% endif %}
+
       <div class="glass p-5">
         <p
-          class="text-xs uppercase tracking-widest mb-4"
-          style="color: #6b7280"
+          class="text-xs font-semibold uppercase tracking-widest mb-4"
+          style="color: #d1d5db"
         >
-          &#x0421;&#x043c;&#x0435;&#x043d;&#x0438;&#x0442;&#x044c;
-          &#x043f;&#x0430;&#x0440;&#x043e;&#x043b;&#x044c;
+          {% if has_password %}Сменить пароль{% else %}Установить пароль для входа{% endif %}
         </p>
+        {% if not has_password %}
+        <p class="text-xs text-gray-400 mb-3">
+          Задайте пароль, чтобы входить на сайт по логину <code>{{ user.username or user.telegram_id }}</code> и паролю без Telegram.
+        </p>
+        {% endif %}
         <div
           class="grid gap-3"
           style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr))"
         >
+          {% if has_password %}
           <div>
             <label class="block text-xs mb-1" style="color: #6b7280"
-              >&#x0422;&#x0435;&#x043a;&#x0443;&#x0449;&#x0438;&#x0439;
-              &#x043f;&#x0430;&#x0440;&#x043e;&#x043b;&#x044c;</label
+              >Текущий пароль</label
             >
             <input
               type="password"
@@ -635,15 +716,16 @@
               "
             />
           </div>
+          {% endif %}
           <div>
             <label class="block text-xs mb-1" style="color: #6b7280"
-              >&#x041d;&#x043e;&#x0432;&#x044b;&#x0439;
-              &#x043f;&#x0430;&#x0440;&#x043e;&#x043b;&#x044c;</label
+              >Новый пароль</label
             >
             <input
               type="password"
               id="pw-new"
               autocomplete="new-password"
+              placeholder="Минимум 4 символа"
               style="
                 width: 100%;
                 background: rgba(0, 0, 0, 0.3);
@@ -668,13 +750,13 @@
                 font-size: 0.875rem;
               "
             >
-              &#x0421;&#x043c;&#x0435;&#x043d;&#x0438;&#x0442;&#x044c;
+              {% if has_password %}Сменить пароль{% else %}Сохранить пароль{% endif %}
             </button>
           </div>
         </div>
         <p id="pw-msg" class="text-xs mt-2 hidden"></p>
       </div>
-      {% endif %} {% endif %}
+      {% endif %}
     </main>
 
     <div
@@ -841,11 +923,16 @@
       });
 
       async function changePassword() {
-        var oldPw = document.getElementById('pw-old').value.trim();
+        var oldPwEl = document.getElementById('pw-old');
+        var oldPw = oldPwEl ? oldPwEl.value.trim() : '';
         var newPw = document.getElementById('pw-new').value.trim();
         var msg = document.getElementById('pw-msg');
-        if (!oldPw || !newPw) {
-          msg.textContent = '\u0417\u0430\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u043e\u0431\u0430 \u043f\u043e\u043b\u044f.';
+        if (oldPwEl && !oldPw) {
+          msg.textContent = 'Заполните текущий пароль.';
+          msg.style.color = '#f87171'; msg.classList.remove('hidden'); return;
+        }
+        if (!newPw) {
+          msg.textContent = 'Введите новый пароль.';
           msg.style.color = '#f87171'; msg.classList.remove('hidden'); return;
         }
         try {
@@ -855,17 +942,18 @@
           });
           var d = await r.json();
           if (d.ok) {
-            msg.textContent = '\u041f\u0430\u0440\u043e\u043b\u044c \u0438\u0437\u043c\u0435\u043d\u0451\u043d.';
+            msg.textContent = oldPwEl ? 'Пароль успешно изменён.' : 'Пароль успешно установлен.';
             msg.style.color = '#34d399';
-            document.getElementById('pw-old').value = '';
+            if (oldPwEl) oldPwEl.value = '';
             document.getElementById('pw-new').value = '';
+            setTimeout(function(){ location.reload(); }, 1200);
           } else {
-            msg.textContent = d.detail || '\u041e\u0448\u0438\u0431\u043a\u0430';
+            msg.textContent = d.detail || 'Ошибка';
             msg.style.color = '#f87171';
           }
           msg.classList.remove('hidden');
         } catch(e) {
-          msg.textContent = '\u041e\u0448\u0438\u0431\u043a\u0430 \u0441\u0435\u0442\u0438';
+          msg.textContent = 'Ошибка сети';
           msg.style.color = '#f87171'; msg.classList.remove('hidden');
         }
       }

@@ -146,7 +146,7 @@ async def _start_bot():
     await start_bot()
 
 
-app = FastAPI(title="VPNBZK Cascade", lifespan=lifespan)
+app = FastAPI(title="Portal", lifespan=lifespan)
 app.state.limiter = limiter
 
 
@@ -164,6 +164,7 @@ SECURITY_HEADERS = [
     (b"x-frame-options", b"DENY"),
     (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
     (b"referrer-policy", b"strict-origin-when-cross-origin"),
+    (b"x-robots-tag", b"noindex, nofollow, noarchive, nosnippet"),
     (b"content-security-policy", (
         b"default-src 'self'; "
         b"script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; "
