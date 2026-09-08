@@ -1906,14 +1906,16 @@ async def admin_realtime_status(
 
 @router.get("/admin/api/analytics/summary")
 async def analytics_summary(
+    days: int = 7,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     """Сводные KPI-метрики для дашборда аналитики."""
     from datetime import timedelta
 
+    days = max(1, min(days, 365))
     now = datetime.now(timezone.utc)
-    week_ago = now - timedelta(days=7)
+    period_start = now - timedelta(days=days)
 
     all_users = db.query(User).all()
     all_keys = db.query(VPNKey).all()
@@ -1925,11 +1927,16 @@ async def analytics_summary(
 
     traffic_total = sum(k.data_used or 0 for k in all_keys)
 
-    # Трафик за последние 7 дней из снимков (таблица может отсутствовать на старых деплоях)
+    # Трафик за период из снимков
+    traffic_period = 0
     traffic_7d = 0
     snapshot_count = 0
     try:
+        period_naive = period_start.replace(tzinfo=None)
         week_ago_naive = (now - timedelta(days=7)).replace(tzinfo=None)
+        traffic_period = db.query(
+            sa_func.coalesce(sa_func.sum(TrafficSnapshot.bytes_delta), 0)
+        ).filter(TrafficSnapshot.recorded_at >= period_naive).scalar() or 0
         traffic_7d = db.query(
             sa_func.coalesce(sa_func.sum(TrafficSnapshot.bytes_delta), 0)
         ).filter(TrafficSnapshot.recorded_at >= week_ago_naive).scalar() or 0
@@ -1940,94 +1947,142 @@ async def analytics_summary(
     servers_ok = sum(1 for s in all_servers if s.is_active and s.last_sync_status == "ok")
     servers_err = sum(1 for s in all_servers if s.is_active and s.last_sync_status == "error")
 
+    # Платежи и выручка
+    total_revenue = 0.0
+    paying_users = 0
+    try:
+        total_revenue = float(db.query(
+            sa_func.coalesce(sa_func.sum(Payment.amount), 0)
+        ).filter(Payment.status == "paid").scalar() or 0.0)
+        paying_users = db.query(
+            sa_func.count(sa_func.distinct(Payment.user_id))
+        ).filter(Payment.status == "paid").scalar() or 0
+    except Exception as _pe:
+        logger.warning("analytics_summary: payments error: %s", _pe)
+
+    active_users_count = sum(1 for u in all_users if u.is_active)
+    free_users_count = sum(1 for u in all_users if getattr(u, "is_free", False))
+    blocked_users_count = sum(1 for u in all_users if not u.is_active)
+
     return JSONResponse({
         "total_users": len(all_users),
-        "active_users": sum(1 for u in all_users if u.is_active),
+        "active_users": active_users_count,
+        "blocked_users": blocked_users_count,
+        "free_users": free_users_count,
         "total_keys": len(all_keys),
         "active_keys": len(active_keys),
         "expired_keys": len(expired_keys),
         "limited_keys": len(limited_keys),
         "traffic_total_bytes": traffic_total,
         "traffic_7d_bytes": traffic_7d,
+        "traffic_period_bytes": traffic_period,
         "snapshot_count": snapshot_count,
+        "total_revenue": total_revenue,
+        "paying_users": paying_users,
         "servers_total": len(all_servers),
         "servers_ok": servers_ok,
         "servers_error": servers_err,
     })
 
 
-@router.get("/admin/api/analytics/traffic")
-async def analytics_traffic(
-    days: int = 7,
+@router.get("/admin/api/analytics/users")
+async def analytics_users(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """Агрегированный трафик по дням для построения графика.
+    """Детальная аналитика по ВСЕМ пользователям сервиса."""
+    all_users = db.query(User).order_by(User.id.desc()).all()
+    all_keys = db.query(VPNKey).all()
+    all_payments = db.query(Payment).all()
 
-    Возвращает {labels: [дата...], data: [bytes...]}.
-    Источник: TrafficSnapshot.bytes_delta группируется по дате.
-    """
-    from datetime import timedelta
+    keys_by_user: dict[int, list[VPNKey]] = {}
+    for k in all_keys:
+        keys_by_user.setdefault(k.user_id, []).append(k)
 
-    days = max(1, min(days, 90))
-    now = datetime.now(timezone.utc)
+    payments_by_user: dict[int, list[Payment]] = {}
+    for p in all_payments:
+        payments_by_user.setdefault(p.user_id, []).append(p)
 
-    result_labels = []
-    result_data = []
+    now_utc = datetime.now(timezone.utc)
+    users_data = []
 
-    try:
-        for i in range(days - 1, -1, -1):
-            day_start = (now - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
-            day_end = day_start + timedelta(days=1)
-            label = day_start.strftime("%d.%m")
+    for u in all_users:
+        ukeys = keys_by_user.get(u.id, [])
+        upayments = payments_by_user.get(u.id, [])
 
-            total = db.query(
-                sa_func.coalesce(sa_func.sum(TrafficSnapshot.bytes_delta), 0)
-            ).filter(
-                TrafficSnapshot.recorded_at >= day_start,
-                TrafficSnapshot.recorded_at < day_end,
-            ).scalar() or 0
+        total_traffic = sum(k.data_used or 0 for k in ukeys)
+        active_keys = [k for k in ukeys if k.status == "active"]
+        total_paid = sum(p.amount for p in upayments if p.status == "paid")
+        has_debt = any(p.status == "debt" for p in upayments)
 
-            result_labels.append(label)
-            result_data.append(total)
-    except Exception as _e:
-        logger.warning("analytics_traffic: %s", _e)
-        result_labels = [(now - timedelta(days=i)).strftime("%d.%m") for i in range(days - 1, -1, -1)]
-        result_data = [0] * days
+        keys_detail = []
+        protocols_used = set()
+        for k in ukeys:
+            proto = k.protocol or "vless"
+            protocols_used.add(proto.upper())
 
-    return JSONResponse({"labels": result_labels, "data": result_data})
+            # Расчет оставшихся дней
+            expire_days = None
+            if k.expire_at:
+                exp = k.expire_at if k.expire_at.tzinfo else k.expire_at.replace(tzinfo=timezone.utc)
+                diff = exp - now_utc
+                expire_days = max(0, diff.days)
+
+            keys_detail.append({
+                "id": k.id,
+                "name": k.name,
+                "uuid": k.uuid,
+                "protocol": proto,
+                "is_active": k.is_active,
+                "status": k.status,
+                "data_used": k.data_used or 0,
+                "data_limit": k.data_limit,
+                "expire_at": k.expire_at.strftime("%d.%m.%Y") if k.expire_at else None,
+                "expire_days": expire_days,
+                "speed_limit_kbps": k.speed_limit_kbps,
+                "notes": k.notes or "",
+            })
+
+        users_data.append({
+            "id": u.id,
+            "display_name": u.display_name or u.username or f"User #{u.id}",
+            "username": u.username or "",
+            "telegram_id": u.telegram_id,
+            "telegram_username": u.telegram_username or "",
+            "is_active": u.is_active,
+            "is_admin": u.is_admin,
+            "is_free": getattr(u, "is_free", False),
+            "free_reason": getattr(u, "free_reason", "") or "",
+            "created_at": u.created_at.strftime("%d.%m.%Y %H:%M") if u.created_at else "—",
+            "created_at_ts": u.created_at.timestamp() if u.created_at else 0,
+            "last_login": u.last_login.strftime("%d.%m.%Y %H:%M") if u.last_login else "—",
+            "last_login_ts": u.last_login.timestamp() if u.last_login else 0,
+            "traffic_bytes": total_traffic,
+            "keys_count": len(ukeys),
+            "active_keys": len(active_keys),
+            "protocols": sorted(list(protocols_used)),
+            "total_paid": total_paid,
+            "has_debt": has_debt,
+            "sub_token": u.sub_token,
+            "keys": keys_detail,
+        })
+
+    # Сортировка по умолчанию: пользователи с наибольшим объемом трафика вверху
+    users_data.sort(key=lambda x: x["traffic_bytes"], reverse=True)
+    return JSONResponse(users_data)
 
 
 @router.get("/admin/api/analytics/top-users")
 async def analytics_top_users(
-    limit: int = 10,
+    limit: int = 100,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """Топ пользователей по суммарному трафику."""
-    all_users = db.query(User).all()
-    all_keys = db.query(VPNKey).all()
-
-    keys_by_user: dict[int, list] = {}
-    for k in all_keys:
-        keys_by_user.setdefault(k.user_id, []).append(k)
-
-    user_stats = []
-    for u in all_users:
-        ukeys = keys_by_user.get(u.id, [])
-        total_bytes = sum(k.data_used or 0 for k in ukeys)
-        active_count = sum(1 for k in ukeys if k.status == "active")
-        user_stats.append({
-            "user_id": u.id,
-            "display_name": u.display_name or u.username or f"ID:{u.id}",
-            "traffic_bytes": total_bytes,
-            "keys_count": len(ukeys),
-            "active_keys": active_count,
-            "is_active": u.is_active,
-        })
-
-    user_stats.sort(key=lambda x: x["traffic_bytes"], reverse=True)
-    return JSONResponse(user_stats[:max(1, min(limit, 50))])
+    """Список пользователей для аналитики (совместим со старыми вызовами)."""
+    full_list = await analytics_users(admin=admin, db=db)
+    import json as _j
+    raw = _j.loads(full_list.body)
+    return JSONResponse(raw[:max(1, min(limit, 500))])
 
 
 @router.get("/admin/api/analytics/hourly")

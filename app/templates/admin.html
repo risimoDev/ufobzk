@@ -1998,6 +1998,170 @@
         </div>
       </div>
       <!-- /TAB: DIAGNOSTICS -->
+
+      <!-- TAB: ANALYTICS -->
+      <div class="tab-panel" id="tab-analytics">
+        <!-- Верхняя панель управления -->
+        <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 class="text-lg font-bold text-gray-100 flex items-center gap-2">
+              <span>📈</span> Аналитика и активность пользователей
+            </h2>
+            <p class="text-xs text-gray-500 mt-0.5">
+              Подробная статистика потребления трафика, статус ключей, оплаты и активность всех пользователей
+            </p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <!-- Переключатели периодов -->
+            <div class="flex items-center bg-black/40 rounded-lg p-1 border border-white/5 text-xs">
+              <button onclick="loadAnalytics(7)" id="analytics-7d" class="btn-acid text-xs px-3 py-1 rounded">7 дней</button>
+              <button onclick="loadAnalytics(14)" id="analytics-14d" class="btn-secondary text-xs px-3 py-1 rounded">14 дней</button>
+              <button onclick="loadAnalytics(30)" id="analytics-30d" class="btn-secondary text-xs px-3 py-1 rounded">30 дней</button>
+              <button onclick="loadAnalytics(90)" id="analytics-90d" class="btn-secondary text-xs px-3 py-1 rounded">90 дней</button>
+            </div>
+            <!-- Быстрые действия -->
+            <button onclick="forceCollectTraffic()" id="analytics-collect-btn" class="btn-secondary text-xs py-1.5 px-3 border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 flex items-center gap-1.5" title="Собрать свежие данные прямо сейчас из Xray">
+              <span>↻</span> Собрать сейчас
+            </button>
+            <button onclick="exportAnalyticsCSV()" class="btn-secondary text-xs py-1.5 px-3 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 flex items-center gap-1.5" title="Скачать таблицу пользователей в формате CSV">
+              <span>📥</span> Экспорт в CSV
+            </button>
+          </div>
+        </div>
+
+        <!-- Сообщения об ошибках / предупреждения -->
+        <div id="analytics-error" class="hidden mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs"></div>
+        <div id="analytics-nodata" class="hidden mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs">
+          ⚠️ Снимки трафика ещё собираются. Нажмите «Собрать сейчас» для мгновенного опроса ядер Xray.
+        </div>
+
+        <!-- Карточки KPI -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6" id="analytics-kpi">
+          <div class="card p-4 glow-box">
+            <p class="text-gray-500 text-[11px] uppercase tracking-wider mb-1">Пользователи</p>
+            <div class="text-xl font-bold text-gray-100" id="kpi-users">—</div>
+            <p class="text-[11px] text-gray-500 mt-1" id="kpi-users-sub">0 активных</p>
+          </div>
+          <div class="card p-4 glow-box">
+            <p class="text-gray-500 text-[11px] uppercase tracking-wider mb-1">VPN-ключи</p>
+            <div class="text-xl font-bold text-acid-400" id="kpi-keys">—</div>
+            <p class="text-[11px] text-gray-500 mt-1" id="kpi-keys-sub">0 активных</p>
+          </div>
+          <div class="card p-4 glow-box">
+            <p class="text-gray-500 text-[11px] uppercase tracking-wider mb-1">Трафик всего</p>
+            <div class="text-xl font-bold text-cyan-400" id="kpi-traffic-total">—</div>
+            <p class="text-[11px] text-gray-500 mt-1">за всё время</p>
+          </div>
+          <div class="card p-4 glow-box">
+            <p class="text-gray-500 text-[11px] uppercase tracking-wider mb-1">За период</p>
+            <div class="text-xl font-bold text-purple-400" id="kpi-traffic-period">—</div>
+            <p class="text-[11px] text-gray-500 mt-1" id="kpi-period-sub">за 7 дней</p>
+          </div>
+          <div class="card p-4 glow-box">
+            <p class="text-gray-500 text-[11px] uppercase tracking-wider mb-1">Оплаты / Выручка</p>
+            <div class="text-xl font-bold text-emerald-400" id="kpi-revenue">—</div>
+            <p class="text-[11px] text-gray-500 mt-1" id="kpi-revenue-sub">0 плательщиков</p>
+          </div>
+          <div class="card p-4 glow-box">
+            <p class="text-gray-500 text-[11px] uppercase tracking-wider mb-1">Серверы / Ноды</p>
+            <div class="text-xl font-bold text-gray-200" id="kpi-servers">—</div>
+            <p class="text-[11px] text-emerald-400 mt-1" id="kpi-servers-sub">все в сети</p>
+          </div>
+        </div>
+
+        <!-- Графики трафика -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <div class="card p-5">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-xs font-semibold text-gray-200 uppercase tracking-wider flex items-center gap-1.5">
+                <span>📊</span> Динамика трафика по дням
+              </h3>
+              <span class="text-[10px] text-gray-500 font-mono" id="chart-daily-range"></span>
+            </div>
+            <div style="position:relative;height:220px">
+              <canvas id="chart-traffic-daily"></canvas>
+            </div>
+          </div>
+          <div class="card p-5">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-xs font-semibold text-gray-200 uppercase tracking-wider flex items-center gap-1.5">
+                <span>⏰</span> Распределение активности по часам суток
+              </h3>
+              <span class="text-[10px] text-gray-500 font-mono">Пиковые часы (UTC)</span>
+            </div>
+            <div style="position:relative;height:220px">
+              <canvas id="chart-traffic-hourly"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Полная детальная таблица аналитики ПО ВСЕМ ПОЛЬЗОВАТЕЛЯМ -->
+        <div class="card p-5">
+          <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+            <div>
+              <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                <span>👥</span> Сводная аналитика по каждому пользователю
+              </h3>
+              <p class="text-xs text-gray-500 mt-0.5">
+                Показано: <span id="analytics-users-count" class="text-acid-400 font-medium">0</span> пользователей
+              </p>
+            </div>
+            <!-- Фильтры и поиск -->
+            <div class="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                id="analytics-search"
+                placeholder="Поиск по имени, логину, Telegram..."
+                class="search-input text-xs w-48 sm:w-64"
+                oninput="filterAnalyticsUsers()"
+              />
+              <select id="analytics-filter-status" class="search-input text-xs" onchange="filterAnalyticsUsers()">
+                <option value="all">Все статусы</option>
+                <option value="active">Только активные</option>
+                <option value="has_traffic">С трафиком &gt; 0</option>
+                <option value="free">Бесплатные (Free)</option>
+                <option value="blocked">Заблокированные</option>
+                <option value="with_debt">С задолженностью</option>
+              </select>
+              <select id="analytics-sort" class="search-input text-xs" onchange="filterAnalyticsUsers()">
+                <option value="traffic_desc">По трафику (убыв.)</option>
+                <option value="traffic_asc">По трафику (возр.)</option>
+                <option value="name_asc">По имени (А-Я)</option>
+                <option value="created_desc">Сначала новые</option>
+                <option value="login_desc">По последнему входу</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Таблица -->
+          <div class="overflow-x-auto">
+            <table class="w-full tbl" id="analytics-table">
+              <thead>
+                <tr>
+                  <th class="text-left w-8">#</th>
+                  <th class="text-left">Пользователь</th>
+                  <th class="text-left">Telegram</th>
+                  <th class="text-center">Статус</th>
+                  <th class="text-right">Трафик всего</th>
+                  <th class="text-center">Ключи</th>
+                  <th class="text-right">Оплаты</th>
+                  <th class="text-left">Регистрация</th>
+                  <th class="text-left">Посл. вход</th>
+                  <th class="text-right w-20">Детали</th>
+                </tr>
+              </thead>
+              <tbody id="analytics-tbody">
+                <tr>
+                  <td colspan="10" class="text-center text-gray-500 py-8">
+                    <span class="inline-block animate-spin mr-2">⏳</span> Загрузка аналитики...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <!-- /TAB: ANALYTICS -->
     </main>
 
     <!-- MODAL: EDIT USER -->
@@ -4276,6 +4440,8 @@
               </button>
               <button
                 type="button"
+                  onclick="closeGuideModal()"
+                  class="btn-secondary"
                 onclick="closeGuideModal()"
                 class="btn-secondary"
               >
@@ -4285,101 +4451,19 @@
           </form>
         </div>
       </div>
-      <!-- TAB: ANALYTICS -->
-      <div id="tab-analytics" class="tab-panel">
-        <div class="mb-6 flex items-center justify-between flex-wrap gap-3">
-          <h2 class="text-lg font-semibold text-white">&#x1f4c8; Аналитика</h2>
-          <div class="flex gap-2 flex-wrap">
-            <button onclick="loadAnalytics(7)" id="analytics-7d" class="btn-acid text-xs px-3 py-1.5">7 дней</button>
-            <button onclick="loadAnalytics(14)" id="analytics-14d" class="btn-secondary text-xs px-3 py-1.5">14 дней</button>
-            <button onclick="loadAnalytics(30)" id="analytics-30d" class="btn-secondary text-xs px-3 py-1.5">30 дней</button>
-            <button onclick="forceCollectTraffic()" id="analytics-collect-btn" class="btn-secondary text-xs px-3 py-1.5 border border-blue-500/40 text-blue-400 hover:bg-blue-500/10">&#x21bb; Собрать сейчас</button>
-          </div>
-        </div>
-        <!-- Error / info banner -->
-        <div id="analytics-error" class="hidden mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm"></div>
-        <div id="analytics-nodata" class="hidden mb-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 text-sm">
-          &#x26a0; Данные трафика ещё не собраны. Нажмите «Собрать сейчас» или подождите 5 минут — фоновый сборщик запишет первые снимки.
-        </div>
-
-        <!-- KPI карточки -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" id="analytics-kpi">
-          <div class="card p-4 glow-box text-center">
-            <div class="text-2xl font-bold text-accent" id="kpi-users">—</div>
-            <div class="text-xs text-gray-500 mt-1">Пользователей</div>
-          </div>
-          <div class="card p-4 glow-box text-center">
-            <div class="text-2xl font-bold text-accent" id="kpi-keys">—</div>
-            <div class="text-xs text-gray-500 mt-1">Активных ключей</div>
-          </div>
-          <div class="card p-4 glow-box text-center">
-            <div class="text-2xl font-bold text-accent" id="kpi-traffic-total">—</div>
-            <div class="text-xs text-gray-500 mt-1">Трафик всего</div>
-          </div>
-          <div class="card p-4 glow-box text-center">
-            <div class="text-2xl font-bold text-accent" id="kpi-traffic-period">—</div>
-            <div class="text-xs text-gray-500 mt-1">Трафик за период</div>
-          </div>
-          <div class="card p-4 text-center">
-            <div class="text-2xl font-bold" id="kpi-expired" style="color:#f87171">—</div>
-            <div class="text-xs text-gray-500 mt-1">Истёкших ключей</div>
-          </div>
-          <div class="card p-4 text-center">
-            <div class="text-2xl font-bold" id="kpi-limited" style="color:#fbbf24">—</div>
-            <div class="text-xs text-gray-500 mt-1">Превысили лимит</div>
-          </div>
-          <div class="card p-4 text-center">
-            <div class="text-2xl font-bold" id="kpi-servers-ok" style="color:#34d399">—</div>
-            <div class="text-xs text-gray-500 mt-1">Серверов онлайн</div>
-          </div>
-          <div class="card p-4 text-center">
-            <div class="text-2xl font-bold" id="kpi-servers-err" style="color:#f87171">—</div>
-            <div class="text-xs text-gray-500 mt-1">Серверов с ошибкой</div>
-          </div>
-        </div>
-
-        <!-- Графики -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <div class="card p-5">
-            <h3 class="text-sm font-semibold text-white mb-4">&#x1f4c9; Трафик по дням</h3>
-            <div style="position:relative;height:220px">
-              <canvas id="chart-traffic-daily"></canvas>
-            </div>
-          </div>
-          <div class="card p-5">
-            <h3 class="text-sm font-semibold text-white mb-4">&#x23f0; Активность по часам суток</h3>
-            <div style="position:relative;height:220px">
-              <canvas id="chart-traffic-hourly"></canvas>
-            </div>
-          </div>
-        </div>
-
-        <!-- Топ пользователей -->
-        <div class="card p-5">
-          <h3 class="text-sm font-semibold text-white mb-4">&#x1f3c6; Топ пользователей по трафику</h3>
-          <div class="overflow-x-auto">
-            <table class="w-full tbl" id="analytics-top-users-table">
-              <thead>
-                <tr>
-                  <th class="text-left">#</th>
-                  <th class="text-left">Пользователь</th>
-                  <th class="text-right">Трафик</th>
-                  <th class="text-right">Ключей</th>
-                  <th class="text-center">Статус</th>
-                  <th class="text-right">Доля</th>
-                </tr>
-              </thead>
-              <tbody id="analytics-top-users">
-                <tr><td colspan="6" class="text-center text-gray-500 py-4">Загрузка...</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div><!-- /tab-analytics -->
-
     </div>
   </body>
+
+  <!-- Chart.js с локального хранилища и CDN fallback -->
   <script src="/static/js/chart.umd.min.js"></script>
+  <script>
+    if (typeof Chart === 'undefined') {
+      var _cs = document.createElement('script');
+      _cs.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+      document.head.appendChild(_cs);
+    }
+  </script>
+
   <script>
     // ── Server token generator ──
     async function genServerToken() {
@@ -4392,14 +4476,15 @@
       }
     }
 
-    // ── Analytics ──
+    // ── Полнофункциональная система аналитики ──
+    var _allAnalyticsUsers = [];
+    var _analyticsDays = 7;
     var _analyticsChartDaily = null;
     var _analyticsChartHourly = null;
-    var _analyticsDays = 7;
 
     function fmtBytes(b) {
-      if (!b || b === 0) return '0 B';
-      var units = ['B','KB','MB','GB','TB'];
+      if (!b || b === 0) return '0 Б';
+      var units = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
       var i = Math.min(Math.floor(Math.log(Math.abs(b)) / Math.log(1024)), 4);
       return (b / Math.pow(1024, i)).toFixed(2) + ' ' + units[i];
     }
@@ -4407,168 +4492,399 @@
     function _analyticsSetError(msg) {
       var el = document.getElementById('analytics-error');
       if (!el) return;
-      if (msg) { el.textContent = '⚠ ' + msg; el.classList.remove('hidden'); }
-      else { el.classList.add('hidden'); el.textContent = ''; }
+      if (msg) {
+        el.textContent = '⚠️ ' + msg;
+        el.classList.remove('hidden');
+      } else {
+        el.classList.add('hidden');
+        el.textContent = '';
+      }
     }
 
     async function loadAnalytics(days) {
       _analyticsDays = days || _analyticsDays;
       _analyticsSetError('');
-      document.getElementById('analytics-nodata').classList.add('hidden');
+      var noDataEl = document.getElementById('analytics-nodata');
+      if (noDataEl) noDataEl.classList.add('hidden');
 
-      ['7','14','30'].forEach(function(d) {
+      // Переключение подсветки кнопок периодов
+      ['7', '14', '30', '90'].forEach(function(d) {
         var btn = document.getElementById('analytics-' + d + 'd');
         if (btn) {
           btn.className = parseInt(d) === _analyticsDays
-            ? 'btn-acid text-xs px-3 py-1.5'
-            : 'btn-secondary text-xs px-3 py-1.5';
+            ? 'btn-acid text-xs px-3 py-1 rounded'
+            : 'btn-secondary text-xs px-3 py-1 rounded';
         }
       });
 
+      var periodSub = document.getElementById('kpi-period-sub');
+      if (periodSub) periodSub.textContent = 'за ' + _analyticsDays + ' дн.';
+
       try {
         var responses = await Promise.all([
-          fetch('/admin/api/analytics/summary'),
+          fetch('/admin/api/analytics/summary?days=' + _analyticsDays),
           fetch('/admin/api/analytics/traffic?days=' + _analyticsDays),
           fetch('/admin/api/analytics/hourly?days=' + _analyticsDays),
-          fetch('/admin/api/analytics/top-users?limit=15'),
+          fetch('/admin/api/analytics/users'),
         ]);
 
-        for (var ri = 0; ri < responses.length; ri++) {
-          if (!responses[ri].ok) {
-            var errText = await responses[ri].text();
-            throw new Error('API ' + responses[ri].url.split('/').pop() + ' → ' + responses[ri].status + ': ' + errText.slice(0, 120));
+        var summary = responses[0].ok ? await responses[0].json() : {};
+        var traffic = responses[1].ok ? await responses[1].json() : { labels: [], data: [] };
+        var hourly = responses[2].ok ? await responses[2].json() : { labels: [], data: [] };
+        var users = responses[3].ok ? await responses[3].json() : [];
+
+        // 1. Заполнение KPI карточек
+        var ku = document.getElementById('kpi-users');
+        if (ku) ku.textContent = summary.total_users !== undefined ? summary.total_users : users.length;
+        var kus = document.getElementById('kpi-users-sub');
+        if (kus) kus.textContent = (summary.active_users || 0) + ' акт. / ' + (summary.blocked_users || 0) + ' блок.';
+
+        var kk = document.getElementById('kpi-keys');
+        if (kk) kk.textContent = summary.total_keys || 0;
+        var kks = document.getElementById('kpi-keys-sub');
+        if (kks) kks.textContent = (summary.active_keys || 0) + ' акт. / ' + (summary.expired_keys || 0) + ' истёк.';
+
+        var kt = document.getElementById('kpi-traffic-total');
+        if (kt) kt.textContent = fmtBytes(summary.traffic_total_bytes || 0);
+
+        var kp = document.getElementById('kpi-traffic-period');
+        if (kp) kp.textContent = fmtBytes(summary.traffic_period_bytes || summary.traffic_7d_bytes || 0);
+
+        var kr = document.getElementById('kpi-revenue');
+        if (kr) kr.textContent = Math.round(summary.total_revenue || 0).toLocaleString('ru') + ' ₽';
+        var krs = document.getElementById('kpi-revenue-sub');
+        if (krs) krs.textContent = (summary.paying_users || 0) + ' плательщиков';
+
+        var ks = document.getElementById('kpi-servers');
+        if (ks) ks.textContent = (summary.servers_ok || 0) + ' / ' + (summary.servers_total || 0);
+        var kss = document.getElementById('kpi-servers-sub');
+        if (kss) {
+          kss.textContent = (summary.servers_error || 0) === 0 ? 'все узлы в норме' : summary.servers_error + ' с ошибкой';
+          kss.className = (summary.servers_error || 0) === 0 ? 'text-[11px] text-emerald-400 mt-1' : 'text-[11px] text-red-400 mt-1';
+        }
+
+        // Предупреждение если нет снимков
+        if ((summary.snapshot_count || 0) === 0 && (summary.traffic_period_bytes || 0) === 0 && noDataEl) {
+          noDataEl.classList.remove('hidden');
+        }
+
+        // 2. Графики (Chart.js)
+        if (typeof Chart !== 'undefined') {
+          var dailyCanvas = document.getElementById('chart-traffic-daily');
+          if (dailyCanvas) {
+            var ctxDaily = dailyCanvas.getContext('2d');
+            var dailyGB = (traffic.data || []).map(function(b) { return +(b / 1073741824).toFixed(3); });
+            if (_analyticsChartDaily) _analyticsChartDaily.destroy();
+            _analyticsChartDaily = new Chart(ctxDaily, {
+              type: 'bar',
+              data: {
+                labels: traffic.labels || [],
+                datasets: [{
+                  label: 'Трафик (ГБ)',
+                  data: dailyGB,
+                  backgroundColor: 'rgba(0, 255, 200, 0.25)',
+                  borderColor: '#00ffc8',
+                  borderWidth: 1.5,
+                  borderRadius: 4,
+                }]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                  x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.03)' } },
+                  y: { ticks: { color: '#6b7280', font: { size: 10 }, callback: function(v) { return v + ' ГБ'; } }, grid: { color: 'rgba(255,255,255,0.05)' }, beginAtZero: true }
+                }
+              }
+            });
+          }
+
+          var hourlyCanvas = document.getElementById('chart-traffic-hourly');
+          if (hourlyCanvas) {
+            var ctxHourly = hourlyCanvas.getContext('2d');
+            var hourlyGB = (hourly.data || []).map(function(b) { return +(b / 1073741824).toFixed(3); });
+            if (_analyticsChartHourly) _analyticsChartHourly.destroy();
+            _analyticsChartHourly = new Chart(ctxHourly, {
+              type: 'bar',
+              data: {
+                labels: hourly.labels || [],
+                datasets: [{
+                  label: 'Активность (ГБ)',
+                  data: hourlyGB,
+                  backgroundColor: 'rgba(168, 85, 247, 0.3)',
+                  borderColor: '#a855f7',
+                  borderWidth: 1.5,
+                  borderRadius: 3,
+                }]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                  x: { ticks: { color: '#6b7280', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.03)' } },
+                  y: { ticks: { color: '#6b7280', font: { size: 10 }, callback: function(v) { return v + ' ГБ'; } }, grid: { color: 'rgba(255,255,255,0.05)' }, beginAtZero: true }
+                }
+              }
+            });
           }
         }
 
-        var [summary, traffic, hourly, topUsers] = await Promise.all(responses.map(function(r) { return r.json(); }));
+        // 3. Сохраняем пользователей и рендерим детальную аналитику
+        _allAnalyticsUsers = users || [];
+        filterAnalyticsUsers();
 
-        // KPI
-        document.getElementById('kpi-users').textContent = summary.active_users + ' / ' + summary.total_users;
-        document.getElementById('kpi-keys').textContent = summary.active_keys;
-        document.getElementById('kpi-traffic-total').textContent = fmtBytes(summary.traffic_total_bytes);
-        document.getElementById('kpi-traffic-period').textContent = fmtBytes(summary.traffic_7d_bytes);
-        document.getElementById('kpi-expired').textContent = summary.expired_keys;
-        document.getElementById('kpi-limited').textContent = summary.limited_keys;
-        document.getElementById('kpi-servers-ok').textContent = summary.servers_ok;
-        document.getElementById('kpi-servers-err').textContent = summary.servers_error;
-
-        // «Нет данных» если снимков нет вообще
-        if ((summary.snapshot_count || 0) === 0 && summary.traffic_7d_bytes === 0) {
-          document.getElementById('analytics-nodata').classList.remove('hidden');
-        }
-
-        // График трафика по дням
-        if (typeof Chart !== 'undefined') {
-          var ctxDaily = document.getElementById('chart-traffic-daily').getContext('2d');
-          var dailyGB = traffic.data.map(function(b) { return +(b / 1073741824).toFixed(3); });
-          if (_analyticsChartDaily) _analyticsChartDaily.destroy();
-          _analyticsChartDaily = new Chart(ctxDaily, {
-            type: 'bar',
-            data: {
-              labels: traffic.labels,
-              datasets: [{
-                label: 'Трафик (GB)',
-                data: dailyGB,
-                backgroundColor: 'rgba(0,255,200,0.25)',
-                borderColor: '#00ffc8',
-                borderWidth: 1.5,
-                borderRadius: 4,
-              }]
-            },
-            options: {
-              responsive: true, maintainAspectRatio: false,
-              plugins: { legend: { display: false } },
-              scales: {
-                x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
-                y: { ticks: { color: '#6b7280', font: { size: 11 }, callback: function(v) { return v + ' GB'; } }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true }
-              }
-            }
-          });
-
-          var ctxHourly = document.getElementById('chart-traffic-hourly').getContext('2d');
-          var hourlyGB = hourly.data.map(function(b) { return +(b / 1073741824).toFixed(3); });
-          if (_analyticsChartHourly) _analyticsChartHourly.destroy();
-          _analyticsChartHourly = new Chart(ctxHourly, {
-            type: 'bar',
-            data: {
-              labels: hourly.labels,
-              datasets: [{
-                label: 'Трафик (GB)',
-                data: hourlyGB,
-                backgroundColor: 'rgba(139,92,246,0.3)',
-                borderColor: '#8b5cf6',
-                borderWidth: 1.5,
-                borderRadius: 3,
-              }]
-            },
-            options: {
-              responsive: true, maintainAspectRatio: false,
-              plugins: { legend: { display: false } },
-              scales: {
-                x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
-                y: { ticks: { color: '#6b7280', font: { size: 11 }, callback: function(v) { return v + ' GB'; } }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true }
-              }
-            }
-          });
-        } else {
-          _analyticsSetError('Chart.js не загружен — графики недоступны. Проверьте /static/js/chart.umd.min.js');
-        }
-
-        // Топ пользователей
-        var totalBytes = summary.traffic_total_bytes || 1;
-        var tbody = document.getElementById('analytics-top-users');
-        if (!topUsers || topUsers.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-500 py-4">Нет данных</td></tr>';
-        } else {
-          tbody.innerHTML = topUsers.map(function(u, i) {
-            var pct = totalBytes > 0 ? (u.traffic_bytes / totalBytes * 100).toFixed(1) : '0.0';
-            var barW = Math.min(Math.round(u.traffic_bytes / totalBytes * 100), 100);
-            return '<tr>' +
-              '<td class="text-gray-500">' + (i+1) + '</td>' +
-              '<td><span class="font-medium text-white">' + (u.display_name || '—') + '</span></td>' +
-              '<td class="text-right font-mono text-accent">' + fmtBytes(u.traffic_bytes) + '</td>' +
-              '<td class="text-right text-gray-400">' + u.active_keys + ' / ' + u.keys_count + '</td>' +
-              '<td class="text-center">' +
-                (u.is_active
-                  ? '<span class="text-xs px-2 py-0.5 rounded-full bg-green-500/15 text-green-400">активен</span>'
-                  : '<span class="text-xs px-2 py-0.5 rounded-full bg-red-500/15 text-red-400">откл.</span>') +
-              '</td>' +
-              '<td class="text-right">' +
-                '<div class="flex items-center gap-2 justify-end">' +
-                  '<div class="w-16 bg-white/5 rounded-full h-1.5"><div class="h-1.5 rounded-full bg-accent" style="width:' + barW + '%"></div></div>' +
-                  '<span class="text-xs text-gray-400">' + pct + '%</span>' +
-                '</div>' +
-              '</td>' +
-            '</tr>';
-          }).join('');
-        }
       } catch(e) {
-        console.error('Analytics error:', e);
+        console.error('Analytics load error:', e);
         _analyticsSetError(e.message || 'Ошибка загрузки аналитики');
       }
     }
 
+    function filterAnalyticsUsers() {
+      var q = (document.getElementById('analytics-search') ? document.getElementById('analytics-search').value : '').toLowerCase().trim();
+      var filterStatus = document.getElementById('analytics-filter-status') ? document.getElementById('analytics-filter-status').value : 'all';
+      var sortOrder = document.getElementById('analytics-sort') ? document.getElementById('analytics-sort').value : 'traffic_desc';
+
+      var filtered = _allAnalyticsUsers.filter(function(u) {
+        // Поиск
+        if (q) {
+          var matchName = (u.display_name || '').toLowerCase().indexOf(q) !== -1;
+          var matchUser = (u.username || '').toLowerCase().indexOf(q) !== -1;
+          var matchTg = (u.telegram_username || '').toLowerCase().indexOf(q) !== -1;
+          var matchTgId = String(u.telegram_id || '').indexOf(q) !== -1;
+          var matchId = String(u.id).indexOf(q) !== -1;
+          if (!matchName && !matchUser && !matchTg && !matchTgId && !matchId) return false;
+        }
+        // Фильтр
+        if (filterStatus === 'active' && !u.is_active) return false;
+        if (filterStatus === 'has_traffic' && (!u.traffic_bytes || u.traffic_bytes <= 0)) return false;
+        if (filterStatus === 'free' && !u.is_free) return false;
+        if (filterStatus === 'blocked' && u.is_active) return false;
+        if (filterStatus === 'with_debt' && !u.has_debt) return false;
+        return true;
+      });
+
+      // Сортировка
+      filtered.sort(function(a, b) {
+        if (sortOrder === 'traffic_desc') return (b.traffic_bytes || 0) - (a.traffic_bytes || 0);
+        if (sortOrder === 'traffic_asc') return (a.traffic_bytes || 0) - (b.traffic_bytes || 0);
+        if (sortOrder === 'name_asc') return (a.display_name || '').localeCompare(b.display_name || '');
+        if (sortOrder === 'created_desc') return (b.created_at_ts || 0) - (a.created_at_ts || 0);
+        if (sortOrder === 'login_desc') return (b.last_login_ts || 0) - (a.last_login_ts || 0);
+        return 0;
+      });
+
+      var countEl = document.getElementById('analytics-users-count');
+      if (countEl) countEl.textContent = filtered.length;
+
+      var tbody = document.getElementById('analytics-tbody');
+      if (!tbody) return;
+
+      if (!filtered.length) {
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-gray-500 py-8 text-xs">Пользователи по заданным критериям не найдены</td></tr>';
+        return;
+      }
+
+      var totalTrafficSystem = _allAnalyticsUsers.reduce(function(acc, x) { return acc + (x.traffic_bytes || 0); }, 0) || 1;
+
+      var html = '';
+      filtered.forEach(function(u, idx) {
+        var pct = Math.min(100, Math.round((u.traffic_bytes || 0) / totalTrafficSystem * 100));
+        var tgCell = '<span class="text-gray-600 text-xs">—</span>';
+        if (u.telegram_username) {
+          tgCell = '<a href="https://t.me/' + escapeHtml(u.telegram_username) + '" target="_blank" onclick="event.stopPropagation();" class="text-sky-400 hover:underline flex items-center gap-1 font-mono text-xs"><span>✈️</span>@' + escapeHtml(u.telegram_username) + '</a>';
+        } else if (u.telegram_id) {
+          tgCell = '<span class="text-gray-400 font-mono text-xs">ID: ' + u.telegram_id + '</span>';
+        }
+
+        var statusBadge = u.is_active
+          ? '<span class="badge badge-green">Активен</span>'
+          : '<span class="badge badge-red">Блок</span>';
+
+        var badges = '';
+        if (u.is_admin) badges += '<span class="badge badge-amber text-[10px] ml-1.5">Admin</span>';
+        if (u.is_free) badges += '<span class="badge badge-purple text-[10px] ml-1.5" title="' + escapeHtml(u.free_reason || 'Бесплатный доступ') + '">Free</span>';
+
+        var protoBadges = (u.protocols || []).map(function(p) {
+          return '<span class="badge badge-cyan text-[10px] mr-1">' + escapeHtml(p) + '</span>';
+        }).join('') || '<span class="text-gray-600 text-xs">—</span>';
+
+        var payText = u.total_paid > 0
+          ? '<span class="font-medium text-emerald-400">' + Math.round(u.total_paid).toLocaleString('ru') + ' ₽</span>'
+          : (u.is_free ? '<span class="text-purple-400 text-xs font-medium">Free</span>' : '<span class="text-gray-600 text-xs">0 ₽</span>');
+
+        html += '<tr class="user-analytics-row hover:bg-white/[0.02] transition cursor-pointer" onclick="toggleUserAnalyticsDetails(' + u.id + ')">' +
+          '<td class="text-gray-500 text-xs font-mono">' + (idx + 1) + '</td>' +
+          '<td>' +
+            '<div class="flex items-center">' +
+              '<span class="font-semibold text-gray-100 text-sm">' + escapeHtml(u.display_name) + '</span>' +
+              badges +
+            '</div>' +
+            (u.username ? '<div class="text-[11px] text-gray-500 font-mono">login: ' + escapeHtml(u.username) + '</div>' : '') +
+          '</td>' +
+          '<td>' + tgCell + '</td>' +
+          '<td class="text-center">' + statusBadge + '</td>' +
+          '<td class="text-right">' +
+            '<div class="font-mono text-sm font-semibold text-cyan-400">' + fmtBytes(u.traffic_bytes) + '</div>' +
+            '<div class="flex items-center gap-1.5 justify-end mt-1">' +
+              '<div class="w-16 bg-white/5 rounded-full h-1"><div class="h-1 rounded-full bg-cyan-400" style="width:' + Math.max(2, pct) + '%"></div></div>' +
+              '<span class="text-[10px] text-gray-500 font-mono">' + pct + '%</span>' +
+            '</div>' +
+          '</td>' +
+          '<td class="text-center">' +
+            '<div class="text-xs text-gray-300 font-medium">' + (u.active_keys || 0) + ' <span class="text-gray-600">/ ' + (u.keys_count || 0) + '</span></div>' +
+            '<div class="text-[10px] text-gray-500 mt-0.5">' + protoBadges + '</div>' +
+          '</td>' +
+          '<td class="text-right font-mono text-xs">' + payText + '</td>' +
+          '<td class="text-gray-400 text-xs">' + escapeHtml(u.created_at) + '</td>' +
+          '<td class="text-gray-400 text-xs font-mono">' + escapeHtml(u.last_login) + '</td>' +
+          '<td class="text-right">' +
+            '<button type="button" class="btn-secondary text-[11px] py-1 px-2.5 text-gray-400 hover:text-cyan-300 flex items-center gap-1 ml-auto" onclick="event.stopPropagation(); toggleUserAnalyticsDetails(' + u.id + ')">' +
+              '<span>👁️</span> <span id="btn-text-' + u.id + '">Детали</span>' +
+            '</button>' +
+          '</td>' +
+        '</tr>';
+
+        // Раскрывающаяся строка со всеми ключами пользователя
+        var keysHtml = '';
+        if (u.keys && u.keys.length > 0) {
+          keysHtml = '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-3 bg-black/40 rounded-xl border border-white/5">';
+          u.keys.forEach(function(k) {
+            var kStatusColor = k.status === 'active' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' :
+                               k.status === 'expired' ? 'text-red-400 border-red-500/20 bg-red-500/10' :
+                               k.status === 'limited' ? 'text-amber-400 border-amber-500/20 bg-amber-500/10' : 'text-gray-500 border-gray-500/20 bg-gray-500/10';
+            var expText = k.expire_days !== null ? (k.expire_days > 0 ? k.expire_days + ' дн. осталось' : 'Истёк') : 'Без срока';
+            var limText = k.data_limit ? fmtBytes(k.data_used) + ' / ' + fmtBytes(k.data_limit) : fmtBytes(k.data_used) + ' / ∞';
+            var kPct = k.data_limit ? Math.min(100, Math.round(k.data_used / k.data_limit * 100)) : 0;
+
+            keysHtml += '<div class="card p-3 border border-white/5 bg-white/[0.015] rounded-lg">' +
+              '<div class="flex items-center justify-between mb-1.5">' +
+                '<span class="font-semibold text-xs text-gray-200 truncate" title="' + escapeHtml(k.name) + '">' + escapeHtml(k.name) + '</span>' +
+                '<span class="text-[10px] px-2 py-0.5 rounded border uppercase font-mono ' + kStatusColor + '">' + escapeHtml(k.status) + '</span>' +
+              '</div>' +
+              '<div class="flex items-center gap-2 mb-1.5">' +
+                '<code class="text-[10px] text-acid-400/80 font-mono truncate flex-1 select-all">' + escapeHtml(k.uuid) + '</code>' +
+                '<button onclick="event.stopPropagation(); copyText(\'' + k.uuid + '\')" class="text-gray-500 hover:text-acid-400 text-xs" title="Копировать UUID">📋</button>' +
+              '</div>' +
+              '<div class="text-[11px] text-gray-400 mb-1">' +
+                '<span>Протокол: <strong class="text-cyan-300">' + escapeHtml(k.protocol.toUpperCase()) + '</strong></span> | ' +
+                '<span>Срок: ' + expText + '</span>' +
+              '</div>' +
+              '<div class="mb-1.5">' +
+                '<div class="flex justify-between text-[10px] text-gray-500 mb-0.5">' +
+                  '<span>Трафик: ' + limText + '</span>' +
+                  (k.data_limit ? '<span>' + kPct + '%</span>' : '') +
+                '</div>' +
+                (k.data_limit ? '<div class="w-full bg-white/5 rounded-full h-1"><div class="h-1 rounded-full ' + (kPct > 90 ? 'bg-red-400' : 'bg-acid-400') + '" style="width:' + kPct + '%"></div></div>' : '') +
+              '</div>' +
+              (k.speed_limit_kbps ? '<div class="text-[10px] text-amber-400/80">⚡ Лимит скорости: ' + k.speed_limit_kbps + ' кбит/с</div>' : '') +
+              (k.notes ? '<div class="text-[10px] text-gray-500 truncate mt-1">📝 ' + escapeHtml(k.notes) + '</div>' : '') +
+            '</div>';
+          });
+          keysHtml += '</div>';
+        } else {
+          keysHtml = '<div class="p-4 text-center text-xs text-gray-600">У пользователя нет активных или созданных VPN-ключей</div>';
+        }
+
+        html += '<tr id="analytics-user-details-' + u.id + '" class="hidden bg-black/30 border-b border-white/5">' +
+          '<td colspan="10" class="p-4">' + keysHtml + '</td>' +
+        '</tr>';
+      });
+
+      tbody.innerHTML = html;
+    }
+
+    function toggleUserAnalyticsDetails(userId) {
+      var row = document.getElementById('analytics-user-details-' + userId);
+      var btnText = document.getElementById('btn-text-' + userId);
+      if (!row) return;
+      var isHidden = row.classList.contains('hidden');
+      if (isHidden) {
+        row.classList.remove('hidden');
+        if (btnText) btnText.textContent = 'Скрыть';
+      } else {
+        row.classList.add('hidden');
+        if (btnText) btnText.textContent = 'Детали';
+      }
+    }
+
+    function exportAnalyticsCSV() {
+      if (!_allAnalyticsUsers || !_allAnalyticsUsers.length) {
+        return showToast('Нет данных пользователей для экспорта', 'error');
+      }
+
+      var rows = [
+        ['ID', 'Имя', 'Логин', 'Telegram Username', 'Telegram ID', 'Статус', 'Трафик (байт)', 'Трафик', 'Ключей', 'Активных ключей', 'Оплачено (руб)', 'Бесплатный', 'Дата регистрации', 'Последний вход']
+      ];
+
+      _allAnalyticsUsers.forEach(function(u) {
+        rows.push([
+          u.id,
+          u.display_name || '',
+          u.username || '',
+          u.telegram_username || '',
+          u.telegram_id || '',
+          u.is_active ? 'Активен' : 'Заблокирован',
+          u.traffic_bytes || 0,
+          fmtBytes(u.traffic_bytes || 0),
+          u.keys_count || 0,
+          u.active_keys || 0,
+          u.total_paid || 0,
+          u.is_free ? 'Да' : 'Нет',
+          u.created_at || '',
+          u.last_login || ''
+        ]);
+      });
+
+      var csvContent = '\uFEFF' + rows.map(function(e) {
+        return e.map(function(val) {
+          var s = String(val).replace(/"/g, '""');
+          return '"' + s + '"';
+        }).join(';');
+      }).join('\r\n');
+
+      var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      var link = document.createElement('a');
+      var url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', 'analytics_users_' + new Date().toISOString().slice(0, 10) + '.csv');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast('CSV-отчёт успешно выгружен', 'success');
+    }
+
     async function forceCollectTraffic() {
       var btn = document.getElementById('analytics-collect-btn');
-      if (btn) { btn.disabled = true; btn.textContent = '⏳ Сбор...'; }
+      if (btn) { btn.disabled = true; btn.textContent = '⏳ Сбор данных...'; }
       _analyticsSetError('');
       try {
         var r = await fetch('/admin/api/analytics/force-collect', { method: 'POST' });
         var data = await r.json();
         if (r.ok) {
           var msg = 'Собрано: ' + data.collected + ' ключей';
-          if (!data.stats_available) msg += ' (Xray stats API недоступен — нет данных)';
+          if (!data.stats_available) msg += ' (Xray stats API пока не вернул данных)';
+          showToast(msg, 'success');
           if (btn) { btn.textContent = '✓ ' + msg; }
           setTimeout(function() {
             if (btn) { btn.disabled = false; btn.textContent = '↻ Собрать сейчас'; }
             loadAnalytics();
-          }, 1500);
+          }, 1000);
         } else {
           throw new Error(data.detail || 'Ошибка ' + r.status);
         }
       } catch(e) {
         _analyticsSetError('Ошибка сбора: ' + e.message);
         if (btn) { btn.disabled = false; btn.textContent = '↻ Собрать сейчас'; }
+      }
+    }
+
+    // Автоматическое переключение на вкладку из hash при загрузке
+    if (window.location.hash) {
+      var targetTab = window.location.hash.replace('#', '');
+      if (document.querySelector('[data-tab="' + targetTab + '"]')) {
+        switchTab(targetTab);
       }
     }
   </script>
