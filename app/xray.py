@@ -69,11 +69,24 @@ WARP_IPV6 = os.getenv("WARP_IPV6", "0").strip().lower() in ("1", "true", "yes", 
 # Старое имя WARP_DOMAINS поддержано, чтобы не ломать существующие .env.
 _GEO_DOMAINS_DEFAULT = (
     "geosite:youtube,domain:googlevideo.com,domain:ytimg.com,domain:ggpht.com,"
+    "domain:youtube.com,domain:youtu.be,domain:youtubei.googleapis.com,domain:gvt1.com,"
     "domain:www.google.com,domain:gemini.google.com,"
     "domain:antigravity.google,domain:codeium.com,"
     "domain:cloudcode-pa.googleapis.com,domain:cloudaicompanion.googleapis.com,"
     "domain:generativelanguage.googleapis.com"
 )
+
+# Домены Meta (Instagram, Facebook, Threads, CDN) для защиты от попадания в RU-каскад
+_META_DOMAINS = [
+    "geosite:instagram",
+    "geosite:facebook",
+    "geosite:meta",
+    "domain:instagram.com",
+    "domain:cdninstagram.com",
+    "domain:fbcdn.net",
+    "domain:threads.net",
+]
+
 # Для IPv6-выхода список ДРУГОЙ: домен без AAAA-записи туда класть нельзя —
 # соединение оборвётся. Проверено: у antigravity.google и codeium.com AAAA нет,
 # поэтому их здесь нет. Модельные вызовы Antigravity идут в cloudaicompanion /
@@ -296,12 +309,19 @@ def build_xray_config(db: Session) -> dict[str, Any]:
                 }
             }
         ],
+        "dns": {
+            "servers": [
+                "1.1.1.1",
+                "8.8.8.8"
+            ],
+            "queryStrategy": "UseIPv4"
+        },
         "outbounds": [
             {
                 "tag": "DIRECT",
                 "protocol": "freedom",
                 "settings": {
-                    "domainStrategy": "UseIP",
+                    "domainStrategy": "UseIPv4",
                     "packetEncoding": "xudp"
                 }
             },
@@ -322,6 +342,12 @@ def build_xray_config(db: Session) -> dict[str, Any]:
                     "type": "field",
                     "outboundTag": "BLACKHOLE",
                     "protocol": ["bittorrent"]
+                },
+                {
+                    "type": "field",
+                    "outboundTag": "BLACKHOLE",
+                    "network": "udp",
+                    "port": "443"
                 },
                 {
                     "type": "field",
@@ -467,26 +493,36 @@ def build_xray_config(db: Session) -> dict[str, Any]:
         })
         geo_outbound_tag = "WARP"
 
-    # ВАЖНО: правило стоит ВЫШЕ правил каскада. Google считает наш IPv4
-    # российским и отдаёт для *.googlevideo.com адреса GGC-кэшей внутри
-    # российских AS. Эти адреса матчатся на "geoip:ru", и без этого правила
-    # YouTube уходил бы в RU-хаб — то есть выходил бы в реальный российский IP.
-    if geo_outbound_tag:
-        # У IPv6-выхода свой дефолтный список — только домены с AAAA
-        default_domains = (
-            _GEO_V6_DOMAINS_DEFAULT if geo_outbound_tag == "GEO-V6" else _GEO_DOMAINS_DEFAULT
-        )
-        geo_domains_raw = GEO_DOMAINS or default_domains
-        geo_domains = [d.strip() for d in geo_domains_raw.split(",") if d.strip()]
-        if geo_domains:
-            rules = config["routing"]["rules"]
-            catchall = rules.pop()  # убираем catch-all (tcp,udp → DIRECT)
-            rules.append({
-                "type": "field",
-                "outboundTag": geo_outbound_tag,
-                "domain": geo_domains
-            })
-            rules.append(catchall)
+    # ВАЖНО: правила для YouTube и Meta стоят ВЫШЕ правил каскада.
+    # 1. Google отдает для *.googlevideo.com адреса GGC-кэшей внутри РФ, которые матчатся на "geoip:ru".
+    #    Без опережающего правила YouTube уходил бы в RU-хаб, где он заблокирован/замедлен РКН!
+    # 2. Instagram/Meta заблокированы в РФ, поэтому их трафик ВСЕГДА идёт через европейский выход.
+    default_domains = (
+        _GEO_V6_DOMAINS_DEFAULT if geo_outbound_tag == "GEO-V6" else _GEO_DOMAINS_DEFAULT
+    )
+    geo_domains_raw = GEO_DOMAINS or default_domains
+    geo_domains = [d.strip() for d in geo_domains_raw.split(",") if d.strip()]
+
+    rules = config["routing"]["rules"]
+    catchall = rules.pop()  # убираем catch-all (tcp,udp → DIRECT)
+
+    # Правило для YouTube / Google (в спец-выход если настроен, либо в DIRECT)
+    yt_target = geo_outbound_tag if geo_outbound_tag else "DIRECT"
+    if geo_domains:
+        rules.append({
+            "type": "field",
+            "outboundTag": yt_target,
+            "domain": geo_domains
+        })
+
+    # Правило для Meta / Instagram (всегда в DIRECT)
+    rules.append({
+        "type": "field",
+        "outboundTag": "DIRECT",
+        "domain": _META_DOMAINS
+    })
+
+    rules.append(catchall)
 
     # Каскад: NL → RU для российского трафика
     if RU_SERVER_IP and RU_TRANSIT_UUID and RU_TRANSIT_PUBLIC_KEY:
@@ -1120,7 +1156,33 @@ def get_subscription_json(keys: list[VPNKey], db: Session | None = None) -> dict
     # Balancer + routing для каскада и fallback
     routing_rules = [
         {"type": "field", "outboundTag": "BLOCK", "protocol": ["bittorrent"]},
+        {"type": "field", "outboundTag": "BLOCK", "network": "udp", "port": "443"},
     ]
+
+    # YouTube, Google и Meta (Instagram) ВСЕГДА идут через EU-ноды (защита от попадания в RU)
+    if eu_tags:
+        safe_domains = [
+            "geosite:youtube",
+            "geosite:google",
+            "geosite:instagram",
+            "geosite:facebook",
+            "geosite:meta",
+            "domain:googlevideo.com",
+            "domain:ytimg.com",
+            "domain:youtube.com",
+            "domain:youtu.be",
+            "domain:youtubei.googleapis.com",
+            "domain:gvt1.com",
+            "domain:instagram.com",
+            "domain:cdninstagram.com",
+            "domain:fbcdn.net",
+            "domain:threads.net",
+        ]
+        routing_rules.append({
+            "type": "field",
+            "outboundTag": eu_tags[0],
+            "domain": safe_domains,
+        })
 
     # RU трафик → RU серверы (каскад)
     if ru_tags:
@@ -1144,8 +1206,12 @@ def get_subscription_json(keys: list[VPNKey], db: Session | None = None) -> dict
         })
 
     result = {
+        "dns": {
+            "servers": ["1.1.1.1", "8.8.8.8"],
+            "queryStrategy": "UseIPv4"
+        },
         "outbounds": outbounds + [
-            {"tag": "DIRECT", "protocol": "freedom", "settings": {"domainStrategy": "UseIP", "packetEncoding": "xudp"}},
+            {"tag": "DIRECT", "protocol": "freedom", "settings": {"domainStrategy": "UseIPv4", "packetEncoding": "xudp"}},
             {"tag": "BLOCK", "protocol": "blackhole"},
         ],
         "log": {"loglevel": "warning"},
@@ -1164,9 +1230,9 @@ def get_subscription_json(keys: list[VPNKey], db: Session | None = None) -> dict
                 "strategy": {"type": "random"},
             }
         ]
-        # Заменяем правило для EU на balancer
+        # Заменяем правила для EU на balancer
         for rule in result["routing"]["rules"]:
-            if rule.get("outboundTag") == eu_tags[0] and rule.get("network") == "tcp,udp":
+            if rule.get("outboundTag") == eu_tags[0]:
                 rule.pop("outboundTag")
                 rule["balancerTag"] = "balancer-eu"
 

@@ -86,5 +86,19 @@ echo "  rmem_max               : $RMEM $([ "$RMEM" = "134217728" ] && echo "✓"
 echo "  ip_forward             : $FWD $([ "$FWD" = "1" ] && echo "✓" || echo "✗")"
 
 echo ""
+echo "[5/5] Настройка TCP MSS Clamping (защита от фрагментации на 4G/5G)..."
+if command -v iptables &>/dev/null; then
+    iptables -t mangle -C POSTROUTING -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || \
+    iptables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null && \
+    echo "  ✓ IPv4 TCP MSS Clamping активирован" || echo "  ! Не удалось применить iptables mangle"
+fi
+if command -v ip6tables &>/dev/null; then
+    ip6tables -t mangle -C POSTROUTING -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || \
+    ip6tables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null && \
+    echo "  ✓ IPv6 TCP MSS Clamping активирован" || true
+fi
+
+echo ""
 echo "=== Готово. Настройки применены и сохранены. ==="
 echo "Перезагрузка не требуется."
+

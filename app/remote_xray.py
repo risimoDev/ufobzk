@@ -138,14 +138,19 @@ def _build_remote_config(server: Server, keys: list[VPNKey]) -> dict[str, Any]:
     config: dict[str, Any] = {
         "log": {"loglevel": "warning"},
         "inbounds": inbounds,
+        "dns": {
+            "servers": ["1.1.1.1", "8.8.8.8"],
+            "queryStrategy": "UseIPv4"
+        },
         "outbounds": [
-            {"tag": "DIRECT", "protocol": "freedom", "settings": {"domainStrategy": "UseIP", "packetEncoding": "xudp"}},
+            {"tag": "DIRECT", "protocol": "freedom", "settings": {"domainStrategy": "UseIPv4", "packetEncoding": "xudp"}},
             {"tag": "BLACKHOLE", "protocol": "blackhole"}
         ],
         "routing": {
             "domainStrategy": "IPIfNonMatch",
             "rules": [
                 {"type": "field", "outboundTag": "BLACKHOLE", "protocol": ["bittorrent"]},
+                {"type": "field", "outboundTag": "BLACKHOLE", "network": "udp", "port": "443"},
                 {"type": "field", "outboundTag": "DIRECT", "network": "tcp,udp"}
             ]
         }
@@ -182,6 +187,31 @@ def _build_remote_config(server: Server, keys: list[VPNKey]) -> dict[str, Any]:
         })
         rules = config["routing"]["rules"]
         catchall = rules.pop()  # убираем catch-all (tcp,udp → DIRECT)
+
+        # Защита YouTube, Google и Meta (Instagram) от попадания в каскадный RU-PROXY
+        safe_domains = [
+            "geosite:youtube",
+            "geosite:google",
+            "geosite:instagram",
+            "geosite:facebook",
+            "geosite:meta",
+            "domain:googlevideo.com",
+            "domain:ytimg.com",
+            "domain:youtube.com",
+            "domain:youtu.be",
+            "domain:youtubei.googleapis.com",
+            "domain:gvt1.com",
+            "domain:instagram.com",
+            "domain:cdninstagram.com",
+            "domain:fbcdn.net",
+            "domain:threads.net",
+        ]
+        rules.append({
+            "type": "field",
+            "outboundTag": "DIRECT",
+            "domain": safe_domains
+        })
+
         rules.extend([
             {
                 "type": "field",
