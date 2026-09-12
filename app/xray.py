@@ -73,7 +73,8 @@ _GEO_DOMAINS_DEFAULT = (
     "domain:www.google.com,domain:gemini.google.com,"
     "domain:antigravity.google,domain:codeium.com,"
     "domain:cloudcode-pa.googleapis.com,domain:cloudaicompanion.googleapis.com,"
-    "domain:generativelanguage.googleapis.com"
+    "domain:generativelanguage.googleapis.com,"
+    "domain:nvidia.com,domain:ngc.nvidia.com,domain:nvcr.io"
 )
 
 # Домены Meta (Instagram, Facebook, Threads, CDN) для защиты от попадания в RU-каскад
