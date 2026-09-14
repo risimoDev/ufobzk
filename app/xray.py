@@ -319,7 +319,7 @@ def build_xray_config(db: Session) -> dict[str, Any]:
                 "1.1.1.1",
                 "8.8.8.8"
             ],
-            "queryStrategy": "UseIPv4"
+            "queryStrategy": "UseIP"
         },
         "outbounds": [
             {
@@ -455,7 +455,7 @@ def build_xray_config(db: Session) -> dict[str, Any]:
         config["outbounds"].append({
             "tag": "GEO-V6",
             "protocol": "freedom",
-            "settings": {"domainStrategy": "UseIPv6"}
+            "settings": {"domainStrategy": "UseIPv6v4"}
         })
         geo_outbound_tag = "GEO-V6"
 
@@ -502,10 +502,12 @@ def build_xray_config(db: Session) -> dict[str, Any]:
     # 1. Google отдает для *.googlevideo.com адреса GGC-кэшей внутри РФ, которые матчатся на "geoip:ru".
     #    Без опережающего правила YouTube уходил бы в RU-хаб, где он заблокирован/замедлен РКН!
     # 2. Instagram/Meta заблокированы в РФ, поэтому их трафик ВСЕГДА идёт через европейский выход.
-    default_domains = (
-        _GEO_V6_DOMAINS_DEFAULT if geo_outbound_tag == "GEO-V6" else _GEO_DOMAINS_DEFAULT
-    )
-    geo_domains_raw = GEO_DOMAINS or default_domains
+    # Для GEO-V6 используем только проверенные домены с AAAA-записями (_GEO_V6_DOMAINS_DEFAULT),
+    # если только GEO_DOMAINS не задан явно (НЕ наследуем WARP_DOMAINS, где лежат IPv4-only домены вроде nvidia).
+    if geo_outbound_tag == "GEO-V6":
+        geo_domains_raw = os.getenv("GEO_DOMAINS", "") or _GEO_V6_DOMAINS_DEFAULT
+    else:
+        geo_domains_raw = GEO_DOMAINS or _GEO_DOMAINS_DEFAULT
     geo_domains = [d.strip() for d in geo_domains_raw.split(",") if d.strip()]
 
     rules = config["routing"]["rules"]
