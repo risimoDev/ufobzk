@@ -205,6 +205,10 @@ def _build_remote_config(server: Server, keys: list[VPNKey]) -> dict[str, Any]:
             "domain:cdninstagram.com",
             "domain:fbcdn.net",
             "domain:threads.net",
+            "domain:cloudflare.com",
+            "domain:nvidia.com",
+            "domain:ngc.nvidia.com",
+            "domain:nvcr.io",
         ]
         rules.append({
             "type": "field",

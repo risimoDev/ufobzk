@@ -77,7 +77,7 @@ _GEO_DOMAINS_DEFAULT = (
     "domain:nvidia.com,domain:ngc.nvidia.com,domain:nvcr.io"
 )
 
-# Домены Meta (Instagram, Facebook, Threads, CDN) для защиты от попадания в RU-каскад
+# Домены Meta (Instagram, Facebook, Threads, CDN), Cloudflare и NVIDIA для защиты от попадания в RU-каскад
 _META_DOMAINS = [
     "geosite:instagram",
     "geosite:facebook",
@@ -86,6 +86,10 @@ _META_DOMAINS = [
     "domain:cdninstagram.com",
     "domain:fbcdn.net",
     "domain:threads.net",
+    "domain:cloudflare.com",
+    "domain:nvidia.com",
+    "domain:ngc.nvidia.com",
+    "domain:nvcr.io",
 ]
 
 # Для IPv6-выхода список ДРУГОЙ: домен без AAAA-записи туда класть нельзя —
@@ -1178,6 +1182,11 @@ def get_subscription_json(keys: list[VPNKey], db: Session | None = None) -> dict
             "domain:cdninstagram.com",
             "domain:fbcdn.net",
             "domain:threads.net",
+            "domain:cloudflare.com",
+            "domain:nvidia.com",
+            "domain:ngc.nvidia.com",
+            "domain:nvcr.io",
+            "geosite:openai",
         ]
         routing_rules.append({
             "type": "field",
