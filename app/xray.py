@@ -97,7 +97,7 @@ _META_DOMAINS = [
 # поэтому их здесь нет. Модельные вызовы Antigravity идут в cloudaicompanion /
 # cloudcode-pa, у которых AAAA есть, так что он всё равно попадает под правило.
 _GEO_V6_DOMAINS_DEFAULT = (
-    "domain:gemini.google.com,"
+    "domain:gemini.google.com,domain:clients6.google.com,domain:www.google.com,"
     "domain:cloudcode-pa.googleapis.com,domain:cloudaicompanion.googleapis.com,"
     "domain:generativelanguage.googleapis.com,"
     # Vertex AI: keyword, а не domain. У Xray "domain:aiplatform.googleapis.com"
