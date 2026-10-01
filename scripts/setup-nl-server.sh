@@ -55,7 +55,7 @@ log "Генерация ключей x25519 для REALITY..."
 KEY_OUTPUT=$(xray x25519 2>/dev/null)
 
 PRIVATE_KEY=$(echo "$KEY_OUTPUT" | grep -i "private" | awk '{print $NF}')
-PUBLIC_KEY=$(echo "$KEY_OUTPUT" | grep -i "public" | awk '{print $NF}')
+PUBLIC_KEY=$(echo "$KEY_OUTPUT" | grep -iE "^(public ?key|password):" | awk '{print $NF}')
 
 [ -n "$PRIVATE_KEY" ] || { err "Не удалось сгенерировать Private Key"; exit 1; }
 [ -n "$PUBLIC_KEY" ]  || { err "Не удалось сгенерировать Public Key"; exit 1; }

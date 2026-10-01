@@ -1,0 +1,18 @@
+# Без этого файла `COPY . .` в Dockerfile запекал в образ .env с секретами,
+# базу из data/ и всю историю .git. .env приложение получает через env_file.
+.env
+.env.*
+!.env.example
+env.example
+data/
+*.db
+.git/
+.warp/
+.warp-test/
+.kilo/
+.claude/
+__pycache__/
+*.pyc
+docs/
+node-package/
+xray-node/

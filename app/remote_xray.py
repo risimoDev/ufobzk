@@ -146,12 +146,15 @@ def _build_remote_config(server: Server, keys: list[VPNKey]) -> dict[str, Any]:
             {"tag": "DIRECT", "protocol": "freedom", "settings": {"domainStrategy": "UseIPv4", "packetEncoding": "xudp"}},
             {"tag": "BLACKHOLE", "protocol": "blackhole"}
         ],
+        # Без catch-all в конце — см. комментарий в app/xray.py: с ним geoip-
+        # правила для доменов никогда не срабатывают. Default = DIRECT (первый).
         "routing": {
             "domainStrategy": "IPIfNonMatch",
             "rules": [
                 {"type": "field", "outboundTag": "BLACKHOLE", "protocol": ["bittorrent"]},
                 {"type": "field", "outboundTag": "BLACKHOLE", "network": "udp", "port": "443"},
-                {"type": "field", "outboundTag": "DIRECT", "network": "tcp,udp"}
+                # Не пускаем клиентов на localhost ноды (API xray-node) и в docker-сеть
+                {"type": "field", "outboundTag": "BLACKHOLE", "ip": ["geoip:private"]},
             ]
         }
     }
@@ -186,7 +189,6 @@ def _build_remote_config(server: Server, keys: list[VPNKey]) -> dict[str, Any]:
             "mux": {"enabled": False}
         })
         rules = config["routing"]["rules"]
-        catchall = rules.pop()  # убираем catch-all (tcp,udp → DIRECT)
 
         # Защита YouTube, Google и Meta (Instagram) от попадания в каскадный RU-PROXY
         safe_domains = [
@@ -246,7 +248,6 @@ def _build_remote_config(server: Server, keys: list[VPNKey]) -> dict[str, Any]:
                 "ip": ["geoip:ru"]
             }
         ])
-        rules.append(catchall)
 
     return config
 
@@ -300,7 +301,7 @@ async def push_config_to_server(server: Server, keys: list[VPNKey]) -> bool:
 
 async def sync_server(db: Session, server: Server) -> bool:
     """Синхронизировать конфиг на один remote сервер."""
-    keys = db.query(VPNKey).filter(VPNKey.is_active == True).all()  # noqa: E712
+    keys = db.query(VPNKey).filter(VPNKey.is_active == True).order_by(VPNKey.id).all()  # noqa: E712
     return await push_config_to_server(server, keys)
 
 
@@ -310,7 +311,7 @@ async def sync_all_servers(db: Session) -> dict[str, bool]:
     if not servers:
         return {}
 
-    keys = db.query(VPNKey).filter(VPNKey.is_active == True).all()  # noqa: E712
+    keys = db.query(VPNKey).filter(VPNKey.is_active == True).order_by(VPNKey.id).all()  # noqa: E712
     results = {}
 
     for server in servers:

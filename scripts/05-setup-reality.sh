@@ -33,7 +33,7 @@ KEY_OUTPUT=$(docker exec "$CONTAINER_NAME" xray x25519 2>/dev/null) \
     || error "Не удалось выполнить xray x25519 в контейнере"
 
 PRIVATE_KEY=$(echo "$KEY_OUTPUT" | grep -i "private" | awk '{print $NF}')
-PUBLIC_KEY=$(echo "$KEY_OUTPUT" | grep -i "public" | awk '{print $NF}')
+PUBLIC_KEY=$(echo "$KEY_OUTPUT" | grep -iE "^(public ?key|password):" | awk '{print $NF}')
 
 [ -n "$PRIVATE_KEY" ] || error "Не удалось извлечь Private Key"
 [ -n "$PUBLIC_KEY" ]  || error "Не удалось извлечь Public Key"

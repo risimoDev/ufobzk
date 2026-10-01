@@ -85,7 +85,7 @@ fi
 log "Генерация REALITY ключей (x25519)..."
 KEY_OUT="$(docker run --rm teddysun/xray:latest xray x25519 2>/dev/null)"
 PRIVATE_KEY="$(echo "$KEY_OUT" | grep -iE 'private' | awk '{print $NF}')"
-PUBLIC_KEY="$(echo "$KEY_OUT"  | grep -iE 'public'  | awk '{print $NF}')"
+PUBLIC_KEY="$(echo "$KEY_OUT"  | grep -iE '^(public ?key|password):' | awk '{print $NF}')"
 [ -n "$PRIVATE_KEY" ] && [ -n "$PUBLIC_KEY" ] || { err "Не удалось сгенерировать ключи x25519"; echo "$KEY_OUT"; exit 1; }
 SHORT_ID="$(openssl rand -hex 8)"
 [ -n "$TOKEN" ] || TOKEN="$(openssl rand -hex 32)"

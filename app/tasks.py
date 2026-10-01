@@ -74,6 +74,16 @@ def collect_and_store_traffic(db, all_stats: dict[str, int]) -> int:
     return updated
 
 
+def _resync_xray() -> None:
+    db = SessionLocal()
+    try:
+        sync_and_reload(db)
+    except Exception as e:
+        logger.error("Ошибка синхронизации Xray после сбора трафика: %s", e)
+    finally:
+        db.close()
+
+
 async def periodic_traffic_collector() -> None:
     """Периодически опрашивает Xray API и обновляет data_used в БД.
 
@@ -110,6 +120,13 @@ async def periodic_traffic_collector() -> None:
                     logger.info("Трафик обновлён для %d ключей", updated)
             finally:
                 db.close()
+
+            # Ключ, перешедший лимит трафика, получает статус "limited" и
+            # выпадает из конфига только при пересборке. Раньше её запускало лишь
+            # истечение срока, и перелимитные ключи работали дальше. Если ни один
+            # ключ лимит не перешёл, конфиг совпадёт с текущим и рестарта не будет.
+            if updated:
+                await asyncio.to_thread(_resync_xray)
 
         except asyncio.CancelledError:
             break

@@ -1,6 +1,7 @@
 """Telegram-бот — авторизация, подписки, статус и привязка аккаунтов."""
 
 import asyncio
+import html
 import logging
 import os
 from datetime import datetime, timezone
@@ -39,6 +40,15 @@ def _run_bg_sync() -> None:
         logger.error("Ошибка синхронизации Xray из бота: %s", e)
     finally:
         db.close()
+
+
+def _name(user: User, default: str = "") -> str:
+    """Имя пользователя для сообщений с parse_mode=HTML.
+
+    Имя приходит из Telegram (full_name) и может содержать <, > или &. Без
+    экранирования Telegram отвечает "can't parse entities" и сообщение не уходит.
+    """
+    return html.escape(user.display_name or user.username or default)
 
 
 def get_main_menu_keyboard(user: User) -> InlineKeyboardMarkup:
@@ -132,7 +142,7 @@ async def cmd_start_deep_link(message: types.Message) -> None:
             conflict = db.query(User).filter(User.telegram_id == telegram_id, User.id != user.id).first()
             if conflict:
                 await message.answer(
-                    f"⚠️ Этот Telegram-аккаунт уже привязан к пользователю <b>{conflict.display_name or conflict.username}</b>.\n"
+                    f"⚠️ Этот Telegram-аккаунт уже привязан к пользователю <b>{_name(conflict)}</b>.\n"
                     "Если хотите изменить привязку, обратитесь к администратору.",
                     parse_mode="HTML",
                 )
@@ -145,7 +155,7 @@ async def cmd_start_deep_link(message: types.Message) -> None:
             db.commit()
 
             await message.answer(
-                f"✅ <b>Telegram успешно привязан</b> к аккаунту <code>{user.display_name or user.username}</code>!\n\n"
+                f"✅ <b>Telegram успешно привязан</b> к аккаунту <code>{_name(user)}</code>!\n\n"
                 "Теперь вы можете управлять доступом и входить в личный кабинет прямо отсюда.",
                 parse_mode="HTML",
                 reply_markup=get_main_menu_keyboard(user),
@@ -159,7 +169,7 @@ async def cmd_start_deep_link(message: types.Message) -> None:
                 await message.answer("🚫 Доступ к учетной записи приостановлен.")
                 return
             await message.answer(
-                f"Здравствуйте, <b>{user.display_name or user.username or 'пользователь'}</b>.\n"
+                f"Здравствуйте, <b>{_name(user, 'пользователь')}</b>.\n"
                 "Выберите нужное действие в меню ниже:",
                 parse_mode="HTML",
                 reply_markup=get_main_menu_keyboard(user),
@@ -236,7 +246,7 @@ async def cmd_start_simple(message: types.Message) -> None:
                 await message.answer("🚫 Доступ к учетной записи приостановлен.")
                 return
             await message.answer(
-                f"Здравствуйте, <b>{user.display_name or user.username or 'пользователь'}</b>.\n"
+                f"Здравствуйте, <b>{_name(user, 'пользователь')}</b>.\n"
                 "Выберите нужное действие в меню ниже:",
                 parse_mode="HTML",
                 reply_markup=get_main_menu_keyboard(user),
@@ -282,7 +292,7 @@ async def cmd_link_code(message: types.Message) -> None:
         conflict = db.query(User).filter(User.telegram_id == telegram_id, User.id != user_id).first()
         if conflict:
             await message.answer(
-                f"⚠️ Этот Telegram-аккаунт уже привязан к <b>{conflict.display_name or conflict.username}</b>.",
+                f"⚠️ Этот Telegram-аккаунт уже привязан к <b>{_name(conflict)}</b>.",
                 parse_mode="HTML",
             )
             return
@@ -300,7 +310,7 @@ async def cmd_link_code(message: types.Message) -> None:
 
         await message.answer(
             f"✅ <b>Telegram успешно привязан!</b>\n"
-            f"Аккаунт: <code>{user.display_name or user.username}</code>",
+            f"Аккаунт: <code>{_name(user)}</code>",
             parse_mode="HTML",
             reply_markup=get_main_menu_keyboard(user),
         )
@@ -321,7 +331,7 @@ async def cb_menu(callback: types.CallbackQuery) -> None:
             await callback.answer("Учетная запись не найдена.", show_alert=True)
             return
         await callback.message.edit_text(
-            f"Здравствуйте, <b>{user.display_name or user.username or 'пользователь'}</b>.\n"
+            f"Здравствуйте, <b>{_name(user, 'пользователь')}</b>.\n"
             "Выберите нужное действие в меню ниже:",
             parse_mode="HTML",
             reply_markup=get_main_menu_keyboard(user),
@@ -394,7 +404,7 @@ async def cb_status(callback: types.CallbackQuery) -> None:
 
         now = datetime.now(timezone.utc)
         lines = [f"📊 <b>Статус учетной записи:</b>\n"]
-        lines.append(f"Пользователь: <b>{user.display_name or user.username or 'Пользователь'}</b>")
+        lines.append(f"Пользователь: <b>{_name(user, 'Пользователь')}</b>")
 
         active_keys = [k for k in user.vpn_keys if k.status == "active"]
         lines.append(f"Активных ключей: <b>{len(active_keys)}</b> / {len(user.vpn_keys)}")

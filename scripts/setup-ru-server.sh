@@ -81,7 +81,7 @@ log "Генерация ключей x25519 для REALITY (RU-сервер)..."
 KEY_OUTPUT=$(xray x25519 2>/dev/null)
 
 RU_PRIVATE_KEY=$(echo "$KEY_OUTPUT" | grep -i "private" | awk '{print $NF}')
-RU_PUBLIC_KEY=$(echo "$KEY_OUTPUT" | grep -i "public" | awk '{print $NF}')
+RU_PUBLIC_KEY=$(echo "$KEY_OUTPUT" | grep -iE "^(public ?key|password):" | awk '{print $NF}')
 RU_SHORT_ID=$(openssl rand -hex 8)
 
 [ -n "$RU_PRIVATE_KEY" ] || { err "Не удалось сгенерировать Private Key"; exit 1; }

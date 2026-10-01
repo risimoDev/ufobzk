@@ -15,7 +15,7 @@ from slowapi.util import get_remote_address
 
 from app.bruteforce import api_guard
 from app.models import SUPERADMIN_TELEGRAM_ID, User, init_db
-from app.xray import sync_and_reload
+from app.xray import log_geo_exit_status, sync_and_reload
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -127,6 +127,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.warning("Не удалось синхронизировать Xray при старте: %s", e)
     finally:
         _db.close()
+    # Проверка IPv6 занимает до 3 сек — не держим ею старт приложения
+    asyncio.create_task(asyncio.to_thread(log_geo_exit_status))
     global bot_task
     bot_task = asyncio.create_task(_start_bot())
     # Фоновые задачи: сбор трафика + проверка истечения ключей

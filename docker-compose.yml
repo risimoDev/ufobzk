@@ -90,6 +90,9 @@ services:
     ports:
       # REALITY порт — прямое подключение без CDN
       - "${REALITY_PORT:-2053}:443"
+      # DIAG-SOCKS: проверка гео-маршрутизации с самого сервера, только localhost.
+      # ipregion.sh ... -p 127.0.0.1:10808 — запросы идут через правила Xray.
+      - "127.0.0.1:10808:10808"
     expose:
       - "8443"
       - "8444"
@@ -185,8 +188,10 @@ networks:
     driver: bridge
   # backend с IPv6: нужен для GEO_IPV6 — выхода гео-доменов через IPv6 главного
   # сервера (Google метит как RU только его IPv4, IPv6 видит как PL). Без этого
-  # freedom-аутбаунд с domainStrategy UseIPv6 падает с "network is unreachable".
-  # Требует Docker 26+ (в более старых нужен "ipv6": true в /etc/docker/daemon.json).
+  # GEO-V6 (UseIPv6v4) молча уходит в IPv4 — и Google снова видит RU.
+  # Нужен ещё и сам IPv6 на хосте: `ip -6 addr show scope global` не должен быть пуст.
+  # Требует Docker 27+ (в более старых нужен "ipv6": true в /etc/docker/daemon.json).
+  # Проверка всего пути: scripts/17-diagnose-geo.sh
   backend:
     driver: bridge
     enable_ipv6: true

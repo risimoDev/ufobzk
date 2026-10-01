@@ -271,53 +271,44 @@ Google показывал бы PL, как и RIPE), а смена IP даёт л
    как RU только IPv4, а тот же сервер по IPv6 определяется как PL.
 3. **WARP — Cloudflare.** Ненадёжен на серверных адресах, см. предупреждение ниже.
 
-### GEO-V6: гео-домены через IPv6 главного (самый простой вариант)
+### GEO-V6: Google через IPv6 главного (самый простой вариант)
 
-Включается `GEO_IPV6=1` в `.env` и требует IPv6 внутри docker-сети `backend` —
-в `docker-compose.yml` для неё уже стоит `enable_ipv6: true`. Без этого
-freedom-аутбаунд падает с `network is unreachable`, ровно как это было с DNS у
-WARP.
+Включается `GEO_IPV6=1` в `.env`. Нужны **две** вещи:
 
-> **В `GEO_DOMAINS` при этом режиме можно класть только домены с AAAA-записью.**
-> Домен без AAAA при `domainStrategy: UseIPv6` не резолвится и соединение
-> обрывается. Проверено: у `antigravity.google` и `codeium.com` AAAA нет, у
-> `gemini.google.com`, `cloudcode-pa`, `cloudaicompanion` и
-> `generativelanguage.googleapis.com` — есть. Поэтому дефолтный список для
-> IPv6-режима свой и содержит только безопасные домены; проще оставить
-> `GEO_DOMAINS` пустым.
+1. Рабочий IPv6 на самом хосте: `ip -6 addr show scope global` не пуст,
+   `curl -6 https://api64.ipify.org` отвечает. Хостер может выдавать IPv6
+   только по запросу или требовать прописать адрес/шлюз в netplan.
+2. IPv6 в docker-сети `backend` — в `docker-compose.yml` уже стоит
+   `enable_ipv6: true` (смена параметров сети = `docker compose down && up -d`).
 
-Проверить AAAA перед добавлением домена:
+Аутбаунд работает в режиме `UseIPv6v4`: домен без AAAA уходит по IPv4, а не
+обрывается. Обратная сторона — **если IPv6 нет, всё молча уходит в IPv4 и Google
+видит RU**, хотя ошибок нигде нет. Поэтому при старте приложение проверяет
+IPv6-выход и пишет в лог `GEO-V6 включён, но выхода по IPv6 нет`.
+
+IPv6 даёт страну **PL** (страна регистрации подсети SEBEK), а не NL. Нужен
+именно NL — используйте GEO-EXIT через ноду, которую Google видит как NL.
+
+В гео-выход уходит **всё семейство Google целиком** (`geosite:google`,
+`geosite:youtube`, `*.googleapis.com`, TLD `.google`, `codeium.com` …): регион
+Google выставляет по cookie/аккаунту с любого своего домена, и единственный
+домен на RU-IPv4 (например, `youtube.com`) возвращает RU везде. `GEO_DOMAINS`
+теперь **добавляется** к встроенному списку, а не заменяет его; `WARP_DOMAINS`
+больше не читается.
+
+### Как проверять
+
+`ipregion.sh` и `curl` в шелле сервера идут **мимо Xray** и всегда показывают
+голый IPv4 главного (Google = RU) — это не то, что видят клиенты. Проверка
+через Xray (тот же путь, что у клиентов) — через локальный вход DIAG-SOCKS:
 
 ```bash
-getent ahostsv6 gemini.google.com
+bash scripts/17-diagnose-geo.sh
+bash <(curl -fsSL https://raw.githubusercontent.com/Davoyan/ipregion/main/ipregion.sh) -p 127.0.0.1:10808
 ```
 
-Замеренное состояние AAAA по сервисам (проверено 28.08.2026 через DoH):
-
-| Домен | AAAA | Годен для GEO-V6 |
-| --- | --- | --- |
-| `gemini.google.com` | есть | да |
-| `cloudcode-pa` / `cloudaicompanion.googleapis.com` | есть | да |
-| `generativelanguage.googleapis.com` | есть | да |
-| `aiplatform.googleapis.com` и `*-aiplatform.googleapis.com` | есть | да |
-| `antigravity.google`, `www.antigravity.google` | нет | нет |
-| `codeium.com` | нет | нет |
-| `gemini.gstatic.com` | нет | нет (и не нужен — CDN без гео-гейта) |
-| **все домены TikTok и ByteDance** | **нет** | **нет** |
-
-`*-aiplatform.googleapis.com` заводится через `keyword:aiplatform.googleapis.com`,
-а не `domain:` — у Xray `domain:aiplatform.googleapis.com` не матчит
-`us-central1-aiplatform.googleapis.com`, потому что это не поддомен, а другой
-первый лейбл.
-
-**TikTok через GEO-V6 невозможен.** Ни `tiktok.com`, ни `tiktokv.com`, ни
-`tiktokw.us`/`tiktokv.us`, ни `musical.ly`, ни CDN (`tiktokcdn.com`,
-`tiktokcdn-us.com`, `byteoversea.com/.net`, `ibytedtos.com`, `byteimg.com`,
-`bytefcdn-oversea.com`), ни инфраструктура ByteDance (`bytedance.com/.net`,
-`sgsnssdk.com`, `ttdns2.com`) не имеют AAAA-записей — вся сеть TikTok
-IPv4-only. Добавление любого из них в `GEO_DOMAINS` при `GEO_IPV6=1` просто
-оборвёт TikTok. Для него нужен IPv4-выход: цепочка на ноду (GEO-EXIT) либо
-другой адрес у хостера.
+Порт `10808` опубликован только на `127.0.0.1` хоста. После обновления
+`docker-compose.yml` его нужно применить: `docker compose up -d xray`.
 
 ### Готовые rule-set базы вместо ручных списков
 

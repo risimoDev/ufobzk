@@ -1017,11 +1017,15 @@ async def admin_generate_reality_keys(
         lines = result.stdout.strip().split("\n")
         private_key = ""
         public_key = ""
+        # Старый Xray: "Private key: …" / "Public key: …".
+        # Xray 25.x: "PrivateKey: …" / "Password: …" (Password и есть pbk) / "Hash32: …".
         for line in lines:
-            if "Private key:" in line:
-                private_key = line.split(":")[-1].strip()
-            if "Public key:" in line:
-                public_key = line.split(":")[-1].strip()
+            label, _, value = line.partition(":")
+            label = label.strip().lower().replace(" ", "")
+            if label == "privatekey":
+                private_key = value.strip()
+            elif label in ("publickey", "password"):
+                public_key = value.strip()
 
         if not private_key or not public_key:
             raise HTTPException(status_code=500, detail="Не удалось распарсить ключи из xray x25519")
@@ -1224,11 +1228,17 @@ async def admin_sync_server(
         raise HTTPException(status_code=404, detail="Сервер не найден")
 
     try:
-        await remote_sync(db, server)
+        # push_config_to_server ловит все ошибки сам и возвращает False —
+        # результат нужно проверять, исключения здесь почти не бывает
+        ok = await remote_sync(db, server)
         server.last_sync = datetime.now(timezone.utc)
-        server.last_sync_status = "ok"
+        server.last_sync_status = "ok" if ok else "error"
         db.commit()
+        if not ok:
+            raise HTTPException(status_code=502, detail="Нода не приняла конфиг — подробности в логах ufo-app")
         return JSONResponse({"ok": True})
+    except HTTPException:
+        raise
     except Exception as e:
         server.last_sync = datetime.now(timezone.utc)
         server.last_sync_status = "error"
@@ -1303,14 +1313,14 @@ async def admin_sync_all_servers(
     from app.remote_xray import sync_server as remote_sync
     import asyncio
 
-    servers = db.query(Server).all()
+    servers = db.query(Server).filter(Server.is_active == True).all()  # noqa: E712
     results = {}
     for s in servers:
         try:
-            await remote_sync(db, s)
+            ok = await remote_sync(db, s)
             s.last_sync = datetime.now(timezone.utc)
-            s.last_sync_status = "ok"
-            results[s.id] = True
+            s.last_sync_status = "ok" if ok else "error"
+            results[s.id] = ok
         except Exception as e:
             s.last_sync = datetime.now(timezone.utc)
             s.last_sync_status = "error"

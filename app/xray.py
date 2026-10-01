@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import subprocess
+import threading
 import uuid as _uuid
 from pathlib import Path
 from typing import Any
@@ -51,31 +52,42 @@ WARP_MTU = int(os.getenv("WARP_MTU", "1280"))
 # эндпоинта — "sendto: network is unreachable". Внешне это выглядит так, будто
 # WARP молча не пропускает трафик.
 WARP_IPV6 = os.getenv("WARP_IPV6", "0").strip().lower() in ("1", "true", "yes", "on")
-# Что заворачивать в WARP. Через запятую, синтаксис routing-правил Xray.
+# Что уводить в гео-выход. Синтаксис routing-правил Xray.
 #
-# ВНИМАНИЕ: не добавляйте сюда "geosite:google" целиком. В эту категорию входят
-# connectivitycheck.gstatic.com, dns.google, googleapis.com и mtalk.google.com
-# (FCM-пуши). Android определяет наличие интернета запросом к connectivitycheck:
-# если выход отвалится, телефон пометит соединение как «без доступа в интернет»
-# и приложения перестанут работать при живом туннеле. Держим список узким —
-# только то, где реально мешает гео-метка RU.
+# connectivitycheck.gstatic.com, dns.google и mtalk.google.com (FCM) входят в
+# geosite:google, но для внешнего выхода (нода/WARP) они отводятся в DIRECT
+# отдельным правилом выше — см. _GEO_BYPASS_DOMAINS. Иначе при падении выхода
+# Android решит, что интернета нет, и приложения встанут при живом туннеле.
 #
-# Antigravity: сайт и вход на antigravity.google, служебные запросы IDE на
-# *.codeium.com (построен на технологии Windsurf/Codeium), а сами вызовы модели —
-# в Google Cloud AI Companion. Без последних IDE отвечает "User location is not
-# supported for the API use" (FAILED_PRECONDITION). Эндпоинты перечислены
-# поимённо: заворачивать googleapis.com целиком нельзя.
+# Antigravity: сайт на antigravity.google, служебные запросы IDE на *.codeium.com,
+# вызовы модели — в Google Cloud AI Companion (*.googleapis.com). Без них IDE
+# отвечает "User location is not supported for the API use".
 #
-# Старое имя WARP_DOMAINS поддержано, чтобы не ломать существующие .env.
+# Список покрывает ВСЕ сервисы Google целиком. Раньше в гео-выход уходили только
+# отдельные домены (www.google.com, gemini…), а youtube.com, accounts.google.com,
+# play.google.com и прочие шли через IPv4 главного — и Google продолжал видеть RU.
+# Регион Google выставляет по cookie/аккаунту, собранным на ЛЮБОМ своём домене,
+# поэтому выпускать нужно всё семейство сразу.
 _GEO_DOMAINS_DEFAULT = (
-    "geosite:youtube,domain:googlevideo.com,domain:ytimg.com,domain:ggpht.com,"
-    "domain:youtube.com,domain:youtu.be,domain:youtubei.googleapis.com,domain:gvt1.com,"
-    "domain:www.google.com,domain:gemini.google.com,"
-    "domain:antigravity.google,domain:codeium.com,"
-    "domain:cloudcode-pa.googleapis.com,domain:cloudaicompanion.googleapis.com,"
-    "domain:generativelanguage.googleapis.com,"
+    "geosite:google,geosite:youtube,"
+    # TLD .google: antigravity.google, gemini.google, blog.google …
+    "domain:google,"
+    "domain:google.com,domain:google.ru,domain:googleapis.com,domain:gstatic.com,"
+    "domain:googleusercontent.com,domain:withgoogle.com,domain:gvt1.com,domain:gvt2.com,"
+    "domain:youtube.com,domain:youtu.be,domain:googlevideo.com,domain:ytimg.com,domain:ggpht.com,"
+    # Antigravity построен на Codeium/Windsurf — служебные запросы IDE идут сюда
+    "domain:codeium.com,"
     "domain:nvidia.com,domain:ngc.nvidia.com,domain:nvcr.io"
 )
+
+# Домены, которые НЕ стоит уводить на внешний выход (нода/WARP): если он ляжет,
+# Android по connectivitycheck решит, что интернета нет, а FCM-пуши встанут.
+# Для GEO-V6 правило не нужно — это тот же сервер, отдельной точки отказа нет.
+_GEO_BYPASS_DOMAINS = [
+    "full:connectivitycheck.gstatic.com",
+    "full:mtalk.google.com",
+    "domain:dns.google",
+]
 
 # Домены Meta (Instagram, Facebook, Threads, CDN), Cloudflare и NVIDIA для защиты от попадания в RU-каскад
 _META_DOMAINS = [
@@ -92,28 +104,26 @@ _META_DOMAINS = [
     "domain:nvcr.io",
 ]
 
-# Для IPv6-выхода список ДРУГОЙ: домен без AAAA-записи туда класть нельзя —
-# соединение оборвётся. Проверено: у antigravity.google и codeium.com AAAA нет,
-# поэтому их здесь нет. Модельные вызовы Antigravity идут в cloudaicompanion /
-# cloudcode-pa, у которых AAAA есть, так что он всё равно попадает под правило.
-_GEO_V6_DOMAINS_DEFAULT = (
-    "domain:gemini.google.com,domain:clients6.google.com,domain:www.google.com,"
-    "domain:cloudcode-pa.googleapis.com,domain:cloudaicompanion.googleapis.com,"
-    "domain:generativelanguage.googleapis.com,"
-    # Vertex AI: keyword, а не domain. У Xray "domain:aiplatform.googleapis.com"
-    # НЕ матчит us-central1-aiplatform.googleapis.com — это не поддомен, а другой
-    # первый лейбл. keyword ловит и apex, и все региональные эндпоинты; AAAA
-    # проверена и там, и там.
-    "keyword:aiplatform.googleapis.com"
-)
-
-# Пусто = взять дефолт под выбранный выход (у IPv6 он свой)
-GEO_DOMAINS = os.getenv("GEO_DOMAINS", os.getenv("WARP_DOMAINS", ""))
+# Отдельного списка для IPv6-выхода больше нет: GEO-V6 работает в режиме
+# UseIPv6v4, и домен без AAAA уходит по IPv4, а не обрывается.
+#
+# GEO_DOMAINS ДОБАВЛЯЕТСЯ к встроенному списку, а не заменяет его: в старых .env
+# лежат урезанные списки, и с ними Google снова видел бы RU. Старое имя
+# WARP_DOMAINS намеренно не читается по той же причине.
+GEO_DOMAINS = os.getenv("GEO_DOMAINS", "")
 
 # Выпускать гео-домены через IPv6 главного сервера. Работает потому, что Google
 # метит как RU только наш IPv4: по IPv6 тот же сервер определяется как PL.
-# ТРЕБУЕТ IPv6 внутри docker-сети backend — иначе "network is unreachable".
+# ТРЕБУЕТ IPv6 на хосте и внутри docker-сети backend. Без него UseIPv6v4 молча
+# уходит в IPv4 — и Google снова видит RU. Проверка: check_ipv6_egress().
 GEO_IPV6 = os.getenv("GEO_IPV6", "0").strip().lower() in ("1", "true", "yes", "on")
+
+# Локальный SOCKS-вход для проверки маршрутизации С СЕРВЕРА. ipregion/curl в
+# шелле хоста идут мимо Xray и всегда показывают «голый» IPv4 (RU у Google).
+# Через этот порт запрос проходит те же правила, что и трафик клиентов:
+#   bash <(curl -fsSL https://raw.githubusercontent.com/Davoyan/ipregion/main/ipregion.sh) -p 127.0.0.1:10808
+# Наружу порт опубликован только на 127.0.0.1 хоста (см. docker-compose.yml).
+DIAG_SOCKS_PORT = 10808
 
 # Своя нода как чистый выход для гео-чувствительных доменов — приоритетнее WARP.
 # GEO_NODE_NAME — поле name строки в таблице servers (как в админке); host, порт
@@ -152,9 +162,12 @@ def generate_uuid() -> str:
 
 def build_xray_config(db: Session) -> dict[str, Any]:
     """Собрать полный xray config.json из активных ключей в базе."""
+    # order_by обязателен: write_xray_config сравнивает текст конфига, и без
+    # стабильного порядка клиентов «изменение» находилось бы на ровном месте —
+    # с рестартом Xray и обрывом всех соединений.
     active_keys = db.query(VPNKey).filter(
         VPNKey.is_active == True  # noqa: E712
-    ).all()
+    ).order_by(VPNKey.id).all()
 
     # Фильтруем просроченные и перелимитные
     valid_keys = [k for k in active_keys if k.status == "active"]
@@ -335,6 +348,11 @@ def build_xray_config(db: Session) -> dict[str, Any]:
                 "protocol": "blackhole"
             }
         ],
+        # Catch-all правила (tcp,udp → DIRECT) в конце НЕТ, и это важно. При
+        # IPIfNonMatch Xray резолвит домен и проверяет geoip-правила только если
+        # на первом проходе не сработало НИ ОДНО правило. Catch-all срабатывал
+        # всегда, поэтому geoip:ru (каскад) и geoip:private для доменов были
+        # мёртвыми. Несовпавший трафик и так уходит в первый outbound — DIRECT.
         "routing": {
             "domainStrategy": "IPIfNonMatch",
             "rules": [
@@ -354,14 +372,29 @@ def build_xray_config(db: Session) -> dict[str, Any]:
                     "network": "udp",
                     "port": "443"
                 },
+                # Клиенты не должны попадать во внутреннюю docker-сеть и на
+                # localhost контейнера: там stats API Xray (10085), ufo-app:8000
+                # (доверяет X-Forwarded-For от кого угодно) и DIAG-SOCKS.
                 {
                     "type": "field",
-                    "outboundTag": "DIRECT",
-                    "network": "tcp,udp"
+                    "outboundTag": "BLACKHOLE",
+                    "ip": ["geoip:private"]
                 }
             ]
         }
     }
+
+    config["inbounds"].append({
+        "tag": "DIAG-SOCKS",
+        "listen": "0.0.0.0",
+        "port": DIAG_SOCKS_PORT,
+        "protocol": "socks",
+        "settings": {"auth": "noauth", "udp": False},
+        "sniffing": {
+            "enabled": True,
+            "destOverride": ["http", "tls"]
+        }
+    })
 
     # Добавляем REALITY inbound если ключи настроены
     if REALITY_PRIVATE_KEY and REALITY_SHORT_ID:
@@ -498,29 +531,32 @@ def build_xray_config(db: Session) -> dict[str, Any]:
         })
         geo_outbound_tag = "WARP"
 
-    # ВАЖНО: правила для YouTube и Meta стоят ВЫШЕ правил каскада.
+    # ВАЖНО: правила для Google/YouTube и Meta стоят ВЫШЕ правил каскада.
     # 1. Google отдает для *.googlevideo.com адреса GGC-кэшей внутри РФ, которые матчатся на "geoip:ru".
     #    Без опережающего правила YouTube уходил бы в RU-хаб, где он заблокирован/замедлен РКН!
+    #    Так же google.ru иначе поймался бы регэкспом \.ru$ и ушёл в RU-хаб.
     # 2. Instagram/Meta заблокированы в РФ, поэтому их трафик ВСЕГДА идёт через европейский выход.
-    # Для GEO-V6 используем только проверенные домены с AAAA-записями (_GEO_V6_DOMAINS_DEFAULT),
-    # если только GEO_DOMAINS не задан явно (НЕ наследуем WARP_DOMAINS, где лежат IPv4-only домены вроде nvidia).
-    if geo_outbound_tag == "GEO-V6":
-        geo_domains_raw = os.getenv("GEO_DOMAINS", "") or _GEO_V6_DOMAINS_DEFAULT
-    else:
-        geo_domains_raw = GEO_DOMAINS or _GEO_DOMAINS_DEFAULT
-    geo_domains = [d.strip() for d in geo_domains_raw.split(",") if d.strip()]
+    geo_domains: list[str] = []
+    for d in (_GEO_DOMAINS_DEFAULT + "," + GEO_DOMAINS).split(","):
+        d = d.strip()
+        if d and d not in geo_domains:
+            geo_domains.append(d)
 
     rules = config["routing"]["rules"]
-    catchall = rules.pop()  # убираем catch-all (tcp,udp → DIRECT)
 
-    # Правило для YouTube / Google (в спец-выход если настроен, либо в DIRECT)
-    yt_target = geo_outbound_tag if geo_outbound_tag else "DIRECT"
-    if geo_domains:
+    if geo_outbound_tag in ("GEO-EXIT", "WARP"):
         rules.append({
             "type": "field",
-            "outboundTag": yt_target,
-            "domain": geo_domains
+            "outboundTag": "DIRECT",
+            "domain": _GEO_BYPASS_DOMAINS
         })
+
+    # Google / YouTube — в гео-выход, если он настроен, иначе в DIRECT
+    rules.append({
+        "type": "field",
+        "outboundTag": geo_outbound_tag or "DIRECT",
+        "domain": geo_domains
+    })
 
     # Правило для Meta / Instagram (всегда в DIRECT)
     rules.append({
@@ -528,8 +564,6 @@ def build_xray_config(db: Session) -> dict[str, Any]:
         "outboundTag": "DIRECT",
         "domain": _META_DOMAINS
     })
-
-    rules.append(catchall)
 
     # Каскад: NL → RU для российского трафика
     if RU_SERVER_IP and RU_TRANSIT_UUID and RU_TRANSIT_PUBLIC_KEY:
@@ -561,9 +595,6 @@ def build_xray_config(db: Session) -> dict[str, Any]:
             "mux": {"enabled": False}
         })
 
-        # Вставляем RU-правила перед catch-all DIRECT правилом
-        rules = config["routing"]["rules"]
-        catchall = rules.pop()  # убираем catch-all (tcp,udp → DIRECT)
         rules.extend([
             {
                 "type": "field",
@@ -594,9 +625,52 @@ def build_xray_config(db: Session) -> dict[str, Any]:
                 "ip": ["geoip:ru"]
             }
         ])
-        rules.append(catchall)
 
     return config
+
+
+def check_ipv6_egress(timeout: float = 3.0) -> tuple[bool, str]:
+    """Есть ли выход в интернет по IPv6 из docker-сети backend.
+
+    Проверяется из контейнера приложения: он в той же сети backend, что и xray,
+    так что результат совпадает с тем, что увидит GEO-V6. TCP-коннект к
+    публичному DNS Google по IPv6 (порт 443 — у dns.google там DoH).
+    """
+    import socket
+    try:
+        sock = socket.create_connection(("2001:4860:4860::8888", 443), timeout=timeout)
+        sock.close()
+        return True, ""
+    except OSError as e:
+        return False, str(e)
+
+
+def log_geo_exit_status() -> None:
+    """Громко предупредить при старте, если GEO-V6 выбран, но IPv6 не работает.
+
+    UseIPv6v4 при отсутствии IPv6 молча уходит в IPv4 — снаружи это выглядит
+    как «всё работает, но Google показывает RU».
+    """
+    if GEO_NODE_NAME and GEO_TRANSIT_UUID:
+        logger.info("Гео-выход для Google/YouTube: нода %s (GEO-EXIT)", GEO_NODE_NAME)
+        return
+    if not GEO_IPV6:
+        if not (WARP_PRIVATE_KEY and WARP_PUBLIC_KEY and WARP_ADDRESS_V4):
+            logger.warning(
+                "Гео-выход не настроен — Google/YouTube идут через IPv4 главного "
+                "(Google видит его как RU). Задайте GEO_NODE_NAME или GEO_IPV6=1."
+            )
+        return
+    ok, err = check_ipv6_egress()
+    if ok:
+        logger.info("GEO-V6: выход по IPv6 из сети backend работает")
+    else:
+        logger.error(
+            "GEO-V6 включён, но выхода по IPv6 нет (%s). Google/YouTube уходят "
+            "по IPv4 и видят RU. Проверьте IPv6 на хосте (ip -6 addr show scope "
+            "global) и enable_ipv6 у сети backend: scripts/17-diagnose-geo.sh",
+            err,
+        )
 
 
 def write_xray_config(db: Session) -> bool:
@@ -814,16 +888,25 @@ def _nginx_graceful_reload() -> None:
         logger.debug("Nginx reload не выполнен — соединения к xray переустановятся сами")
 
 
+_sync_lock = threading.Lock()
+
+
 def sync_and_reload(db: Session) -> bool:
-    """Пересобрать конфиг и перезагрузить Xray (только если конфиг изменился)."""
-    changed = write_xray_config(db)
-    if not changed:
-        logger.debug("Xray конфиг не изменился — перезагрузка не нужна")
-        return True
-    reloaded = reload_xray()
-    if reloaded:
-        _nginx_graceful_reload()
-    return reloaded
+    """Пересобрать конфиг и перезагрузить Xray (только если конфиг изменился).
+
+    Вызывается из нескольких потоков сразу (фоновые задачи админки, бот,
+    проверка истечения). Без блокировки два вызова одновременно пишут конфиг и
+    дважды рестартят контейнер — клиенты рвутся два раза подряд.
+    """
+    with _sync_lock:
+        changed = write_xray_config(db)
+        if not changed:
+            logger.debug("Xray конфиг не изменился — перезагрузка не нужна")
+            return True
+        reloaded = reload_xray()
+        if reloaded:
+            _nginx_graceful_reload()
+        return reloaded
 
 
 # ── Генерация ссылок подключения ──
