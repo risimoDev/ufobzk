@@ -75,7 +75,11 @@ services:
 
   # ── Xray — VPN ядро ──
   xray:
-    image: teddysun/xray:latest
+    # Версия закреплена: начиная с 26.7.28 REALITY-сервер отвергает клиентов
+    # sing-box (Karing/Hiddify) — "reality verification failed" при любых
+    # realitySettings. 26.5.9 — последняя проверенная совместимая
+    # (scripts/20-reality-versions.sh). Перед обновлением прогнать скрипт 20.
+    image: teddysun/xray:26.5.9
     container_name: ufobzk-xray
     environment:
       - GODEBUG=tlsmlkem=0
