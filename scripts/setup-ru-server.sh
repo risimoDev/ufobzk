@@ -80,10 +80,12 @@ fi
 # ══════════════════════════════════════════
 
 log "Генерация ключей x25519 для REALITY (RU-сервер)..."
-KEY_OUTPUT=$(xray x25519 2>/dev/null)
+hash -r 2>/dev/null || true
+XRAY_BIN="$(command -v xray || echo /usr/local/bin/xray)"
+KEY_OUTPUT=$($XRAY_BIN x25519 2>&1)
 
-RU_PRIVATE_KEY=$(echo "$KEY_OUTPUT" | grep -i "private" | awk '{print $NF}')
-RU_PUBLIC_KEY=$(echo "$KEY_OUTPUT" | grep -iE "^(public ?key|password):" | awk '{print $NF}')
+RU_PRIVATE_KEY=$(echo "$KEY_OUTPUT" | grep -iE "private" | awk '{print $NF}' | tr -d '\r')
+RU_PUBLIC_KEY=$(echo "$KEY_OUTPUT" | grep -iE "(public|password)" | awk '{print $NF}' | tr -d '\r')
 RU_SHORT_ID=$(openssl rand -hex 8)
 
 [ -n "$RU_PRIVATE_KEY" ] || { err "Не удалось сгенерировать Private Key"; exit 1; }
@@ -95,7 +97,7 @@ ok "Ключи REALITY сгенерированы для RU-сервера"
 
 log "Создание конфигурации /etc/xray/config.json..."
 
-mkdir -p /etc/xray /var/log/xray
+mkdir -p /etc/xray /usr/local/etc/xray /var/log/xray
 
 cat > /etc/xray/config.json <<XRAYEOF
 {
@@ -277,6 +279,7 @@ cat > /etc/xray/config.json <<XRAYEOF
 }
 XRAYEOF
 
+cp -f /etc/xray/config.json /usr/local/etc/xray/config.json 2>/dev/null || true
 ok "Конфигурация Xray создана (каскад → NL-сервер)"
 
 # ══════════════════════════════════════════
