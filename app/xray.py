@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import re as _re_mod
 import subprocess
 import threading
 import uuid as _uuid
@@ -10,6 +11,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+import httpx
 from sqlalchemy.orm import Session
 
 from app.models import Server, VPNKey
@@ -112,11 +114,23 @@ _META_DOMAINS = [
 # WARP_DOMAINS намеренно не читается по той же причине.
 GEO_DOMAINS = os.getenv("GEO_DOMAINS", "")
 
-# Выпускать гео-домены через IPv6 главного сервера. Работает потому, что Google
-# метит как RU только наш IPv4: по IPv6 тот же сервер определяется как PL.
-# ТРЕБУЕТ IPv6 на хосте и внутри docker-сети backend. Без него UseIPv6v4 молча
-# уходит в IPv4 — и Google снова видит RU. Проверка: check_ipv6_egress().
-GEO_IPV6 = os.getenv("GEO_IPV6", "0").strip().lower() in ("1", "true", "yes", "on")
+# Выпускать гео-домены через IPv6 главного сервера (GEO_IPV6=1) или через IPv4
+# (GEO_IPV6=0, тогда Google идёт в DIRECT). Страну Google определяет поведенчески,
+# и она плавает: до октября 2026 IPv4 был RU, а IPv6 — PL, 21.10.2026 они
+# поменялись местами. ТРЕБУЕТ IPv6 на хосте и внутри docker-сети backend. Без
+# него UseIPv6v4 молча уходит в IPv4. Проверка: check_ipv6_egress().
+#
+# GEO_IPV6=auto — семью выбирает фоновая задача (app/tasks.py: periodic_geo_auto):
+# периодически спрашивает Google о стране по IPv4 и по IPv6 и переключает выход,
+# когда текущий адрес попадает в GEO_AUTO_BAD_COUNTRIES. Выбор хранится в
+# GEO_AUTO_STATE_PATH и переживает рестарт.
+_GEO_IPV6_RAW = os.getenv("GEO_IPV6", "0").strip().lower()
+GEO_IPV6_AUTO = _GEO_IPV6_RAW == "auto"
+GEO_IPV6 = _GEO_IPV6_RAW in ("1", "true", "yes", "on")
+GEO_AUTO_STATE_PATH = Path(os.getenv("GEO_AUTO_STATE_PATH", "data/geo_family"))
+GEO_AUTO_BAD_COUNTRIES = {
+    c.strip().upper() for c in os.getenv("GEO_AUTO_BAD_COUNTRIES", "RU,BY").split(",") if c.strip()
+}
 
 # Локальный SOCKS-вход для проверки маршрутизации С СЕРВЕРА. ipregion/curl в
 # шелле хоста идут мимо Xray и всегда показывают «голый» IPv4 (RU у Google).
@@ -484,7 +498,8 @@ def build_xray_config(db: Session) -> dict[str, Any]:
 
     # IPv6 главного сервера. Никаких внешних зависимостей: тот же сервер, но
     # Google метит как RU только его IPv4, а IPv6 видит как PL.
-    if geo_outbound_tag is None and not geo_node_requested and GEO_IPV6:
+    geo_v6 = GEO_IPV6 or (GEO_IPV6_AUTO and get_geo_family() == "v6")
+    if geo_outbound_tag is None and not geo_node_requested and geo_v6:
         config["outbounds"].append({
             "tag": "GEO-V6",
             "protocol": "freedom",
@@ -492,8 +507,9 @@ def build_xray_config(db: Session) -> dict[str, Any]:
         })
         geo_outbound_tag = "GEO-V6"
 
+    # В режиме auto семья «v4» означает именно IPv4 главного (DIRECT), не WARP.
     if (geo_outbound_tag is None and not geo_node_requested and not GEO_IPV6
-            and WARP_PRIVATE_KEY and WARP_PUBLIC_KEY and WARP_ADDRESS_V4):
+            and not GEO_IPV6_AUTO and WARP_PRIVATE_KEY and WARP_PUBLIC_KEY and WARP_ADDRESS_V4):
         # По умолчанию туннель строго IPv4 — см. комментарий у WARP_IPV6
         warp_address = [f"{WARP_ADDRESS_V4}/32"]
         warp_allowed_ips = ["0.0.0.0/0"]
@@ -645,6 +661,55 @@ def check_ipv6_egress(timeout: float = 3.0) -> tuple[bool, str]:
         return False, str(e)
 
 
+def get_geo_family() -> str:
+    """Через какую семью адресов сейчас выпускается Google в режиме GEO_IPV6=auto."""
+    try:
+        family = GEO_AUTO_STATE_PATH.read_text().strip()
+    except OSError:
+        family = ""
+    return family if family in ("v4", "v6") else "v4"
+
+
+def set_geo_family(family: str) -> None:
+    GEO_AUTO_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    GEO_AUTO_STATE_PATH.write_text(family)
+
+
+# Страна, которую Google проставляет на главной (hl_GL, например "ru_RU").
+# Тот же разбор, что в scripts/17-diagnose-geo.sh и ipregion.sh: последнее
+# совпадение в первой строке, где оно есть.
+_GOOGLE_COUNTRY_RE = _re_mod.compile(r'"[a-z]{2}_([A-Z]{2})"')
+_BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/130.0 Safari/537.36"
+)
+
+
+def detect_google_country(family: str, timeout: float = 15.0) -> str | None:
+    """Какую страну Google видит у главного сервера по IPv4 ("v4") или IPv6 ("v6").
+
+    Запрос идёт из контейнера приложения напрямую, мимо Xray: он в той же сети
+    backend и выходит наружу с теми же адресами хоста, что и Xray. Без cookie —
+    Google решает только по адресу. None — если проверить не удалось.
+    """
+    local_address = "0.0.0.0" if family == "v4" else "::"
+    try:
+        with httpx.Client(
+            transport=httpx.HTTPTransport(local_address=local_address),
+            timeout=timeout,
+            headers={"User-Agent": _BROWSER_UA},
+        ) as client:
+            resp = client.get("https://www.google.com/")
+    except httpx.HTTPError as e:
+        logger.debug("Google по %s не ответил: %s", family, e)
+        return None
+    for line in resp.text.splitlines():
+        found = _GOOGLE_COUNTRY_RE.findall(line)
+        if found:
+            return found[-1]
+    return None
+
+
 def log_geo_exit_status() -> None:
     """Громко предупредить при старте, если GEO-V6 выбран, но IPv6 не работает.
 
@@ -654,11 +719,14 @@ def log_geo_exit_status() -> None:
     if GEO_NODE_NAME and GEO_TRANSIT_UUID:
         logger.info("Гео-выход для Google/YouTube: нода %s (GEO-EXIT)", GEO_NODE_NAME)
         return
+    if GEO_IPV6_AUTO:
+        logger.info("GEO-AUTO: семья выбирается автоматически, сейчас %s", get_geo_family())
+        return
     if not GEO_IPV6:
         if not (WARP_PRIVATE_KEY and WARP_PUBLIC_KEY and WARP_ADDRESS_V4):
-            logger.warning(
-                "Гео-выход не настроен — Google/YouTube идут через IPv4 главного "
-                "(Google видит его как RU). Задайте GEO_NODE_NAME или GEO_IPV6=1."
+            logger.info(
+                "Google/YouTube идут через IPv4 главного. Если Google видит его "
+                "как RU — GEO_IPV6=1 или GEO_IPV6=auto (scripts/17-diagnose-geo.sh)."
             )
         return
     ok, err = check_ipv6_egress()

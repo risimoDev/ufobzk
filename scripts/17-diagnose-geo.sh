@@ -54,7 +54,7 @@ if [ -z "$V6_EXT" ]; then
 else
   kv "Google по IPv6 хоста" "$(google_country -6)"
 fi
-kv "Google по IPv4 хоста" "$(google_country -4)  (ожидаемо RU — это НЕ то, что видят клиенты)"
+kv "Google по IPv4 хоста" "$(google_country -4)"
 
 # ── 2. IPv6 в docker ──
 sec "2. DOCKER-СЕТЬ BACKEND"
@@ -79,6 +79,10 @@ sec "3. ГЕО-ВЫХОД В .env И config.json"
 kv "GEO_NODE_NAME" "$(getenv GEO_NODE_NAME)"
 kv "GEO_TRANSIT_UUID" "$( [ -n "$(getenv GEO_TRANSIT_UUID)" ] && echo задан || echo ПУСТО)"
 kv "GEO_IPV6" "$(getenv GEO_IPV6)"
+if [ "$(getenv GEO_IPV6)" = "auto" ]; then
+  kv "GEO-AUTO выбрал" "$(docker exec ufobzk-app cat data/geo_family 2>/dev/null || echo "v4 (по умолчанию)")"
+  echo "  История переключений: docker logs ufobzk-app 2>&1 | grep GEO-AUTO"
+fi
 kv "GEO_DOMAINS (доп.)" "$(getenv GEO_DOMAINS)"
 docker exec ufobzk-xray cat /etc/xray/config.json 2>/dev/null | python3 -c "
 import json, sys

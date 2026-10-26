@@ -7,7 +7,17 @@ from datetime import datetime
 
 from app.models import SessionLocal, TrafficSnapshot, VPNKey
 from app.remote_xray import sync_all_servers
-from app.xray import get_all_xray_stats, sync_and_reload
+from app.xray import (
+    GEO_AUTO_BAD_COUNTRIES,
+    GEO_IPV6_AUTO,
+    GEO_NODE_NAME,
+    GEO_TRANSIT_UUID,
+    detect_google_country,
+    get_all_xray_stats,
+    get_geo_family,
+    set_geo_family,
+    sync_and_reload,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +28,8 @@ REMOTE_SYNC_INTERVAL = 300       # 5 минут
 BACKUP_INTERVAL = 86400          # 24 часа
 SNAPSHOT_RETENTION_DAYS = 30     # хранить снимки трафика 30 дней (совпадает с макс. периодом аналитики)
 SNAPSHOT_CLEANUP_INTERVAL = 86400  # чистка раз в сутки
+GEO_AUTO_INTERVAL = 1800         # проверка страны Google — 30 минут
+GEO_AUTO_RECHECK = 300           # повторная проверка перед переключением — 5 минут
 
 # Последнее «сырое» значение счётчика Xray по UUID (в памяти процесса).
 # Нужно для корректного подсчёта дельт: счётчики Xray обнуляются при рестарте
@@ -248,6 +260,89 @@ async def periodic_snapshot_cleanup() -> None:
         await asyncio.sleep(SNAPSHOT_CLEANUP_INTERVAL)
 
 
+async def _notify_admin(text: str) -> None:
+    """Короткое сообщение суперадмину в Telegram (без ошибок наружу)."""
+    import httpx
+    from app.backup import SUPERADMIN_CHAT_ID, TELEGRAM_TOKEN
+
+    if not TELEGRAM_TOKEN or not SUPERADMIN_CHAT_ID:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            await client.post(
+                f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+                data={"chat_id": SUPERADMIN_CHAT_ID, "text": text},
+            )
+    except Exception as e:
+        logger.warning("Не удалось отправить уведомление в Telegram: %s", e)
+
+
+async def periodic_geo_auto() -> None:
+    """GEO_IPV6=auto: держать Google на той семье адресов, которую он не видит как RU.
+
+    Страна Google у главного сервера плавает (IPv4 и IPv6 уже менялись местами).
+    Текущий выход остаётся, пока он в порядке — лишние переключения меняют
+    регион в cookie пользователей. Переключение — только если текущий адрес
+    плохой, другой хороший, и это подтвердилось двумя проверками подряд.
+    """
+    if not GEO_IPV6_AUTO:
+        return
+    if GEO_NODE_NAME and GEO_TRANSIT_UUID:
+        logger.info("GEO-AUTO выключен: задан GEO_NODE_NAME, Google идёт через ноду")
+        return
+
+    await asyncio.sleep(60)
+    confirmed_bad = 0
+    alerted = False
+    while True:
+        delay = GEO_AUTO_INTERVAL
+        try:
+            current = get_geo_family()
+            other = "v6" if current == "v4" else "v4"
+            cur_country, other_country = await asyncio.gather(
+                asyncio.to_thread(detect_google_country, current),
+                asyncio.to_thread(detect_google_country, other),
+            )
+            logger.info("GEO-AUTO: выход %s, Google видит %s=%s, %s=%s",
+                        current, current, cur_country, other, other_country)
+
+            current_ok = cur_country is not None and cur_country not in GEO_AUTO_BAD_COUNTRIES
+            other_ok = other_country is not None and other_country not in GEO_AUTO_BAD_COUNTRIES
+            if current_ok:
+                confirmed_bad = 0
+                alerted = False
+            elif not other_ok:
+                confirmed_bad = 0
+                if not alerted and cur_country and other_country:
+                    alerted = True
+                    logger.error("GEO-AUTO: Google видит оба адреса как плохие (%s / %s)",
+                                 cur_country, other_country)
+                    await _notify_admin(
+                        f"⚠️ Google видит главный сервер как {cur_country} по {current} "
+                        f"и {other_country} по {other}. Gemini может не работать — "
+                        "нужен выход через ноду (GEO_NODE_NAME)."
+                    )
+            else:
+                confirmed_bad += 1
+                if confirmed_bad < 2:
+                    delay = GEO_AUTO_RECHECK
+                else:
+                    confirmed_bad = 0
+                    set_geo_family(other)
+                    await asyncio.to_thread(_resync_xray)
+                    logger.warning("GEO-AUTO: Google переключён %s → %s (%s → %s)",
+                                   current, other, cur_country, other_country)
+                    await _notify_admin(
+                        f"🔀 Google/Gemini переключён с {current} ({cur_country}) "
+                        f"на {other} ({other_country})."
+                    )
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.error("Ошибка GEO-AUTO: %s", e)
+        await asyncio.sleep(delay)
+
+
 async def run_background_tasks() -> None:
     """Запускает все фоновые задачи параллельно."""
     tasks = [
@@ -256,6 +351,7 @@ async def run_background_tasks() -> None:
         asyncio.create_task(periodic_remote_sync()),
         asyncio.create_task(periodic_backup()),
         asyncio.create_task(periodic_snapshot_cleanup()),
+        asyncio.create_task(periodic_geo_auto()),
     ]
     try:
         await asyncio.gather(*tasks)

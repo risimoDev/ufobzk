@@ -19,8 +19,8 @@ services:
         max-size: "10m"
         max-file: "3"
     ports:
-      - "80:80"
-      - "443:443"
+      - "${MAIN_WEB_IP:-0.0.0.0}:80:80"
+      - "${MAIN_WEB_IP:-0.0.0.0}:443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf.template:ro
       - certbot-webroot:/var/www/certbot:ro
@@ -89,7 +89,7 @@ services:
         max-file: "3"
     ports:
       # REALITY порт — прямое подключение без CDN
-      - "${REALITY_PORT:-2053}:443"
+      - "${REALITY_BIND_IP:-0.0.0.0}:${REALITY_PORT:-2053}:443"
       # DIAG-SOCKS: проверка гео-маршрутизации с самого сервера, только localhost.
       # ipregion.sh ... -p 127.0.0.1:10808 — запросы идут через правила Xray.
       - "127.0.0.1:10808:10808"
