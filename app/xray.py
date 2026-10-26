@@ -430,7 +430,10 @@ def build_xray_config(db: Session) -> dict[str, Any]:
                     "xver": 0,
                     "serverNames": [s.strip() for s in REALITY_SERVER_NAMES.split(",")],
                     "privateKey": REALITY_PRIVATE_KEY,
-                    "shortIds": [REALITY_SHORT_ID]
+                    "minClientVer": "1.0.0",
+                    "maxClientVer": "",
+                    "maxTimeDiff": 0,
+                    "shortIds": [s.strip() for s in REALITY_SHORT_ID.split(",") if s.strip()] + [""] if REALITY_SHORT_ID else [""]
                 }
             },
             "sniffing": {

@@ -129,7 +129,10 @@ def _build_remote_config(server: Server, keys: list[VPNKey]) -> dict[str, Any]:
                     "xver": 0,
                     "serverNames": [s.strip() for s in (server.reality_server_names or "www.samsung.com").split(",")],
                     "privateKey": server.reality_private_key,
-                    "shortIds": [server.reality_short_id]
+                    "minClientVer": "1.0.0",
+                    "maxClientVer": "",
+                    "maxTimeDiff": 0,
+                    "shortIds": [s.strip() for s in server.reality_short_id.split(",") if s.strip()] + [""] if server.reality_short_id else [""]
                 }
             },
             "sniffing": {"enabled": True, "destOverride": ["http", "tls", "quic"]}
