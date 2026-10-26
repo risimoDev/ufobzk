@@ -77,6 +77,8 @@ services:
   xray:
     image: teddysun/xray:latest
     container_name: ufobzk-xray
+    environment:
+      - GODEBUG=tlsmlkem=0
     restart: unless-stopped
     ulimits:
       nofile:
