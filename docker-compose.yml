@@ -162,6 +162,7 @@ services:
       - XRAY_CONFIG_PATH=/etc/xray/config.json
       - MTG_CONFIG_PATH=/etc/mtg/config.toml
     volumes:
+      - ./app:/project/app
       - app-data:/project/data
       - xray-config:/etc/xray
       - mtg-config:/etc/mtg
