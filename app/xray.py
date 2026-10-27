@@ -147,6 +147,17 @@ DIAG_SOCKS_PORT = 10808
 GEO_NODE_NAME = os.getenv("GEO_NODE_NAME", "")
 GEO_TRANSIT_UUID = os.getenv("GEO_TRANSIT_UUID", "")
 
+# Отдельный сервер-выход, которого нет в таблице servers (не нода для
+# пользователей, голый xray — scripts/22-geo-exit-setup.sh печатает эти строки).
+# Приоритетнее GEO_NODE_NAME. Включается, когда заданы HOST + UUID + PUBLIC_KEY.
+GEO_EXIT_HOST = os.getenv("GEO_EXIT_HOST", "")
+GEO_EXIT_PORT = int(os.getenv("GEO_EXIT_PORT", "443"))
+GEO_EXIT_UUID = os.getenv("GEO_EXIT_UUID", "")
+GEO_EXIT_PUBLIC_KEY = os.getenv("GEO_EXIT_PUBLIC_KEY", "")
+GEO_EXIT_SHORT_ID = os.getenv("GEO_EXIT_SHORT_ID", "")
+GEO_EXIT_SN = os.getenv("GEO_EXIT_SN", "www.samsung.com")
+GEO_EXIT_STATIC = bool(GEO_EXIT_HOST and GEO_EXIT_UUID and GEO_EXIT_PUBLIC_KEY)
+
 # Порты
 VLESS_WS_PORT = int(os.getenv("VLESS_WS_PORT", "443"))
 REALITY_PORT = int(os.getenv("REALITY_PORT", "2053"))
@@ -449,7 +460,37 @@ def build_xray_config(db: Session) -> dict[str, Any]:
     geo_outbound_tag = None
     # Если нода выбрана явно, отката на WARP быть не должно: при опечатке в
     # имени тихо уехать на другой выход хуже, чем остаться на DIRECT.
-    geo_node_requested = bool(GEO_NODE_NAME and GEO_TRANSIT_UUID)
+    geo_node_requested = bool(GEO_NODE_NAME and GEO_TRANSIT_UUID) and not GEO_EXIT_STATIC
+
+    if GEO_EXIT_STATIC:
+        config["outbounds"].append({
+            "tag": "GEO-EXIT",
+            "protocol": "vless",
+            "settings": {
+                "vnext": [{
+                    "address": GEO_EXIT_HOST,
+                    "port": GEO_EXIT_PORT,
+                    "users": [{
+                        "id": GEO_EXIT_UUID,
+                        "encryption": "none",
+                        "flow": "xtls-rprx-vision"
+                    }]
+                }]
+            },
+            "streamSettings": {
+                "network": "tcp",
+                "security": "reality",
+                "realitySettings": {
+                    "show": False,
+                    "fingerprint": "chrome",
+                    "serverName": GEO_EXIT_SN,
+                    "publicKey": GEO_EXIT_PUBLIC_KEY,
+                    "shortId": GEO_EXIT_SHORT_ID
+                }
+            },
+            "mux": {"enabled": False}
+        })
+        geo_outbound_tag = "GEO-EXIT"
 
     if geo_node_requested:
         geo_node = db.query(Server).filter(
@@ -719,6 +760,9 @@ def log_geo_exit_status() -> None:
     UseIPv6v4 при отсутствии IPv6 молча уходит в IPv4 — снаружи это выглядит
     как «всё работает, но Google показывает RU».
     """
+    if GEO_EXIT_STATIC:
+        logger.info("Гео-выход для Google/YouTube: сервер %s:%s (GEO-EXIT)", GEO_EXIT_HOST, GEO_EXIT_PORT)
+        return
     if GEO_NODE_NAME and GEO_TRANSIT_UUID:
         logger.info("Гео-выход для Google/YouTube: нода %s (GEO-EXIT)", GEO_NODE_NAME)
         return

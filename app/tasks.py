@@ -9,6 +9,7 @@ from app.models import SessionLocal, TrafficSnapshot, VPNKey
 from app.remote_xray import sync_all_servers
 from app.xray import (
     GEO_AUTO_BAD_COUNTRIES,
+    GEO_EXIT_STATIC,
     GEO_IPV6_AUTO,
     GEO_NODE_NAME,
     GEO_TRANSIT_UUID,
@@ -287,8 +288,8 @@ async def periodic_geo_auto() -> None:
     """
     if not GEO_IPV6_AUTO:
         return
-    if GEO_NODE_NAME and GEO_TRANSIT_UUID:
-        logger.info("GEO-AUTO выключен: задан GEO_NODE_NAME, Google идёт через ноду")
+    if GEO_EXIT_STATIC or (GEO_NODE_NAME and GEO_TRANSIT_UUID):
+        logger.info("GEO-AUTO выключен: задан GEO-EXIT, Google идёт через отдельный выход")
         return
 
     await asyncio.sleep(60)

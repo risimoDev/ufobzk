@@ -76,6 +76,7 @@ kv "IPv6-выход из backend" "${APP_V6:-не удалось провери�
 
 # ── 3. Что выбрано в конфиге ──
 sec "3. ГЕО-ВЫХОД В .env И config.json"
+kv "GEO_EXIT_HOST" "$(getenv GEO_EXIT_HOST)"
 kv "GEO_NODE_NAME" "$(getenv GEO_NODE_NAME)"
 kv "GEO_TRANSIT_UUID" "$( [ -n "$(getenv GEO_TRANSIT_UUID)" ] && echo задан || echo ПУСТО)"
 kv "GEO_IPV6" "$(getenv GEO_IPV6)"
