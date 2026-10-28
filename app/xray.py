@@ -156,7 +156,13 @@ GEO_EXIT_UUID = os.getenv("GEO_EXIT_UUID", "")
 GEO_EXIT_PUBLIC_KEY = os.getenv("GEO_EXIT_PUBLIC_KEY", "")
 GEO_EXIT_SHORT_ID = os.getenv("GEO_EXIT_SHORT_ID", "")
 GEO_EXIT_SN = os.getenv("GEO_EXIT_SN", "www.samsung.com")
-GEO_EXIT_STATIC = bool(GEO_EXIT_HOST and GEO_EXIT_UUID and GEO_EXIT_PUBLIC_KEY)
+# GEO_EXIT_MODE=reverse — выход сам подключается к REALITY главного (VLESS
+# reverse, Xray 25.9+): нужен, когда главный не может открыть TCP к выходу
+# (так режет Hostkey ↔ наш хостер), а обратно — может. Тогда нужен только
+# GEO_EXIT_UUID: клиент с reverse добавляется в VLESS-REALITY, а GEO-EXIT —
+# это его обратный туннель. Выход ставится scripts/22-geo-exit-setup.sh reverse.
+GEO_EXIT_REVERSE = os.getenv("GEO_EXIT_MODE", "").strip().lower() == "reverse"
+GEO_EXIT_STATIC = bool(GEO_EXIT_UUID and (GEO_EXIT_REVERSE or (GEO_EXIT_HOST and GEO_EXIT_PUBLIC_KEY)))
 
 # Порты
 VLESS_WS_PORT = int(os.getenv("VLESS_WS_PORT", "443"))
@@ -231,6 +237,14 @@ def build_xray_config(db: Session) -> dict[str, Any]:
                 "flow": "xtls-rprx-vision",
                 "level": _level(key)
             })
+    # Обратный туннель от сервера-выхода: этот UUID не ходит наружу как
+    # пользователь, его соединения становятся outbound'ом GEO-EXIT.
+    if GEO_EXIT_STATIC and GEO_EXIT_REVERSE:
+        reality_clients.append({
+            "id": GEO_EXIT_UUID,
+            "flow": "xtls-rprx-vision",
+            "reverse": {"tag": "GEO-EXIT"}
+        })
 
     # Строим policy levels: 0 = без ограничений, 1+ = ограниченные
     policy_levels: dict[str, Any] = {
@@ -462,7 +476,9 @@ def build_xray_config(db: Session) -> dict[str, Any]:
     # имени тихо уехать на другой выход хуже, чем остаться на DIRECT.
     geo_node_requested = bool(GEO_NODE_NAME and GEO_TRANSIT_UUID) and not GEO_EXIT_STATIC
 
-    if GEO_EXIT_STATIC:
+    if GEO_EXIT_STATIC and GEO_EXIT_REVERSE:
+        geo_outbound_tag = "GEO-EXIT"
+    elif GEO_EXIT_STATIC:
         config["outbounds"].append({
             "tag": "GEO-EXIT",
             "protocol": "vless",
@@ -760,6 +776,9 @@ def log_geo_exit_status() -> None:
     UseIPv6v4 при отсутствии IPv6 молча уходит в IPv4 — снаружи это выглядит
     как «всё работает, но Google показывает RU».
     """
+    if GEO_EXIT_STATIC and GEO_EXIT_REVERSE:
+        logger.info("Гео-выход для Google/YouTube: обратный туннель от сервера-выхода (GEO-EXIT)")
+        return
     if GEO_EXIT_STATIC:
         logger.info("Гео-выход для Google/YouTube: сервер %s:%s (GEO-EXIT)", GEO_EXIT_HOST, GEO_EXIT_PORT)
         return
