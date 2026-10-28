@@ -239,10 +239,11 @@ def build_xray_config(db: Session) -> dict[str, Any]:
             })
     # Обратный туннель от сервера-выхода: этот UUID не ходит наружу как
     # пользователь, его соединения становятся outbound'ом GEO-EXIT.
+    # Без vision: с ним туннель поднимается, но ответы обратно не идут.
     if GEO_EXIT_STATIC and GEO_EXIT_REVERSE:
         reality_clients.append({
             "id": GEO_EXIT_UUID,
-            "flow": "xtls-rprx-vision",
+            "flow": "",
             "reverse": {"tag": "GEO-EXIT"}
         })
 

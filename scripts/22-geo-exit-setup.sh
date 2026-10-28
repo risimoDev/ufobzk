@@ -51,7 +51,6 @@ if [ "$1" = "reverse" ]; then
         "port": 443,
         "id": "$UUID",
         "encryption": "none",
-        "flow": "xtls-rprx-vision",
         "reverse": {"tag": "r-in"}
       },
       "streamSettings": {
