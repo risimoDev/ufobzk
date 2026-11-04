@@ -104,6 +104,12 @@ class Server(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     last_sync = Column(DateTime, nullable=True)
     last_sync_status = Column(String(16), nullable=True)
+    hysteria_port = Column(Integer, nullable=True, default=8443)
+    tuic_port = Column(Integer, nullable=True, default=8444)
+    hysteria_sni = Column(String(128), nullable=True, default="bing.com")
+    tuic_sni = Column(String(128), nullable=True, default="bing.com")
+    cascade_domains = Column(Text, nullable=True)
+    is_blocked_ru = Column(Boolean, default=False)
 
 
 class InviteKey(Base):
@@ -607,7 +613,30 @@ DEFAULT_SETTINGS = {
 }
 
 
+def _safe_migrate_sqlite():
+    """Безопасное добавление недостающих колонок в существующие таблицы SQLite."""
+    try:
+        with engine.connect() as conn:
+            res = conn.exec_driver_sql("PRAGMA table_info(servers)").fetchall()
+            existing_cols = {r[1] for r in res}
+            new_cols = [
+                ("hysteria_port", "INTEGER DEFAULT 8443"),
+                ("tuic_port", "INTEGER DEFAULT 8444"),
+                ("hysteria_sni", "VARCHAR(128) DEFAULT 'bing.com'"),
+                ("tuic_sni", "VARCHAR(128) DEFAULT 'bing.com'"),
+                ("cascade_domains", "TEXT"),
+                ("is_blocked_ru", "BOOLEAN DEFAULT 0"),
+            ]
+            for col_name, col_type in new_cols:
+                if col_name not in existing_cols:
+                    conn.exec_driver_sql(f"ALTER TABLE servers ADD COLUMN {col_name} {col_type}")
+    except Exception as e:
+        import logging as _logging
+        _logging.getLogger(__name__).debug("SQLite safe migration: %s", e)
+
+
 def init_db():
+    _safe_migrate_sqlite()
     Base.metadata.create_all(bind=engine)
     _db = SessionLocal()
     try:

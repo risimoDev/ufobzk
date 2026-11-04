@@ -1085,7 +1085,7 @@ def build_vless_reality_link(key: VPNKey, server_ip: str, port: int = 443, remar
 
 
 def build_vless_grpc_link(key: VPNKey, server_domain: str, port: int = 443, remark: str = "") -> str:
-    """VLESS gRPC + TLS ссылка (HTTP/2, сложнее fingerprint для DPI)."""
+    """VLESS gRPC + TLS ссылка (устаревший, оставлен для обратной совместимости)."""
     if not remark:
         remark = f"{key.name}@{server_domain}-grpc"
     params = (
@@ -1096,44 +1096,47 @@ def build_vless_grpc_link(key: VPNKey, server_domain: str, port: int = 443, rema
     return f"vless://{key.uuid}@{server_domain}:{port}?{params}#{quote(remark)}"
 
 
-def get_user_links(key: VPNKey) -> list[dict[str, str]]:
-    """Получить ссылки подключения для ключа (основной NL-сервер).
+def build_hysteria2_link(key: VPNKey, host: str, port: int = 8443, sni: str = "bing.com", remark: str = "") -> str:
+    """Hysteria 2 (QUIC / UDP) ссылка подключения — устойчива к потерям пакетов и LTE-джиттеру."""
+    if not remark:
+        remark = f"{key.name}@hy2"
+    return f"hysteria2://{key.uuid}@{host}:{port}/?insecure=1&sni={sni}#{quote(remark)}"
 
-    RU-сервер намеренно исключён: он используется только как EXIT-узел
-    каскада для российского трафика (NL→RU outbound). Прямые подключения
-    пользователей к RU-серверу не нужны и не будут работать корректно.
-    Remote серверы (Finland, NL-2, …) добавляются через get_all_links.
+
+def build_tuic_link(key: VPNKey, host: str, port: int = 8444, sni: str = "bing.com", remark: str = "") -> str:
+    """TUIC v5 (QUIC / UDP) ссылка подключения — высокоскоростной 0-RTT прокси."""
+    if not remark:
+        remark = f"{key.name}@tuic"
+    return f"tuic://{key.uuid}:{key.uuid}@{host}:{port}/?congestion_control=bbr&alpn=h3&sni={sni}&allow_insecure=1#{quote(remark)}"
+
+
+def get_user_links(key: VPNKey) -> list[dict[str, str]]:
+    """Получить ссылки подключения для ключа (основной сервер).
+
+    Устаревшие gRPC и WebSocket исключены.
+    Оставлены современные, устойчивые к ТСПУ протоколы:
+    - VLESS-REALITY (эталонный TCP-камуфляж под TLS 1.3)
+    - VLESS-XHTTP (потоковый чанк-транспорт с обходом DPI)
     """
     links = []
 
-    # Основной сервер (управляющий) — WS/XHTTP/gRPC через CDN+nginx
-    if DOMAIN:
-        links.append({
-            "name": f"🇳🇱 Европа (WS+TLS)",
-            "link": build_vless_ws_link(key, DOMAIN, VLESS_WS_PORT, f"NL-{key.name}"),
-            "type": "vless-ws"
-        })
-        links.append({
-            "name": f"\U0001f1f3\U0001f1f1 Европа (XHTTP+TLS)",
-            "link": build_vless_xhttp_link(key, DOMAIN, VLESS_WS_PORT, f"NL-XHTTP-{key.name}"),
-            "type": "vless-xhttp"
-        })
-        links.append({
-            "name": f"🇳🇱 Европа (gRPC+TLS)",
-            "link": build_vless_grpc_link(key, DOMAIN, VLESS_WS_PORT, f"NL-gRPC-{key.name}"),
-            "type": "vless-grpc"
-        })
-
-    # NL сервер через REALITY (прямое подключение, обходит DPI)
+    # 1. Основной сервер через REALITY (наивысшая надежность против ТСПУ)
     if NL_SERVER_IP and REALITY_PUBLIC_KEY:
         links.append({
-            "name": f"🇳🇱 Европа (REALITY)",
+            "name": "🇪🇺 Европа (REALITY)",
             "link": build_vless_reality_link(key, NL_SERVER_IP, REALITY_PORT, f"NL-Reality-{key.name}"),
             "type": "vless-reality"
         })
 
-    return links
+    # 2. Основной сервер через XHTTP (современный преемник gRPC/WS)
+    if DOMAIN:
+        links.append({
+            "name": "🇪🇺 Европа (XHTTP)",
+            "link": build_vless_xhttp_link(key, DOMAIN, VLESS_WS_PORT, f"NL-XHTTP-{key.name}"),
+            "type": "vless-xhttp"
+        })
 
+    return links
 
 import re as _re
 
@@ -1147,58 +1150,70 @@ def _host_is_ip(host: str) -> bool:
 def get_server_links(key: VPNKey, server: Server) -> list[dict[str, str]]:
     """Ссылки для ключа на конкретном remote сервере.
 
-    Если host — IP адрес (нет nginx/TLS): только REALITY (работает без nginx).
-    Если host — доменное имя: WS/XHTTP/gRPC+TLS + REALITY.
+    - Серверы с ролью 'cascade' или 'ru' исключены из клиентской подписки (транзитные узлы).
+    - Для серверов с ролью 'direct' / 'remote' выдаются современные протоколы:
+      REALITY (TCP), Hysteria 2 (UDP/QUIC) и TUIC v5 (UDP/QUIC).
     """
+    server_role = getattr(server, "role", "remote") or "remote"
+    if server_role in ("cascade", "ru"):
+        return []
+
     links = []
     host = server.host
-    ws_port = server.ws_port or 443
-    reality_port = server.reality_port or 2053
+    reality_port = server.reality_port or 443
     suffix = server.name.replace(" ", "-")
-    is_ip = _host_is_ip(host)
+    region_prefix = (server.region or "EU").upper()
 
-    if not is_ip:
-        # Домен с nginx/TLS — WS/XHTTP/gRPC работают
-        links.append({
-            "name": f"{server.region.upper()}-{suffix} (WS+TLS)",
-            "link": build_vless_ws_link(key, host, ws_port, f"{suffix}-{key.name}"),
-            "type": "vless-ws",
-            "server_id": server.id,
-            "region": server.region,
-        })
-        links.append({
-            "name": f"{server.region.upper()}-{suffix} (XHTTP+TLS)",
-            "link": build_vless_xhttp_link(key, host, ws_port, f"{suffix}-XHTTP-{key.name}"),
-            "type": "vless-xhttp",
-            "server_id": server.id,
-            "region": server.region,
-        })
-        links.append({
-            "name": f"{server.region.upper()}-{suffix} (gRPC+TLS)",
-            "link": build_vless_grpc_link(key, host, ws_port, f"{suffix}-gRPC-{key.name}"),
-            "type": "vless-grpc",
-            "server_id": server.id,
-            "region": server.region,
-        })
-
-    # REALITY — работает на IP напрямую, не требует nginx
+    # 1. REALITY — эталонный TCP-камуфляж
     if server.reality_public_key and server.reality_short_id:
-        sn = (server.reality_server_names or "www.samsung.com").split(",")[0].strip()
+        sn = (server.reality_server_names or "github.com").split(",")[0].strip()
         remark = f"{suffix}-Reality-{key.name}"
         params = (
             f"type=tcp&security=reality&sni={sn}"
             f"&fp=chrome&pbk={server.reality_public_key}"
             f"&sid={server.reality_short_id}&flow=xtls-rprx-vision"
         )
-        from urllib.parse import quote as _quote
-        link = f"vless://{key.uuid}@{host}:{reality_port}?{params}#{_quote(remark)}"
+        link = f"vless://{key.uuid}@{host}:{reality_port}?{params}#{quote(remark)}"
         links.append({
-            "name": f"{server.region.upper()}-{suffix} (REALITY)",
+            "name": f"{region_prefix}-{suffix} (REALITY)",
             "link": link,
             "type": "vless-reality",
             "server_id": server.id,
             "region": server.region,
         })
+
+    # 2. Hysteria 2 — высокоскоростной UDP / QUIC (пробивает LTE и подавляет дропы)
+    hy_port = getattr(server, "hysteria_port", None) or 8443
+    hy_sni = getattr(server, "hysteria_sni", None) or "bing.com"
+    links.append({
+        "name": f"{region_prefix}-{suffix} (Hysteria2)",
+        "link": build_hysteria2_link(key, host, hy_port, hy_sni, f"{suffix}-Hysteria2-{key.name}"),
+        "type": "hysteria2",
+        "server_id": server.id,
+        "region": server.region,
+    })
+
+    # 3. TUIC v5 — ультрабыстрый 0-RTT QUIC
+    tuic_port = getattr(server, "tuic_port", None) or 8444
+    tuic_sni = getattr(server, "tuic_sni", None) or "bing.com"
+    links.append({
+        "name": f"{region_prefix}-{suffix} (TUIC)",
+        "link": build_tuic_link(key, host, tuic_port, tuic_sni, f"{suffix}-TUIC-{key.name}"),
+        "type": "tuic",
+        "server_id": server.id,
+        "region": server.region,
+    })
+
+    # 4. XHTTP — если настроено доменное имя
+    if not _host_is_ip(host):
+        links.append({
+            "name": f"{region_prefix}-{suffix} (XHTTP)",
+            "link": build_vless_xhttp_link(key, host, server.ws_port or 443, f"{suffix}-XHTTP-{key.name}"),
+            "type": "vless-xhttp",
+            "server_id": server.id,
+            "region": server.region,
+        })
+
     return links
 
 
@@ -1230,7 +1245,7 @@ def get_subscription_content(keys: list[VPNKey], db: Session | None = None) -> s
         else:
             link_list = get_user_links(key)
         for link_info in link_list:
-            if link_info["type"] in ("vless-ws", "vless-xhttp", "vless-grpc", "vless-reality"):
+            if link_info["type"] in ("vless-reality", "vless-xhttp", "hysteria2", "tuic", "vless-ws", "vless-grpc"):
                 all_links.append(link_info["link"])
     return base64.b64encode("\n".join(all_links).encode()).decode()
 
