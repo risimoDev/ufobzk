@@ -618,7 +618,7 @@ DEFAULT_SETTINGS = {
 def _safe_migrate_sqlite():
     """Безопасное добавление недостающих колонок в существующие таблицы SQLite."""
     try:
-        with engine.connect() as conn:
+        with engine.begin() as conn:
             res = conn.exec_driver_sql("PRAGMA table_info(servers)").fetchall()
             existing_cols = {r[1] for r in res}
             new_cols = [
@@ -636,12 +636,16 @@ def _safe_migrate_sqlite():
                     conn.exec_driver_sql(f"ALTER TABLE servers ADD COLUMN {col_name} {col_type}")
     except Exception as e:
         import logging as _logging
-        _logging.getLogger(__name__).debug("SQLite safe migration: %s", e)
+        _logging.getLogger(__name__).warning("SQLite safe migration: %s", e)
 
 
 def init_db():
     _safe_migrate_sqlite()
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        import logging as _logging
+        _logging.getLogger(__name__).warning("Base.metadata.create_all: %s", e)
     _db = SessionLocal()
     try:
         try:

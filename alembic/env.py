@@ -15,7 +15,10 @@ from app.models import Base  # noqa: E402
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    try:
+        fileConfig(config.config_file_name, disable_existing_loggers=False)
+    except Exception:
+        pass
 
 # Переопределяем URL из переменной окружения, если задана
 db_url = os.getenv("DATABASE_URL")

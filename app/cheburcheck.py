@@ -16,20 +16,37 @@ logger = logging.getLogger(__name__)
 
 CHEBURCHECK_API_URL = "https://cheburcheck.ru/api/v1/check"
 # По умолчанию проверка 4 раза в сутки (каждые 6 часов = 21600 сек)
-CHEBURCHECK_INTERVAL = int(os.getenv("CHEBURCHECK_INTERVAL", "21600"))
+try:
+    CHEBURCHECK_INTERVAL = int(os.getenv("CHEBURCHECK_INTERVAL", "21600"))
+except Exception:
+    CHEBURCHECK_INTERVAL = 21600
 MONITOR_EXTERNAL_TARGETS = os.getenv("MONITOR_EXTERNAL_TARGETS", "")
 
 
-async def check_target(client: httpx.AsyncClient, target: str) -> dict[str, Any]:
+async def check_target(target_or_client: Any, target: str | None = None) -> dict[str, Any]:
     """Проверить один IP или домен через Cheburcheck API."""
-    target = target.strip()
-    if not target:
-        return {"target": target, "status": "error", "error": "Пустой адрес"}
+    if isinstance(target_or_client, str):
+        target_str = target_or_client
+        client = None
+    else:
+        client = target_or_client
+        target_str = target or ""
+
+    target_str = target_str.strip()
+    if not target_str:
+        return {"target": target_str, "status": "error", "error": "Пустой адрес"}
+
+    if client is None:
+        try:
+            async with httpx.AsyncClient(timeout=15.0, trust_env=False, headers={"User-Agent": "VPNBZK-Monitor/1.0"}) as cl:
+                return await check_target(cl, target_str)
+        except Exception as e:
+            return {"target": target_str, "blocked": False, "status": "error", "error": str(e), "checked_at": datetime.now(timezone.utc).isoformat()}
 
     try:
         resp = await client.get(
             CHEBURCHECK_API_URL,
-            params={"target": target},
+            params={"target": target_str},
             timeout=12.0,
         )
         if resp.status_code == 200:

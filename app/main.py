@@ -31,114 +31,122 @@ bot_task: asyncio.Task | None = None
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Инициализация БД, суперадмин, синхронизация Xray и запуск бота."""
-    os.makedirs("data", exist_ok=True)
-    from app.env_check import check_env_on_startup
-    check_env_on_startup()
-    # Бэкап БД перед миграцией — защита от повреждения при неудачной миграции
-    _db_path = os.path.join("data", "vpnbzk.db")
-    if os.path.exists(_db_path):
-        import shutil as _shutil
-        from datetime import datetime as _dt
-        _backup_name = f"vpnbzk.pre-migration.{_dt.utcnow().strftime('%Y%m%d_%H%M%S')}.db"
-        _backup_path = os.path.join("data", _backup_name)
-        try:
-            _shutil.copy2(_db_path, _backup_path)
-            logger.info("DB backup before migration: %s", _backup_path)
-            # Удаляем старые pre-migration бэкапы, оставляем 3 последних
-            import glob as _glob
-            _pre_backups = sorted(_glob.glob(os.path.join("data", "vpnbzk.pre-migration.*.db")))
-            for _old in _pre_backups[:-3]:
-                try:
-                    os.remove(_old)
-                except Exception:
-                    pass
-        except Exception as _be:
-            logger.warning("Pre-migration backup failed: %s", _be)
-
-    # Ensure DB schema is current before querying
+    global bot_task
+    bg_task = None
     try:
-        from alembic.config import Config
-        from alembic import command
-        alembic_cfg = Config("alembic.ini")
-        command.upgrade(alembic_cfg, "head")
-    except Exception as e:
-        logger.warning("Alembic upgrade skipped: %s", e)
-    init_db()
-    # If alembic_version is missing (tables created via create_all without tracking),
-    # stamp to head via raw SQLite so future alembic calls don't re-create existing tables.
-    try:
-        import sqlite3 as _sqlite3
+        os.makedirs("data", exist_ok=True)
+        from app.env_check import check_env_on_startup
+        check_env_on_startup()
+        # Бэкап БД перед миграцией — защита от повреждения при неудачной миграции
         _db_path = os.path.join("data", "vpnbzk.db")
         if os.path.exists(_db_path):
-            with _sqlite3.connect(_db_path) as _sc:
-                _tables = {r[0] for r in _sc.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
-                _av_rows = 0
-                if "alembic_version" in _tables:
-                    _av_rows = _sc.execute("SELECT COUNT(*) FROM alembic_version").fetchone()[0]
-            # Stamp needed if: tables exist but alembic_version missing or empty
-            if "users" in _tables and ("alembic_version" not in _tables or _av_rows == 0):
-                # Get head revision ID from migration scripts (no DB connection needed)
-                from alembic.config import Config as _ACfg
-                from alembic.script import ScriptDirectory as _SD
-                _head_rev = _SD.from_config(_ACfg("alembic.ini")).get_current_head()
-                if _head_rev:
-                    with _sqlite3.connect(_db_path) as _sc:
-                        _sc.execute(
-                            "CREATE TABLE IF NOT EXISTS alembic_version "
-                            "(version_num VARCHAR(32) NOT NULL, "
-                            "CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num))"
-                        )
-                        _sc.execute("DELETE FROM alembic_version")
-                        _sc.execute("INSERT INTO alembic_version (version_num) VALUES (?)", (_head_rev,))
-                        _sc.commit()
-                    logger.info("Alembic stamped to head (%s) via raw SQLite.", _head_rev)
-    except Exception as e:
-        logger.warning("Alembic stamp failed: %s", e)
-    from app.models import SessionLocal
-    _db = SessionLocal()
-    try:
+            import shutil as _shutil
+            from datetime import datetime as _dt
+            _backup_name = f"vpnbzk.pre-migration.{_dt.utcnow().strftime('%Y%m%d_%H%M%S')}.db"
+            _backup_path = os.path.join("data", _backup_name)
+            try:
+                _shutil.copy2(_db_path, _backup_path)
+                logger.info("DB backup before migration: %s", _backup_path)
+                # Удаляем старые pre-migration бэкапы, оставляем 3 последних
+                import glob as _glob
+                _pre_backups = sorted(_glob.glob(os.path.join("data", "vpnbzk.pre-migration.*.db")))
+                for _old in _pre_backups[:-3]:
+                    try:
+                        os.remove(_old)
+                    except Exception:
+                        pass
+            except Exception as _be:
+                logger.warning("Pre-migration backup failed: %s", _be)
+
+        # Ensure DB schema is current before querying
         try:
-            if SUPERADMIN_TELEGRAM_ID:
-                sa = _db.query(User).filter(User.telegram_id == SUPERADMIN_TELEGRAM_ID).first()
-                if sa:
-                    if not sa.is_admin:
-                        sa.is_admin = True
+            from alembic.config import Config
+            from alembic import command
+            alembic_cfg = Config("alembic.ini")
+            command.upgrade(alembic_cfg, "head")
+        except Exception as e:
+            logger.warning("Alembic upgrade skipped: %s", e)
+        init_db()
+        # If alembic_version is missing (tables created via create_all without tracking),
+        # stamp to head via raw SQLite so future alembic calls don't re-create existing tables.
+        try:
+            import sqlite3 as _sqlite3
+            _db_path = os.path.join("data", "vpnbzk.db")
+            if os.path.exists(_db_path):
+                with _sqlite3.connect(_db_path) as _sc:
+                    _tables = {r[0] for r in _sc.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+                    _av_rows = 0
+                    if "alembic_version" in _tables:
+                        _av_rows = _sc.execute("SELECT COUNT(*) FROM alembic_version").fetchone()[0]
+                # Stamp needed if: tables exist but alembic_version missing or empty
+                if "users" in _tables and ("alembic_version" not in _tables or _av_rows == 0):
+                    # Get head revision ID from migration scripts (no DB connection needed)
+                    from alembic.config import Config as _ACfg
+                    from alembic.script import ScriptDirectory as _SD
+                    _head_rev = _SD.from_config(_ACfg("alembic.ini")).get_current_head()
+                    if _head_rev:
+                        with _sqlite3.connect(_db_path) as _sc:
+                            _sc.execute(
+                                "CREATE TABLE IF NOT EXISTS alembic_version "
+                                "(version_num VARCHAR(32) NOT NULL, "
+                                "CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num))"
+                            )
+                            _sc.execute("DELETE FROM alembic_version")
+                            _sc.execute("INSERT INTO alembic_version (version_num) VALUES (?)", (_head_rev,))
+                            _sc.commit()
+                        logger.info("Alembic stamped to head (%s) via raw SQLite.", _head_rev)
+        except Exception as e:
+            logger.warning("Alembic stamp failed: %s", e)
+        from app.models import SessionLocal
+        _db = SessionLocal()
+        try:
+            try:
+                if SUPERADMIN_TELEGRAM_ID:
+                    sa = _db.query(User).filter(User.telegram_id == SUPERADMIN_TELEGRAM_ID).first()
+                    if sa:
+                        if not sa.is_admin:
+                            sa.is_admin = True
+                            _db.commit()
+                    else:
+                        from app.models import _gen_uuid
+                        sa = User(
+                            telegram_id=SUPERADMIN_TELEGRAM_ID,
+                            display_name="Суперадмин",
+                            is_admin=True,
+                            is_active=True,
+                            sub_token=_gen_uuid(),
+                        )
+                        _db.add(sa)
                         _db.commit()
                 else:
-                    from app.models import _gen_uuid
-                    sa = User(
-                        telegram_id=SUPERADMIN_TELEGRAM_ID,
-                        display_name="Суперадмин",
-                        is_admin=True,
-                        is_active=True,
-                        sub_token=_gen_uuid(),
-                    )
-                    _db.add(sa)
-                    _db.commit()
-            else:
-                logger.warning("SUPERADMIN_TELEGRAM_ID не задан — суперадмин не создан автоматически.")
-        except Exception as e:
-            _db.rollback()
-            logger.warning("Superadmin check/create failed (schema mismatch?): %s", e)
-        # Синхронизация Xray при старте
-        try:
-            sync_and_reload(_db)
-        except Exception as e:
-            logger.warning("Не удалось синхронизировать Xray при старте: %s", e)
-    finally:
-        _db.close()
-    # Проверка IPv6 занимает до 3 сек — не держим ею старт приложения
-    asyncio.create_task(asyncio.to_thread(log_geo_exit_status))
-    global bot_task
-    bot_task = asyncio.create_task(_start_bot())
-    # Фоновые задачи: сбор трафика + проверка истечения ключей
-    from app.tasks import run_background_tasks
-    bg_task = asyncio.create_task(run_background_tasks())
-    logger.info("Приложение запущено (каскадный VPN).")
+                    logger.warning("SUPERADMIN_TELEGRAM_ID не задан — суперадмин не создан автоматически.")
+            except Exception as e:
+                _db.rollback()
+                logger.warning("Superadmin check/create failed (schema mismatch?): %s", e)
+            # Синхронизация Xray при старте
+            try:
+                sync_and_reload(_db)
+            except Exception as e:
+                logger.warning("Не удалось синхронизировать Xray при старте: %s", e)
+        finally:
+            _db.close()
+        # Проверка IPv6 занимает до 3 сек — не держим ею старт приложения
+        asyncio.create_task(asyncio.to_thread(log_geo_exit_status))
+        bot_task = asyncio.create_task(_start_bot())
+        # Фоновые задачи: сбор трафика + проверка истечения ключей
+        from app.tasks import run_background_tasks
+        bg_task = asyncio.create_task(run_background_tasks())
+        logger.info("Приложение запущено (каскадный VPN).")
+    except Exception as _lifespan_exc:
+        import traceback
+        traceback.print_exc()
+        logger.critical("Критическая ошибка инициализации в lifespan: %s", _lifespan_exc, exc_info=True)
+
     yield
+
     if bot_task and not bot_task.done():
         bot_task.cancel()
-    if not bg_task.done():
+    if bg_task and not bg_task.done():
         bg_task.cancel()
     logger.info("Приложение остановлено.")
 
