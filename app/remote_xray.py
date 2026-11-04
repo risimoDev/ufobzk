@@ -61,7 +61,7 @@ def _build_singbox_remote_config(server: Server, keys: list[VPNKey]) -> dict[str
         inbounds.append({
             "type": "vless",
             "tag": "vless-reality-in",
-            "listen": "::",
+            "listen": "0.0.0.0",
             "listen_port": server.reality_port or 443,
             "sniff": True,
             "sniff_override_destination": True,
@@ -87,7 +87,7 @@ def _build_singbox_remote_config(server: Server, keys: list[VPNKey]) -> dict[str
     inbounds.append({
         "type": "hysteria2",
         "tag": "hy2-in",
-        "listen": "::",
+        "listen": "0.0.0.0",
         "listen_port": hy_port,
         "users": hy2_users,
         "tls": {
@@ -104,7 +104,7 @@ def _build_singbox_remote_config(server: Server, keys: list[VPNKey]) -> dict[str
     inbounds.append({
         "type": "tuic",
         "tag": "tuic-in",
-        "listen": "::",
+        "listen": "0.0.0.0",
         "listen_port": tuic_port,
         "users": tuic_users,
         "congestion_control": "bbr",
@@ -358,13 +358,13 @@ def _build_remote_config(server: Server, keys: list[VPNKey]) -> dict[str, Any]:
     return config
 
 
-async def push_config_to_server(server: Server, keys: list[VPNKey]) -> bool:
-    """Отправить конфиг на remote Xray сервер."""
+async def push_config_to_server(server: Server, keys: list[VPNKey]) -> tuple[bool, str]:
+    """Отправить конфиг на remote сервер ноды."""
     config = _build_remote_config(server, keys)
     headers = {"Authorization": f"Bearer {server.api_token}"}
 
     try:
-        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, verify=False) as client:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, verify=False, trust_env=False) as client:
             resp = await client.post(
                 f"{server.api_url.rstrip('/')}/config",
                 json=config,
@@ -376,39 +376,37 @@ async def push_config_to_server(server: Server, keys: list[VPNKey]) -> bool:
             restarted = data.get("restarted", False)
             unchanged = data.get("unchanged", False)
             if ok and unchanged:
-                # Конфиг идентичен текущему — нода ничего не трогала. Это норма
-                # (пуш раз в 5 минут), а НЕ ошибка: пользователи не обрываются.
                 logger.debug("Config unchanged on %s — restart skipped", server.name)
-                return True
+                return True, "unchanged"
             if ok and restarted:
                 logger.info("Config pushed and restarted on %s", server.name)
-                return True
+                return True, "ok"
             elif ok:
-                # Конфиг записан, но xray НЕ перезапущен. Xray читает конфиг
-                # только при старте, поэтому без рестарта новые ключи не
-                # активируются — клиенты получают timeout. Считаем это ошибкой
-                # синхронизации, чтобы админ видел проблему (а не зелёный «ok»).
-                logger.error(
-                    "Config pushed but xray NOT restarted on %s: %s — "
-                    "проверьте docker.sock и XRAY_CONTAINER_NAME на ноде",
-                    server.name, data.get("error"),
-                )
-                return False
+                err_msg = data.get("error") or "Контейнер ядра не перезапущен на ноде"
+                logger.error("Config pushed but core NOT restarted on %s: %s", server.name, err_msg)
+                return False, err_msg
             else:
-                logger.error("Server %s rejected config: %s", server.name, data)
-                return False
+                err_msg = data.get("error") or str(data)
+                logger.error("Server %s rejected config: %s", server.name, err_msg)
+                return False, err_msg
     except httpx.HTTPStatusError as e:
-        logger.error("HTTP error pushing to %s: %s %s", server.name, e.response.status_code, e.response.text[:200])
-        return False
+        err = f"HTTP {e.response.status_code}: {e.response.text[:200]}"
+        logger.error("HTTP error pushing to %s: %s", server.name, err)
+        return False, err
     except Exception as e:
-        logger.error("Failed to push config to %s: %s", server.name, e)
-        return False
+        err = str(e).strip() or type(e).__name__
+        logger.error("Failed to push config to %s (%s): %s", server.name, server.api_url, err)
+        return False, err
 
 
-async def sync_server(db: Session, server: Server) -> bool:
+async def sync_server(db: Session, server: Server) -> tuple[bool, str]:
     """Синхронизировать конфиг на один remote сервер."""
     keys = db.query(VPNKey).filter(VPNKey.is_active == True).order_by(VPNKey.id).all()  # noqa: E712
-    return await push_config_to_server(server, keys)
+    success, msg = await push_config_to_server(server, keys)
+    server.last_sync = datetime.now(timezone.utc)
+    server.last_sync_status = "ok" if success else f"error: {msg}"
+    db.commit()
+    return success, msg
 
 
 async def sync_all_servers(db: Session) -> dict[str, bool]:
@@ -421,9 +419,9 @@ async def sync_all_servers(db: Session) -> dict[str, bool]:
     results = {}
 
     for server in servers:
-        success = await push_config_to_server(server, keys)
+        success, msg = await push_config_to_server(server, keys)
         server.last_sync = datetime.now(timezone.utc)
-        server.last_sync_status = "ok" if success else "error"
+        server.last_sync_status = "ok" if success else f"error: {msg}"
         results[server.name] = success
 
     db.commit()

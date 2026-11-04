@@ -1357,14 +1357,9 @@ async def admin_sync_server(
         raise HTTPException(status_code=404, detail="Сервер не найден")
 
     try:
-        # push_config_to_server ловит все ошибки сам и возвращает False —
-        # результат нужно проверять, исключения здесь почти не бывает
-        ok = await remote_sync(db, server)
-        server.last_sync = datetime.now(timezone.utc)
-        server.last_sync_status = "ok" if ok else "error"
-        db.commit()
+        ok, err_msg = await remote_sync(db, server)
         if not ok:
-            raise HTTPException(status_code=502, detail="Нода не приняла конфиг — подробности в логах ufo-app")
+            raise HTTPException(status_code=502, detail=f"Нода не приняла конфиг: {err_msg}")
         return JSONResponse({"ok": True})
     except HTTPException:
         raise
@@ -1446,13 +1441,11 @@ async def admin_sync_all_servers(
     results = {}
     for s in servers:
         try:
-            ok = await remote_sync(db, s)
-            s.last_sync = datetime.now(timezone.utc)
-            s.last_sync_status = "ok" if ok else "error"
+            ok, err_msg = await remote_sync(db, s)
             results[s.id] = ok
         except Exception as e:
             s.last_sync = datetime.now(timezone.utc)
-            s.last_sync_status = "error"
+            s.last_sync_status = f"error: {e}"
             results[s.id] = False
             logger.error("Ошибка синхронизации сервера %s: %s", s.name, e)
     db.commit()

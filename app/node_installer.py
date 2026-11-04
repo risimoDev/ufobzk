@@ -120,22 +120,21 @@ ok "TLS certificate ready"
 log "Writing Node Agent API..."
 cat << 'AGENT_EOF' > "$WORK_DIR/api/main.py"
 import http.client
+import http.server
+import json
 import logging
 import os
 import socket
 import urllib.parse
-from fastapi import FastAPI, Header, HTTPException, Request
-from fastapi.responses import JSONResponse
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("node-agent")
 
 TOKEN = os.getenv("XRAY_NODE_TOKEN", "")
 CONFIG_PATH = os.getenv("XRAY_CONFIG_PATH", "/etc/sing-box/config.json")
 CONTAINER = os.getenv("XRAY_CONTAINER_NAME", "ufobzk-node-core")
 DOCKER_SOCK = "/var/run/docker.sock"
-
-app = FastAPI(title="Node Agent")
+PORT = int(os.getenv("NODE_API_PORT", "9090"))
 
 class UnixConn(http.client.HTTPConnection):
     def connect(self):
@@ -146,41 +145,87 @@ class UnixConn(http.client.HTTPConnection):
 def restart_container(name: str) -> bool:
     try:
         enc = urllib.parse.quote(name, safe="")
-        conn = UnixConn("localhost", timeout=20)
+        conn = UnixConn("localhost", timeout=25)
         conn.request("POST", f"/containers/{{enc}}/restart?t=5", headers={{"Content-Length": "0", "Content-Type": "application/json"}})
         resp = conn.getresponse()
         resp.read()
         conn.close()
-        return resp.status == 204
+        return resp.status in (204, 200)
     except Exception as e:
         logger.warning("Docker socket restart error: %s", e)
         return False
 
-@app.get("/health")
-async def health():
-    return {{"status": "ok"}}
+class NodeHandler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        logger.info("%s - %s", self.address_string(), format % args)
 
-@app.post("/config")
-async def apply_config(request: Request, authorization: str | None = Header(None)):
-    if not TOKEN or authorization != f"Bearer {{TOKEN}}":
-        raise HTTPException(status_code=401, detail="Invalid token")
-    import json
-    data = await request.json()
-    new_raw = json.dumps(data, indent=2, ensure_ascii=False, sort_keys=True)
-    try:
-        if os.path.exists(CONFIG_PATH):
-            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                cur_raw = json.dumps(json.loads(f.read()), indent=2, ensure_ascii=False, sort_keys=True)
-            if cur_raw == new_raw:
-                return JSONResponse({{"ok": True, "restarted": False, "unchanged": True}})
-    except Exception:
-        pass
+    def do_GET(self):
+        if self.path == "/health":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{{"status":"ok"}}')
+        else:
+            self.send_response(404)
+            self.end_headers()
 
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-        f.write(new_raw)
+    def do_POST(self):
+        if self.path != "/config":
+            self.send_response(404)
+            self.end_headers()
+            return
 
-    restarted = restart_container(CONTAINER)
-    return JSONResponse({{"ok": True, "restarted": restarted}})
+        auth = self.headers.get("Authorization", "")
+        if not TOKEN or auth != f"Bearer {{TOKEN}}":
+            self.send_response(401)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{{"ok":false,"error":"Invalid token"}}')
+            return
+
+        length = int(self.headers.get("Content-Length", 0))
+        raw_body = self.rfile.read(length)
+        try:
+            data = json.loads(raw_body.decode("utf-8"))
+        except Exception as e:
+            self.send_response(400)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({{"ok": False, "error": f"Invalid JSON: {{e}}"}}).encode())
+            return
+
+        new_raw = json.dumps(data, indent=2, ensure_ascii=False, sort_keys=True)
+        try:
+            if os.path.exists(CONFIG_PATH):
+                with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                    cur_raw = json.dumps(json.loads(f.read()), indent=2, ensure_ascii=False, sort_keys=True)
+                if cur_raw == new_raw:
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(b'{{"ok":true,"restarted":false,"unchanged":true}}')
+                    return
+        except Exception:
+            pass
+
+        try:
+            with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+                f.write(new_raw)
+            restarted = restart_container(CONTAINER)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({{"ok": True, "restarted": restarted}}).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({{"ok": False, "error": str(e)}}).encode())
+
+if __name__ == "__main__":
+    server = http.server.ThreadingHTTPServer(("0.0.0.0", PORT), NodeHandler)
+    logger.info("Node Agent listening on port %s...", PORT)
+    server.serve_forever()
 AGENT_EOF
 
 # 8. Seed Sing-box config
@@ -191,7 +236,7 @@ cat << SEED_EOF > "$WORK_DIR/config/config.json"
     {{
       "type": "vless",
       "tag": "vless-reality-in",
-      "listen": "::",
+      "listen": "0.0.0.0",
       "listen_port": $REALITY_PORT,
       "users": [],
       "tls": {{
@@ -208,7 +253,7 @@ cat << SEED_EOF > "$WORK_DIR/config/config.json"
     {{
       "type": "hysteria2",
       "tag": "hy2-in",
-      "listen": "::",
+      "listen": "0.0.0.0",
       "listen_port": $HYSTERIA_PORT,
       "users": [],
       "tls": {{
@@ -221,7 +266,7 @@ cat << SEED_EOF > "$WORK_DIR/config/config.json"
     {{
       "type": "tuic",
       "tag": "tuic-in",
-      "listen": "::",
+      "listen": "0.0.0.0",
       "listen_port": $TUIC_PORT,
       "users": [],
       "congestion_control": "bbr",
@@ -285,9 +330,9 @@ services:
       - ./api:/app
     working_dir: /app
     entrypoint:
-      - /bin/sh
-      - -c
-      - "pip install --no-cache-dir fastapi uvicorn && python -m uvicorn main:app --host 0.0.0.0 --port $API_PORT"
+      - python
+      - -u
+      - /app/main.py
     depends_on:
       - sing-box
 COMPOSE_EOF
@@ -298,20 +343,41 @@ $DC down --remove-orphans 2>/dev/null || true
 $DC up -d
 ok "Containers launched"
 
+# Ожидание готовности Node Agent API
+log "Waiting for Node Agent API to become ready..."
+API_READY=0
+for i in $(seq 1 20); do
+    if curl -fsSL --max-time 2 "http://127.0.0.1:$API_PORT/health" &>/dev/null; then
+        API_READY=1
+        ok "Node Agent API is up and listening on port $API_PORT"
+        break
+    fi
+    sleep 1
+done
+if [ "$API_READY" -eq 0 ]; then
+    warn "Node Agent API not answering on /health yet. Checking container logs:"
+    $DC logs --tail 20 node-api || true
+fi
+
 # 11. Firewall
-if command -v ufw &>/dev/null; then
+if command -v ufw &>/dev/null && ufw status | grep -qw "active"; then
     ufw allow 22/tcp comment 'SSH' >/dev/null 2>&1 || true
     ufw allow $REALITY_PORT/tcp comment 'REALITY' >/dev/null 2>&1 || true
     ufw allow $HYSTERIA_PORT/udp comment 'Hysteria2' >/dev/null 2>&1 || true
     ufw allow $TUIC_PORT/udp comment 'TUIC' >/dev/null 2>&1 || true
     ufw allow $API_PORT/tcp comment 'Node-API' >/dev/null 2>&1 || true
-    ufw --force enable >/dev/null 2>&1 || true
-    ok "Firewall configured (TCP $REALITY_PORT, UDP $HYSTERIA_PORT, UDP $TUIC_PORT, TCP $API_PORT)"
+    ok "UFW rules added (ports 22, $REALITY_PORT, $HYSTERIA_PORT, $TUIC_PORT, $API_PORT)"
+elif command -v iptables &>/dev/null; then
+    iptables -I INPUT -p tcp --dport "$REALITY_PORT" -j ACCEPT 2>/dev/null || true
+    iptables -I INPUT -p udp --dport "$HYSTERIA_PORT" -j ACCEPT 2>/dev/null || true
+    iptables -I INPUT -p udp --dport "$TUIC_PORT" -j ACCEPT 2>/dev/null || true
+    iptables -I INPUT -p tcp --dport "$API_PORT" -j ACCEPT 2>/dev/null || true
+    ok "iptables rules added (ports $REALITY_PORT, $HYSTERIA_PORT, $TUIC_PORT, $API_PORT)"
 fi
 
 # 12. Register back with Master Control Plane
 log "Registering node with Master Server ($MASTER_URL)..."
-sleep 4
+sleep 2
 REG_PAYLOAD=$(cat << REG_EOF
 {{
   "install_token": "$INSTALL_TOKEN",

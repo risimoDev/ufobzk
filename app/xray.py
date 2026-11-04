@@ -74,7 +74,7 @@ _GEO_DOMAINS_DEFAULT = (
     "geosite:google,geosite:youtube,"
     # TLD .google: antigravity.google, gemini.google, blog.google …
     "domain:google,"
-    "domain:google.com,domain:google.ru,domain:googleapis.com,domain:gstatic.com,"
+    "domain:google.com,domain:google.ru,domain:googleapis.com,"
     "domain:googleusercontent.com,domain:withgoogle.com,domain:gvt1.com,domain:gvt2.com,"
     "domain:youtube.com,domain:youtu.be,domain:googlevideo.com,domain:ytimg.com,domain:ggpht.com,"
     # Antigravity построен на Codeium/Windsurf — служебные запросы IDE идут сюда
@@ -87,6 +87,11 @@ _GEO_DOMAINS_DEFAULT = (
 # Для GEO-V6 правило не нужно — это тот же сервер, отдельной точки отказа нет.
 _GEO_BYPASS_DOMAINS = [
     "full:connectivitycheck.gstatic.com",
+    "full:www.gstatic.com",
+    "domain:gstatic.com",
+    "domain:cp.cloudflare.com",
+    "domain:msftconnecttest.com",
+    "domain:apple.com",
     "full:mtalk.google.com",
     "domain:dns.google",
 ]
@@ -162,7 +167,13 @@ GEO_EXIT_SN = os.getenv("GEO_EXIT_SN", "www.samsung.com")
 # GEO_EXIT_UUID: клиент с reverse добавляется в VLESS-REALITY, а GEO-EXIT —
 # это его обратный туннель. Выход ставится scripts/22-geo-exit-setup.sh reverse.
 GEO_EXIT_REVERSE = os.getenv("GEO_EXIT_MODE", "").strip().lower() == "reverse"
-GEO_EXIT_STATIC = bool(GEO_EXIT_UUID and (GEO_EXIT_REVERSE or (GEO_EXIT_HOST and GEO_EXIT_PUBLIC_KEY)))
+GEO_EXIT_ENABLED = os.getenv("GEO_EXIT_ENABLE", "1").strip().lower() not in ("0", "false", "no", "off")
+GEO_EXIT_STATIC = bool(
+    GEO_EXIT_ENABLED
+    and GEO_EXIT_UUID
+    and GEO_EXIT_HOST
+    and (GEO_EXIT_REVERSE or GEO_EXIT_PUBLIC_KEY)
+)
 
 # Порты
 VLESS_WS_PORT = int(os.getenv("VLESS_WS_PORT", "443"))
@@ -621,12 +632,12 @@ def build_xray_config(db: Session) -> dict[str, Any]:
 
     rules = config["routing"]["rules"]
 
-    if geo_outbound_tag in ("GEO-EXIT", "WARP"):
-        rules.append({
-            "type": "field",
-            "outboundTag": "DIRECT",
-            "domain": _GEO_BYPASS_DOMAINS
-        })
+    # Проверка доступности сети (captive portal, DNS, FCM) ВСЕГДА напрямую в DIRECT
+    rules.append({
+        "type": "field",
+        "outboundTag": "DIRECT",
+        "domain": _GEO_BYPASS_DOMAINS
+    })
 
     # Google / YouTube — в гео-выход, если он настроен, иначе в DIRECT
     rules.append({
