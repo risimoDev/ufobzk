@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # Интервалы в секундах
 TRAFFIC_COLLECT_INTERVAL = 300   # 5 минут
 EXPIRE_CHECK_INTERVAL = 3600     # 1 час
-REMOTE_SYNC_INTERVAL = 300       # 5 минут
+REMOTE_SYNC_INTERVAL = 30        # 30 секунд (автосинхронизация при сбоях)
 BACKUP_INTERVAL = 86400          # 24 часа
 SNAPSHOT_RETENTION_DAYS = 30     # хранить снимки трафика 30 дней (совпадает с макс. периодом аналитики)
 SNAPSHOT_CLEANUP_INTERVAL = 86400  # чистка раз в сутки

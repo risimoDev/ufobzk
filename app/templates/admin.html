@@ -3776,6 +3776,26 @@
       }
 
       // ── SERVERS FLEET ──
+      async function setServerRole(serverId, newRole) {
+        showToast('Переключение роли сервера...', 'info');
+        try {
+          var r = await fetch('/admin/api/servers/' + serverId + '/set-role', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role: newRole })
+          });
+          var d = await r.json();
+          if (d.ok) {
+            showToast('Роль сервера изменена на ' + (newRole === 'cascade' ? '🔀 Каскад' : '🚀 Вход'), 'success');
+            loadServers();
+          } else {
+            showToast(d.detail || 'Ошибка смены роли', 'error');
+          }
+        } catch(e) {
+          showToast('Ошибка сети', 'error');
+        }
+      }
+
       async function loadServers() {
         loadCheburcheckStatus();
         try {
@@ -3788,23 +3808,37 @@
           }
           var html = '';
           data.forEach(function(s) {
-            var syncCls = s.last_sync_status === 'ok' ? 'text-emerald-400' : s.last_sync_status ? 'text-red-400' : 'text-gray-600';
-            var syncText = s.last_sync ? new Date(s.last_sync).toLocaleString('ru', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
-            
-            var roleBadge = s.role === 'cascade' || s.role === 'ru'
-              ? '<span class="badge badge-amber text-[10px] ml-1.5">🔀 Каскад</span>'
-              : '<span class="badge badge-emerald text-[10px] ml-1.5">🚀 Вход</span>';
+            var roleBadge = (s.role === 'cascade' || s.role === 'ru')
+              ? '<span class="badge badge-amber text-[10px] ml-1.5 cursor-pointer" onclick="setServerRole(' + s.id + ', \'direct\')" title="Нажмите, чтобы сделать входом">🔀 Каскад</span>'
+              : '<span class="badge badge-emerald text-[10px] ml-1.5 cursor-pointer" onclick="setServerRole(' + s.id + ', \'cascade\')" title="Нажмите, чтобы сделать каскадом">🚀 Вход</span>';
 
-            var activeBadge = s.is_active
-              ? '<span class="text-emerald-400 font-medium text-xs">🟢 В сети</span>'
-              : '<span class="text-amber-400 font-medium text-xs">⚪ Ожидает</span>';
+            // Живой статус агента
+            var agentStatus = '';
+            if (s.agent_online) {
+              var ago = s.last_sync_seconds !== null ? (s.last_sync_seconds + 'с назад') : 'онлайн';
+              agentStatus = '<span class="text-emerald-400 font-semibold text-xs flex items-center gap-1">🟢 Агент онлайн <span class="text-gray-500 font-normal text-[10px]">(' + ago + ')</span></span>';
+            } else if (s.last_sync) {
+              agentStatus = '<span class="text-amber-400 font-semibold text-xs flex items-center gap-1">🟡 Агент офлайн <span class="text-gray-500 font-normal text-[10px]">(' + Math.round((s.last_sync_seconds||0)/60) + 'м назад)</span></span>';
+            } else {
+              agentStatus = '<span class="text-gray-500 font-medium text-xs">⚪ Не установлен</span>';
+            }
+
+            // Живая проверка порта 443 (REALITY для клиентов)
+            var realityPortStatus = '';
+            if (s.role === 'cascade' || s.role === 'ru') {
+              realityPortStatus = '<span class="text-amber-300/80 text-[11px] block mt-0.5">🔀 Транзитный узел (Каскад)</span>';
+            } else if (s.reality_live) {
+              realityPortStatus = '<span class="text-emerald-400 font-mono text-[11px] block mt-0.5">🟢 Порт 443 доступен (' + s.reality_ms + 'ms)</span>';
+            } else {
+              realityPortStatus = '<span class="text-red-400 font-semibold text-[11px] block mt-0.5" title="' + escapeHtml(s.reality_err || 'Таймаут') + '">🔴 443: ТАЙМАУТ У КЛИЕНТОВ</span>';
+            }
 
             var tspuBadge = s.is_blocked_ru
               ? '<span class="px-1.5 py-0.5 rounded bg-red-950/60 text-red-400 border border-red-500/30 text-[11px] font-semibold">🔴 Блок ТСПУ</span>'
               : '<span class="px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-500/30 text-[11px]">🟢 Чист</span>';
 
             var protocols = '<div class="flex items-center gap-1 flex-wrap text-[11px] font-mono">' +
-              '<span class="px-1 py-0.2 rounded bg-white/5 text-cyan-300">Reality:443</span>' +
+              '<span class="px-1 py-0.2 rounded bg-white/5 text-cyan-300">Reality:' + (s.reality_port || 443) + '</span>' +
               '<span class="px-1 py-0.2 rounded bg-white/5 text-emerald-300">Hy2:' + (s.hysteria_port || 8443) + '</span>' +
               '<span class="px-1 py-0.2 rounded bg-white/5 text-purple-300">TUIC:' + (s.tuic_port || 8444) + '</span>' +
             '</div>';
@@ -3813,7 +3847,7 @@
               ? '<button onclick="showExistingInstallCmd(\'' + s.install_token + '\')" class="p-1 rounded bg-white/5 text-gray-500 hover:text-cyan-400 transition text-xs" title="Показать команду установки">📋</button>'
               : '';
 
-            html += '<tr>' +
+            html += '<tr class="border-b border-white/5 hover:bg-white/[0.02] transition">' +
               '<td class="px-4 py-3">' +
                 '<div class="flex items-center">' +
                   '<span class="text-gray-200 text-sm font-semibold">' + escapeHtml(s.name) + '</span>' +
@@ -3824,7 +3858,7 @@
               '<td class="px-4 py-3 text-xs text-gray-400 font-mono">' + escapeHtml(s.host) + '</td>' +
               '<td class="px-4 py-3">' + protocols + '</td>' +
               '<td class="px-4 py-3">' + tspuBadge + '</td>' +
-              '<td class="px-4 py-3 text-xs">' + activeBadge + '<div class="' + syncCls + ' text-[10px] mt-0.5">' + syncText + '</div></td>' +
+              '<td class="px-4 py-3 text-xs">' + agentStatus + realityPortStatus + '</td>' +
               '<td class="px-4 py-3 text-right">' +
                 installCmdBtn +
                 '<button onclick="syncServer(' + s.id + ')" class="p-1 rounded bg-white/5 text-gray-500 hover:text-emerald-400 transition text-xs ml-1" title="Синхронизировать">🔄</button>' +
@@ -3832,10 +3866,35 @@
                 '<button onclick="deleteServer(' + s.id + ', \'' + escapeStr(s.name) + '\')" class="p-1 rounded bg-white/5 text-gray-500 hover:text-red-400 transition text-xs ml-1" title="Удалить">🗑️</button>' +
               '</td>' +
             '</tr>';
+
+            // Если обнаружена проблема — выводим строку с подсказкой и быстрой кнопкой решения
+            if (s.issue) {
+              var fixAction = s.role === 'direct'
+                ? '<button onclick="setServerRole(' + s.id + ', \'cascade\')" class="px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/30 text-xs font-medium transition shadow">🔀 Сделать каскадом (исправит таймаут)</button>'
+                : '';
+              html += '<tr class="bg-red-950/25 border-b border-red-500/20">' +
+                '<td colspan="7" class="px-4 py-2.5">' +
+                  '<div class="flex items-center justify-between gap-3 text-xs">' +
+                    '<div class="flex items-center gap-2 text-red-300 font-medium">' +
+                      '<span class="text-sm">⚠️</span>' +
+                      '<span>' + escapeHtml(s.issue) + '</span>' +
+                    '</div>' +
+                    '<div class="shrink-0">' + fixAction + '</div>' +
+                  '</div>' +
+                '</td>' +
+              '</tr>';
+            }
           });
           tbody.innerHTML = html;
         } catch(e) { showToast('Ошибка загрузки серверов', 'error'); }
       }
+
+      // Автообновление статуса серверов каждые 12 секунд
+      setInterval(function() {
+        if (document.visibilityState === 'visible') {
+          loadServers();
+        }
+      }, 12000);
 
       async function syncServer(serverId) {
         showToast('Синхронизация сервера...', 'info');

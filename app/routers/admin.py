@@ -1081,35 +1081,123 @@ async def admin_list_servers(
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """Список удалённых серверов (xray/singbox nodes)."""
+    """Список удалённых серверов с живой диагностикой портов и статуса в реальном времени."""
+    import asyncio
+    import socket as _socket
+    import time as _time
+    from datetime import datetime, timezone
+
     servers = db.query(Server).order_by(Server.priority.asc()).all()
-    return JSONResponse([{
-        "id": s.id,
-        "name": s.name,
-        "region": s.region,
-        "host": s.host,
-        "api_url": s.api_url,
-        "ws_port": s.ws_port,
-        "reality_port": s.reality_port,
-        "grpc_port": s.grpc_port,
-        "xhttp_port": s.xhttp_port,
-        "priority": s.priority,
-        "role": s.role,
-        "is_active": s.is_active,
-        "reality_public_key": s.reality_public_key,
-        "reality_short_id": s.reality_short_id,
-        "hysteria_port": s.hysteria_port,
-        "tuic_port": s.tuic_port,
-        "hysteria_sni": s.hysteria_sni,
-        "tuic_sni": s.tuic_sni,
-        "cascade_domains": s.cascade_domains,
-        "is_blocked_ru": s.is_blocked_ru,
-        "install_token": s.install_token,
-        "core_type": s.core_type or "sing-box",
-        "last_sync": s.last_sync.isoformat() if s.last_sync else None,
-        "last_sync_status": s.last_sync_status,
-        "created_at": s.created_at.isoformat() if s.created_at else None,
-    } for s in servers])
+
+    async def _probe_server(s: Server) -> dict:
+        reality_live = False
+        reality_ms = None
+        reality_err = None
+
+        if s.reality_port and s.host and s.host != "pending":
+            try:
+                t0 = _time.monotonic()
+                await asyncio.wait_for(
+                    asyncio.get_running_loop().run_in_executor(
+                        None,
+                        lambda: _socket.create_connection((s.host, s.reality_port), timeout=1.5).close()
+                    ),
+                    timeout=2.0
+                )
+                reality_ms = round((_time.monotonic() - t0) * 1000)
+                reality_live = True
+            except asyncio.TimeoutError:
+                reality_err = "Таймаут TCP 443 (порт закрыт, фаервол хостинга или нода за NAT)"
+            except ConnectionRefusedError:
+                reality_err = "Сброс TCP 443 (ядро Sing-box не слушает порт или упало)"
+            except Exception as e:
+                reality_err = f"Ошибка связи ({type(e).__name__}): {str(e)[:60]}"
+
+        now_utc = datetime.now(timezone.utc)
+        agent_online = False
+        last_sync_seconds = None
+        if s.last_sync:
+            ls = s.last_sync if s.last_sync.tzinfo else s.last_sync.replace(tzinfo=timezone.utc)
+            last_sync_seconds = int((now_utc - ls).total_seconds())
+            agent_online = last_sync_seconds < 120
+
+        # Формируем прозрачную диагностику и совет для исправления
+        issue = None
+        if s.is_active:
+            if s.role in ("direct", "remote"):
+                if not reality_live:
+                    issue = "Клиенты получают ТАЙМАУТ! Порт 443 недоступен снаружи. Нода за NAT (серый IP 192.168.x.x) или закрыт фаервол хостинга. Переключите сервер в «Каскад» или пробросьте порт 443."
+            elif s.role in ("cascade", "ru"):
+                if not agent_online and s.last_sync is None:
+                    issue = "Каскадная нода ожидает первой установки и подключения агента."
+
+        return {
+            "id": s.id,
+            "name": s.name,
+            "region": s.region,
+            "host": s.host,
+            "api_url": s.api_url,
+            "ws_port": s.ws_port,
+            "reality_port": s.reality_port,
+            "grpc_port": s.grpc_port,
+            "xhttp_port": s.xhttp_port,
+            "priority": s.priority,
+            "role": s.role,
+            "is_active": s.is_active,
+            "reality_public_key": s.reality_public_key,
+            "reality_short_id": s.reality_short_id,
+            "hysteria_port": s.hysteria_port,
+            "tuic_port": s.tuic_port,
+            "hysteria_sni": s.hysteria_sni,
+            "tuic_sni": s.tuic_sni,
+            "cascade_domains": s.cascade_domains,
+            "is_blocked_ru": s.is_blocked_ru,
+            "install_token": s.install_token,
+            "core_type": s.core_type or "sing-box",
+            "last_sync": s.last_sync.isoformat() if s.last_sync else None,
+            "last_sync_seconds": last_sync_seconds,
+            "last_sync_status": s.last_sync_status,
+            "agent_online": agent_online,
+            "reality_live": reality_live,
+            "reality_ms": reality_ms,
+            "reality_err": reality_err,
+            "issue": issue,
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+        }
+
+    results = await asyncio.gather(*[_probe_server(s) for s in servers])
+    return JSONResponse(list(results))
+
+
+@router.post("/admin/api/servers/{server_id}/set-role")
+async def admin_set_server_role(
+    server_id: int,
+    request: Request,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Быстрое переключение роли сервера: direct (вход) <-> cascade (каскадный выход)."""
+    server = db.query(Server).filter(Server.id == server_id).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Сервер не найден")
+
+    body = await request.json()
+    new_role = body.get("role", "cascade")
+    if new_role not in ("direct", "cascade", "ru"):
+        raise HTTPException(status_code=400, detail="Недопустимая роль")
+
+    server.role = new_role
+    db.commit()
+
+    # Перезагружаем мастер Xray для актуализации правил каскада
+    try:
+        from app.xray import sync_and_reload
+        sync_and_reload(db)
+    except Exception as e:
+        logger.warning("Не удалось перезагрузить Xray: %s", e)
+
+    _log_action(db, admin.id, "set_server_role", str(server_id), f"{server.name} -> {new_role}")
+    return JSONResponse({"ok": True, "role": new_role})
 
 
 @router.post("/admin/api/servers/create-install")
