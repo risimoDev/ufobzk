@@ -1330,6 +1330,39 @@ async def admin_sync_all_servers(
     return JSONResponse({"ok": True, "results": results})
 
 
+# ── Cheburcheck Monitoring ──
+
+@router.get("/admin/api/cheburcheck/status")
+async def admin_cheburcheck_status(
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Получить статус последней проверки инфраструктуры через Cheburcheck."""
+    from app.cheburcheck import run_cheburcheck_audit
+    raw = get_setting(db, "cheburcheck_last_audit", "")
+    if raw:
+        try:
+            return JSONResponse(_json.loads(raw))
+        except Exception:
+            pass
+    # Если еще ни разу не проверялось — запускаем первую проверку
+    res = await run_cheburcheck_audit(db, notify=False)
+    return JSONResponse(res)
+
+
+@router.post("/admin/api/cheburcheck/run")
+async def admin_cheburcheck_run(
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Вручную запустить немедленную проверку всех серверов через Cheburcheck."""
+    from app.cheburcheck import run_cheburcheck_audit, notify_telegram_alert
+    res = await run_cheburcheck_audit(db, notify=False)
+    # При ручном запуске шлем статус в Telegram суперадмину (даже если всё чисто)
+    await notify_telegram_alert(res, always=True)
+    return JSONResponse(res)
+
+
 # ── Guides ──
 
 @router.get("/admin/api/guides")

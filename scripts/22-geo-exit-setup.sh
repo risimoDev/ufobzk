@@ -12,6 +12,9 @@
 #  главного и держит туннель — когда главный не может открыть TCP к выходу.
 #    bash 22-geo-exit-setup.sh reverse <REALITY-IP главного> <PUBLIC_KEY> <SNI> <SHORT_ID> <GEO_EXIT_UUID>
 #    Готовую команду печатает на главном:  bash scripts/22-geo-exit-setup.sh print-reverse
+#    finalRules у DIRECT обязательны: для трафика из обратного туннеля freedom
+#    по умолчанию блокирует ВСЕ адреса ("blocked target ... blackholing") —
+#    туннель поднят, запросы приходят, а ответа нет.
 # ═══════════════════════════════════════════════════════════════════════════
 set -e
 CFG=/usr/local/etc/xray/config.json
@@ -42,7 +45,16 @@ if [ "$1" = "reverse" ]; then
 {
   "log": {"loglevel": "warning"},
   "outbounds": [
-    {"tag": "DIRECT", "protocol": "freedom"},
+    {
+      "tag": "DIRECT",
+      "protocol": "freedom",
+      "settings": {
+        "finalRules": [
+          {"action": "block", "ip": ["geoip:private"]},
+          {"action": "allow"}
+        ]
+      }
+    },
     {
       "tag": "TO-MAIN",
       "protocol": "vless",

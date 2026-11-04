@@ -31,6 +31,7 @@ SNAPSHOT_RETENTION_DAYS = 30     # хранить снимки трафика 30
 SNAPSHOT_CLEANUP_INTERVAL = 86400  # чистка раз в сутки
 GEO_AUTO_INTERVAL = 1800         # проверка страны Google — 30 минут
 GEO_AUTO_RECHECK = 300           # повторная проверка перед переключением — 5 минут
+CHEBURCHECK_INTERVAL = int(os.getenv("CHEBURCHECK_INTERVAL", "21600"))  # проверка Cheburcheck — 6 часов (4 раза в сутки)
 
 # Последнее «сырое» значение счётчика Xray по UUID (в памяти процесса).
 # Нужно для корректного подсчёта дельт: счётчики Xray обнуляются при рестарте
@@ -344,6 +345,22 @@ async def periodic_geo_auto() -> None:
         await asyncio.sleep(delay)
 
 
+async def periodic_cheburcheck() -> None:
+    """Периодическая проверка всех серверов и доменов через Cheburcheck (4 раза в сутки)."""
+    # Пауза перед первым запуском, чтобы контейнеры и БД успели инициализироваться
+    await asyncio.sleep(45)
+    while True:
+        try:
+            from app.cheburcheck import run_cheburcheck_audit
+            with SessionLocal() as db:
+                await run_cheburcheck_audit(db, notify=True)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.error("Ошибка в задаче Cheburcheck: %s", e)
+        await asyncio.sleep(CHEBURCHECK_INTERVAL)
+
+
 async def run_background_tasks() -> None:
     """Запускает все фоновые задачи параллельно."""
     tasks = [
@@ -353,6 +370,7 @@ async def run_background_tasks() -> None:
         asyncio.create_task(periodic_backup()),
         asyncio.create_task(periodic_snapshot_cleanup()),
         asyncio.create_task(periodic_geo_auto()),
+        asyncio.create_task(periodic_cheburcheck()),
     ]
     try:
         await asyncio.gather(*tasks)
