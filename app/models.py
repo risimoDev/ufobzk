@@ -617,6 +617,16 @@ DEFAULT_SETTINGS = {
 }
 
 
+def clean_key(val: str | None) -> str | None:
+    """Очистить reality-ключ или short_id от кавычек, запятых и пробелов."""
+    if not val:
+        return None
+    val = str(val).strip()
+    for char in ('"', "'", ',', ' '):
+        val = val.replace(char, '')
+    return val or None
+
+
 def _safe_migrate_sqlite():
     """Безопасное добавление недостающих колонок в существующие таблицы SQLite."""
     try:
@@ -638,6 +648,15 @@ def _safe_migrate_sqlite():
             for col_name, col_type in new_cols:
                 if col_name not in existing_cols:
                     conn.exec_driver_sql(f"ALTER TABLE servers ADD COLUMN {col_name} {col_type}")
+
+            # Очистка reality-ключей от кавычек и запятых (если попали при автогенерации)
+            conn.exec_driver_sql("""
+                UPDATE servers 
+                SET reality_public_key = TRIM(REPLACE(REPLACE(REPLACE(reality_public_key, '"', ''), '''', ''), ',', '')),
+                    reality_private_key = TRIM(REPLACE(REPLACE(REPLACE(reality_private_key, '"', ''), '''', ''), ',', '')),
+                    reality_short_id = TRIM(REPLACE(REPLACE(REPLACE(reality_short_id, '"', ''), '''', ''), ',', ''))
+                WHERE reality_public_key IS NOT NULL
+            """)
     except Exception as e:
         import logging as _logging
         _logging.getLogger(__name__).warning("SQLite safe migration: %s", e)

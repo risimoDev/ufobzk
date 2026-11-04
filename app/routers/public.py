@@ -344,12 +344,13 @@ async def api_register_node(
     server.host = body.get("host") or server.host
     api_port = body.get("api_port", 9090)
     server.api_url = f"http://{server.host}:{api_port}"
+    from app.models import clean_key
     if body.get("reality_public_key"):
-        server.reality_public_key = body["reality_public_key"]
+        server.reality_public_key = clean_key(body["reality_public_key"])
     if body.get("reality_private_key"):
-        server.reality_private_key = body["reality_private_key"]
+        server.reality_private_key = clean_key(body["reality_private_key"])
     if body.get("reality_short_id"):
-        server.reality_short_id = body["reality_short_id"]
+        server.reality_short_id = clean_key(body["reality_short_id"])
 
     server.is_active = True
     server.last_sync_status = "syncing"

@@ -62,10 +62,14 @@ def _build_singbox_remote_config(server: Server, keys: list[VPNKey]) -> dict[str
     if not tuic_users:
         tuic_users = [{"uuid": "00000000-0000-0000-0000-000000000000", "password": "bootstrap-password", "name": "bootstrap"}]
 
+    from app.models import clean_key
+    priv_key = clean_key(server.reality_private_key)
+    sid_raw = clean_key(server.reality_short_id)
+
     # 1. REALITY Inbound (TCP 443 или кастомный порт)
-    if server.reality_private_key and server.reality_short_id:
+    if priv_key and sid_raw:
         sn = (server.reality_server_names or "github.com").split(",")[0].strip()
-        short_ids = [s.strip() for s in (server.reality_short_id or "").split(",") if s.strip()]
+        short_ids = [clean_key(s) for s in sid_raw.split(",") if clean_key(s)]
         if not short_ids:
             short_ids = ["0123456789abcdef"]
         inbounds.append({
@@ -83,7 +87,7 @@ def _build_singbox_remote_config(server: Server, keys: list[VPNKey]) -> dict[str
                         "server": sn,
                         "server_port": 443
                     },
-                    "private_key": server.reality_private_key,
+                    "private_key": priv_key,
                     "short_id": short_ids
                 }
             }
@@ -101,6 +105,7 @@ def _build_singbox_remote_config(server: Server, keys: list[VPNKey]) -> dict[str
         "tls": {
             "enabled": True,
             "server_name": hy_sni,
+            "alpn": ["h3"],
             "certificate_path": "/etc/sing-box/cert.crt",
             "key_path": "/etc/sing-box/cert.key"
         }
@@ -119,6 +124,7 @@ def _build_singbox_remote_config(server: Server, keys: list[VPNKey]) -> dict[str
         "tls": {
             "enabled": True,
             "server_name": tuic_sni,
+            "alpn": ["h3"],
             "certificate_path": "/etc/sing-box/cert.crt",
             "key_path": "/etc/sing-box/cert.key"
         }

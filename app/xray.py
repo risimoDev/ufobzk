@@ -1167,14 +1167,14 @@ def build_hysteria2_link(key: VPNKey, host: str, port: int = 8443, sni: str = "b
     """Hysteria 2 (QUIC / UDP) ссылка подключения — устойчива к потерям пакетов и LTE-джиттеру."""
     if not remark:
         remark = f"{key.name}@hy2"
-    return f"hysteria2://{key.uuid}@{host}:{port}/?insecure=1&sni={sni}#{quote(remark)}"
+    return f"hysteria2://{key.uuid}@{host}:{port}/?insecure=1&allow_insecure=1&sni={sni}#{quote(remark)}"
 
 
 def build_tuic_link(key: VPNKey, host: str, port: int = 8444, sni: str = "bing.com", remark: str = "") -> str:
     """TUIC v5 (QUIC / UDP) ссылка подключения — высокоскоростной 0-RTT прокси."""
     if not remark:
         remark = f"{key.name}@tuic"
-    return f"tuic://{key.uuid}:{key.uuid}@{host}:{port}/?congestion_control=bbr&alpn=h3&sni={sni}&allow_insecure=1#{quote(remark)}"
+    return f"tuic://{key.uuid}:{key.uuid}@{host}:{port}/?congestion_control=bbr&alpn=h3&sni={sni}&udp_relay_mode=native&allow_insecure=1&insecure=1#{quote(remark)}"
 
 
 def get_user_links(key: VPNKey) -> list[dict[str, str]]:
@@ -1232,13 +1232,16 @@ def get_server_links(key: VPNKey, server: Server) -> list[dict[str, str]]:
     region_prefix = (server.region or "EU").upper()
 
     # 1. REALITY — эталонный TCP-камуфляж
-    if server.reality_public_key and server.reality_short_id:
+    from app.models import clean_key
+    pub_key = clean_key(server.reality_public_key)
+    sid = clean_key(server.reality_short_id)
+    if pub_key and sid:
         sn = (server.reality_server_names or "github.com").split(",")[0].strip()
         remark = f"{suffix}-Reality-{key.name}"
         params = (
             f"type=tcp&security=reality&sni={sn}"
-            f"&fp=chrome&pbk={server.reality_public_key}"
-            f"&sid={server.reality_short_id}&flow=xtls-rprx-vision"
+            f"&fp=chrome&pbk={pub_key}"
+            f"&sid={sid}&flow=xtls-rprx-vision"
         )
         link = f"vless://{key.uuid}@{host}:{reality_port}?{params}#{quote(remark)}"
         links.append({

@@ -95,9 +95,9 @@ cd "$WORK_DIR"
 # 5. Generate Reality Keys
 log "Generating REALITY x25519 keypair..."
 KEY_OUT="$(docker run --rm ghcr.io/sagernet/sing-box:latest generate reality-keypair 2>/dev/null || docker run --rm teddysun/xray:latest xray x25519 2>/dev/null || echo "")"
-PRIVATE_KEY="$(echo "$KEY_OUT" | grep -i 'private' | awk '{{print $NF}}')"
-PUBLIC_KEY="$(echo "$KEY_OUT" | grep -iE '^(public|password)' | awk '{{print $NF}}')"
-SHORT_ID="$(openssl rand -hex 8)"
+PRIVATE_KEY="$(echo "$KEY_OUT" | grep -i 'private' | awk '{{print $NF}}' | tr -d '", \r\n')"
+PUBLIC_KEY="$(echo "$KEY_OUT" | grep -iE '(public|password)' | awk '{{print $NF}}' | tr -d '", \r\n')"
+SHORT_ID="$(openssl rand -hex 8 | tr -d '", \r\n')"
 
 if [ -z "$PRIVATE_KEY" ] || [ -z "$PUBLIC_KEY" ]; then
     err "Failed to generate REALITY keypair automatically."
@@ -108,6 +108,12 @@ ok "Reality keys generated (short_id: $SHORT_ID)"
 
 # 6. Generate Self-signed TLS Cert for Hysteria 2 / TUIC
 log "Generating TLS certificate for Hysteria 2 & TUIC (SNI: $QUIC_SNI)..."
+openssl req -x509 -newkey rsa:2048 -nodes \\
+    -keyout "$WORK_DIR/config/cert.key" \\
+    -out "$WORK_DIR/config/cert.crt" \\
+    -days 3650 \\
+    -subj "/CN=$QUIC_SNI" \\
+    -addext "subjectAltName=DNS:$QUIC_SNI,IP:$NODE_IP" 2>/dev/null || \\
 openssl req -x509 -newkey rsa:2048 -nodes \\
     -keyout "$WORK_DIR/config/cert.key" \\
     -out "$WORK_DIR/config/cert.crt" \\
@@ -352,6 +358,7 @@ cat << SEED_EOF > "$WORK_DIR/config/config.json"
       "tls": {{
         "enabled": true,
         "server_name": "$QUIC_SNI",
+        "alpn": ["h3"],
         "certificate_path": "/etc/sing-box/cert.crt",
         "key_path": "/etc/sing-box/cert.key"
       }}
@@ -368,6 +375,7 @@ cat << SEED_EOF > "$WORK_DIR/config/config.json"
       "tls": {{
         "enabled": true,
         "server_name": "$QUIC_SNI",
+        "alpn": ["h3"],
         "certificate_path": "/etc/sing-box/cert.crt",
         "key_path": "/etc/sing-box/cert.key"
       }}
@@ -489,21 +497,14 @@ REG_RESP=$(curl -fsSL -X POST "$MASTER_URL/api/nodes/register" \\
 if echo "$REG_RESP" | grep -q '"ok":true'; then
     ok "Node successfully registered with Master Server!"
     echo "$REG_RESP" > "$WORK_DIR/reg_resp.json"
-    APPLY_RES=$(python3 -c "
-import json
-try:
-    with open('$WORK_DIR/reg_resp.json', 'r', encoding='utf-8') as f:
-        d = json.load(f)
-    cfg = d.get('config')
-    if cfg:
-        with open('$WORK_DIR/config/config.json', 'w', encoding='utf-8') as out:
-            json.dump(cfg, out, indent=2, ensure_ascii=False)
-        print('OK')
-except Exception:
-    pass
-" 2>/dev/null || true)
+    APPLY_OK=0
+    if command -v jq &>/dev/null; then
+        jq '.config' "$WORK_DIR/reg_resp.json" > "$WORK_DIR/config/config.json" 2>/dev/null && APPLY_OK=1
+    elif command -v python3 &>/dev/null; then
+        python3 -c "import json; d=json.load(open('$WORK_DIR/reg_resp.json')); json.dump(d['config'], open('$WORK_DIR/config/config.json', 'w'))" 2>/dev/null && APPLY_OK=1
+    fi
     rm -f "$WORK_DIR/reg_resp.json"
-    if [ "$APPLY_RES" = "OK" ]; then
+    if [ "$APPLY_OK" -eq 1 ]; then
         ok "Full configuration received and applied from master!"
         $DC restart sing-box >/dev/null 2>&1 || true
     fi
