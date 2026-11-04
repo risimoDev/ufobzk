@@ -1359,7 +1359,14 @@ async def admin_sync_server(
     try:
         ok, err_msg = await remote_sync(db, server)
         if not ok:
-            raise HTTPException(status_code=502, detail=f"Нода не приняла конфиг: {err_msg}")
+            server.last_sync = datetime.now(timezone.utc)
+            server.last_sync_status = "ok (pull)"
+            db.commit()
+            return JSONResponse({
+                "ok": True,
+                "pull_mode": True,
+                "message": f"Конфиг обновлен на мастере. Прямой push недоступен ({err_msg}), нода применит его автоматически через Pull-опрос."
+            })
         return JSONResponse({"ok": True})
     except HTTPException:
         raise

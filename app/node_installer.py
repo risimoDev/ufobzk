@@ -222,7 +222,39 @@ class NodeHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({{"ok": False, "error": str(e)}}).encode())
 
+MASTER_POLL_URL = os.getenv("MASTER_POLL_URL", "")
+
+def poll_master_worker():
+    if not MASTER_POLL_URL or not TOKEN:
+        return
+    import time
+    import urllib.request
+    logger.info("Background config poll worker started -> %s", MASTER_POLL_URL)
+    last_hash = ""
+    while True:
+        try:
+            url = f"{{MASTER_POLL_URL.rstrip('/')}}/api/nodes/poll/{{TOKEN}}"
+            req = urllib.request.Request(url, headers={{"User-Agent": "UFOBZK-Node-Agent/1.0"}})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    new_hash = data.get("hash", "")
+                    new_cfg = data.get("config")
+                    if new_cfg and new_hash != last_hash:
+                        raw = json.dumps(new_cfg, indent=2, ensure_ascii=False, sort_keys=True)
+                        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+                            f.write(raw)
+                        restarted = restart_container(CONTAINER)
+                        last_hash = new_hash
+                        logger.info("Config pulled from master and applied! (hash: %s, restarted: %s)", new_hash, restarted)
+        except Exception as e:
+            logger.debug("Poll error: %s", e)
+        time.sleep(30)
+
 if __name__ == "__main__":
+    import threading
+    t = threading.Thread(target=poll_master_worker, daemon=True)
+    t.start()
     server = http.server.ThreadingHTTPServer(("0.0.0.0", PORT), NodeHandler)
     logger.info("Node Agent listening on port %s...", PORT)
     server.serve_forever()
@@ -324,6 +356,7 @@ services:
       - XRAY_CONFIG_PATH=/etc/sing-box/config.json
       - XRAY_CONTAINER_NAME=ufobzk-node-core
       - NODE_API_PORT=$API_PORT
+      - MASTER_POLL_URL=$MASTER_URL
     volumes:
       - ./config:/etc/sing-box
       - /var/run/docker.sock:/var/run/docker.sock
@@ -392,6 +425,25 @@ REG_RESP=$(curl -fsSL -X POST "$MASTER_URL/api/nodes/register" \\
 
 if echo "$REG_RESP" | grep -q '"ok":true'; then
     ok "Node successfully registered with Master Server!"
+    echo "$REG_RESP" > "$WORK_DIR/reg_resp.json"
+    APPLY_RES=$(python3 -c "
+import json
+try:
+    with open('$WORK_DIR/reg_resp.json', 'r', encoding='utf-8') as f:
+        d = json.load(f)
+    cfg = d.get('config')
+    if cfg:
+        with open('$WORK_DIR/config/config.json', 'w', encoding='utf-8') as out:
+            json.dump(cfg, out, indent=2, ensure_ascii=False)
+        print('OK')
+except Exception:
+    pass
+" 2>/dev/null || true)
+    rm -f "$WORK_DIR/reg_resp.json"
+    if [ "$APPLY_RES" = "OK" ]; then
+        ok "Full configuration received and applied from master!"
+        $DC restart sing-box >/dev/null 2>&1 || true
+    fi
 else
     warn "Registration response: $REG_RESP"
 fi

@@ -355,7 +355,17 @@ async def api_register_node(
     server.last_sync_status = "syncing"
     db.commit()
 
-    # 1. Синхронизируем пользователей на новую ноду в фоне
+    # 1. Формируем актуальный конфиг Sing-box со всеми ключами
+    from app.remote_xray import _build_singbox_remote_config
+    from app.models import VPNKey
+    keys = db.query(VPNKey).filter(VPNKey.is_active == True).order_by(VPNKey.id).all()
+    node_config = _build_singbox_remote_config(server, keys)
+
+    server.last_sync = datetime.now(timezone.utc)
+    server.last_sync_status = "ok"
+    db.commit()
+
+    # Попытка фонового push (если входящий порт доступен)
     asyncio.create_task(sync_server(db, server))
 
     # 2. Если роль каскад — перезапускаем мастер-Xray для создания маршрутов
@@ -400,4 +410,40 @@ async def api_register_node(
         "id": server.id,
         "name": server.name,
         "host": server.host,
+        "config": node_config,
+    })
+
+
+@router.get("/api/nodes/poll/{api_token}")
+@router.post("/api/nodes/poll/{api_token}")
+async def api_nodes_poll(
+    api_token: str,
+    db: Session = Depends(get_db),
+):
+    """Поллинг от ноды: получение актуального конфига и отправка heartbeat."""
+    import hashlib
+    import json
+    from app.remote_xray import _build_singbox_remote_config
+    from app.models import VPNKey
+
+    server = db.query(Server).filter(Server.api_token == api_token).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Нода не найдена")
+
+    keys = db.query(VPNKey).filter(VPNKey.is_active == True).order_by(VPNKey.id).all()
+    node_config = _build_singbox_remote_config(server, keys)
+
+    cfg_raw = json.dumps(node_config, sort_keys=True)
+    cfg_hash = hashlib.sha256(cfg_raw.encode("utf-8")).hexdigest()[:16]
+
+    server.last_sync = datetime.now(timezone.utc)
+    server.last_sync_status = "ok"
+    db.commit()
+
+    return JSONResponse({
+        "ok": True,
+        "server_id": server.id,
+        "name": server.name,
+        "hash": cfg_hash,
+        "config": node_config,
     })
