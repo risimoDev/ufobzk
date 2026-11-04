@@ -112,6 +112,8 @@ class Server(Base):
     is_blocked_ru = Column(Boolean, default=False)
     install_token = Column(String(64), nullable=True, unique=True, index=True)
     core_type = Column(String(32), default="sing-box")
+    core_status = Column(String(32), default="unknown")
+    last_error = Column(Text, nullable=True)
 
 
 class InviteKey(Base):
@@ -630,6 +632,8 @@ def _safe_migrate_sqlite():
                 ("is_blocked_ru", "BOOLEAN DEFAULT 0"),
                 ("install_token", "VARCHAR(64)"),
                 ("core_type", "VARCHAR(32) DEFAULT 'sing-box'"),
+                ("core_status", "VARCHAR(32) DEFAULT 'unknown'"),
+                ("last_error", "TEXT"),
             ]
             for col_name, col_type in new_cols:
                 if col_name not in existing_cols:

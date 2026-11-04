@@ -1107,9 +1107,9 @@ async def admin_list_servers(
                 reality_ms = round((_time.monotonic() - t0) * 1000)
                 reality_live = True
             except asyncio.TimeoutError:
-                reality_err = "Таймаут TCP 443 (порт закрыт, фаервол хостинга или нода за NAT)"
+                reality_err = f"Таймаут TCP {s.reality_port} (порт закрыт, фаервол хостинга или нода за NAT)"
             except ConnectionRefusedError:
-                reality_err = "Сброс TCP 443 (ядро Sing-box не слушает порт или упало)"
+                reality_err = f"Сброс TCP {s.reality_port} (RST: процесс Sing-box не слушает порт или упал)"
             except Exception as e:
                 reality_err = f"Ошибка связи ({type(e).__name__}): {str(e)[:60]}"
 
@@ -1121,15 +1121,25 @@ async def admin_list_servers(
             last_sync_seconds = int((now_utc - ls).total_seconds())
             agent_online = last_sync_seconds < 120
 
+        core_st = getattr(s, "core_status", "unknown") or "unknown"
+        last_err = getattr(s, "last_error", None)
+
         # Формируем прозрачную диагностику и совет для исправления
         issue = None
         if s.is_active:
             if s.role in ("direct", "remote"):
                 if not reality_live:
-                    issue = "Клиенты получают ТАЙМАУТ! Порт 443 недоступен снаружи. Нода за NAT (серый IP 192.168.x.x) или закрыт фаервол хостинга. Переключите сервер в «Каскад» или пробросьте порт 443."
+                    if core_st in ("exited", "dead") or (last_err and "error" in last_err.lower()):
+                        issue = f"Ядро Sing-box упало на ноде! Ошибка: {last_err[:150] if last_err else 'процесс завершился'}"
+                    elif reality_err and "RST" in reality_err:
+                        issue = f"Сброс TCP {s.reality_port}! Процесс Sing-box не слушает порт (упал или не стартовал)."
+                    else:
+                        issue = f"Клиенты получают ТАЙМАУТ! Порт {s.reality_port} недоступен снаружи. Нода за NAT (серый IP 192.168.х.х) или закрыт фаервол хостинга. Переключите сервер в «Каскад» или смените порт."
             elif s.role in ("cascade", "ru"):
                 if not agent_online and s.last_sync is None:
                     issue = "Каскадная нода ожидает первой установки и подключения агента."
+                elif core_st in ("exited", "dead"):
+                    issue = f"Ядро Sing-box каскадной ноды упало: {last_err[:150] if last_err else 'ошибка'}"
 
         return {
             "id": s.id,
@@ -1154,6 +1164,8 @@ async def admin_list_servers(
             "is_blocked_ru": s.is_blocked_ru,
             "install_token": s.install_token,
             "core_type": s.core_type or "sing-box",
+            "core_status": core_st,
+            "last_error": last_err,
             "last_sync": s.last_sync.isoformat() if s.last_sync else None,
             "last_sync_seconds": last_sync_seconds,
             "last_sync_status": s.last_sync_status,

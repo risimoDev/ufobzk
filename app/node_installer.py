@@ -113,7 +113,8 @@ openssl req -x509 -newkey rsa:2048 -nodes \\
     -out "$WORK_DIR/config/cert.crt" \\
     -days 3650 \\
     -subj "/CN=$QUIC_SNI" 2>/dev/null
-chmod 600 "$WORK_DIR/config/cert.key"
+chmod 644 "$WORK_DIR/config/cert.key"
+chmod 644 "$WORK_DIR/config/cert.crt"
 ok "TLS certificate ready"
 
 # 7. Write lightweight Node API (main.py)
@@ -154,6 +155,32 @@ def restart_container(name: str) -> bool:
     except Exception as e:
         logger.warning("Docker socket restart error: %s", e)
         return False
+
+def get_container_status(name: str) -> tuple[str, str]:
+    try:
+        enc = urllib.parse.quote(name, safe="")
+        conn = UnixConn("localhost", timeout=5)
+        conn.request("GET", f"/containers/{{enc}}/json")
+        resp = conn.getresponse()
+        raw = resp.read().decode("utf-8")
+        conn.close()
+        data = json.loads(raw)
+        state = data.get("State", {{}})
+        status = state.get("Status", "unknown")
+        running = state.get("Running", False)
+        err = state.get("Error", "")
+        if not running or status != "running":
+            conn2 = UnixConn("localhost", timeout=5)
+            conn2.request("GET", f"/containers/{{enc}}/logs?stderr=true&stdout=true&tail=10")
+            resp2 = conn2.getresponse()
+            raw_logs = resp2.read().decode("utf-8", errors="replace")
+            conn2.close()
+            lines = [l[8:] if len(l) > 8 and l[0] in ('\x01', '\x02') else l for l in raw_logs.splitlines()]
+            err_clean = "\n".join(lines).strip()
+            return status, (err or err_clean or "Container exited")
+        return "running", ""
+    except Exception as e:
+        return "unknown", str(e)
 
 class NodeHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
@@ -233,8 +260,22 @@ def poll_master_worker():
     last_hash = ""
     while True:
         try:
+            status, err_log = get_container_status(CONTAINER)
             url = f"{{MASTER_POLL_URL.rstrip('/')}}/api/nodes/poll/{{TOKEN}}"
-            req = urllib.request.Request(url, headers={{"User-Agent": "UFOBZK-Node-Agent/1.0"}})
+            body = json.dumps({{
+                "core_status": status,
+                "core_running": status == "running",
+                "core_error": err_log
+            }}).encode("utf-8")
+            req = urllib.request.Request(
+                url,
+                data=body,
+                headers={{
+                    "Content-Type": "application/json",
+                    "User-Agent": "UFOBZK-Node-Agent/2.0"
+                }},
+                method="POST"
+            )
             with urllib.request.urlopen(req, timeout=15) as resp:
                 if resp.status == 200:
                     data = json.loads(resp.read().decode("utf-8"))
@@ -242,14 +283,30 @@ def poll_master_worker():
                     new_cfg = data.get("config")
                     if new_cfg and new_hash != last_hash:
                         raw = json.dumps(new_cfg, indent=2, ensure_ascii=False, sort_keys=True)
+                        if os.path.exists(CONFIG_PATH):
+                            try:
+                                with open(CONFIG_PATH, "r", encoding="utf-8") as cur_f:
+                                    with open(CONFIG_PATH + ".bak", "w", encoding="utf-8") as bak_f:
+                                        bak_f.write(cur_f.read())
+                            except Exception:
+                                pass
                         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
                             f.write(raw)
                         restarted = restart_container(CONTAINER)
-                        last_hash = new_hash
-                        logger.info("Config pulled from master and applied! (hash: %s, restarted: %s)", new_hash, restarted)
+                        time.sleep(2)
+                        st_after, err_after = get_container_status(CONTAINER)
+                        if st_after != "running" and os.path.exists(CONFIG_PATH + ".bak"):
+                            logger.error("Core crashed with pulled config (%s). Rolling back to .bak", err_after)
+                            with open(CONFIG_PATH + ".bak", "r", encoding="utf-8") as bak_f:
+                                with open(CONFIG_PATH, "w", encoding="utf-8") as cur_f:
+                                    cur_f.write(bak_f.read())
+                            restart_container(CONTAINER)
+                        else:
+                            last_hash = new_hash
+                            logger.info("Config pulled and applied successfully! (hash: %s, restarted: %s)", new_hash, restarted)
         except Exception as e:
             logger.debug("Poll error: %s", e)
-        time.sleep(30)
+        time.sleep(25)
 
 if __name__ == "__main__":
     import threading
@@ -270,7 +327,9 @@ cat << SEED_EOF > "$WORK_DIR/config/config.json"
       "tag": "vless-reality-in",
       "listen": "0.0.0.0",
       "listen_port": $REALITY_PORT,
-      "users": [],
+      "users": [
+        {{"uuid": "00000000-0000-0000-0000-000000000000", "flow": "xtls-rprx-vision", "name": "bootstrap"}}
+      ],
       "tls": {{
         "enabled": true,
         "server_name": "$REALITY_SNI",
@@ -287,7 +346,9 @@ cat << SEED_EOF > "$WORK_DIR/config/config.json"
       "tag": "hy2-in",
       "listen": "0.0.0.0",
       "listen_port": $HYSTERIA_PORT,
-      "users": [],
+      "users": [
+        {{"password": "bootstrap-password", "name": "bootstrap"}}
+      ],
       "tls": {{
         "enabled": true,
         "server_name": "$QUIC_SNI",
@@ -300,7 +361,9 @@ cat << SEED_EOF > "$WORK_DIR/config/config.json"
       "tag": "tuic-in",
       "listen": "0.0.0.0",
       "listen_port": $TUIC_PORT,
-      "users": [],
+      "users": [
+        {{"uuid": "00000000-0000-0000-0000-000000000000", "password": "bootstrap-password", "name": "bootstrap"}}
+      ],
       "congestion_control": "bbr",
       "tls": {{
         "enabled": true,

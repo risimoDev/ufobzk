@@ -418,9 +418,10 @@ async def api_register_node(
 @router.post("/api/nodes/poll/{api_token}")
 async def api_nodes_poll(
     api_token: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
-    """Поллинг от ноды: получение актуального конфига и отправка heartbeat."""
+    """Поллинг от ноды: получение актуального конфига, отправка heartbeat и отчёта о статусе ядра."""
     import hashlib
     import json
     from app.remote_xray import _build_singbox_remote_config
@@ -430,14 +431,34 @@ async def api_nodes_poll(
     if not server:
         raise HTTPException(status_code=404, detail="Нода не найдена")
 
+    # Чтение отчёта агента о статусе ядра Sing-box
+    core_status = "running"
+    core_error = None
+    try:
+        body = await request.json()
+        if isinstance(body, dict):
+            core_status = body.get("core_status") or ("running" if body.get("core_running") else "unknown")
+            core_error = body.get("core_error")
+    except Exception:
+        pass
+
+    if core_status and core_status != "unknown":
+        server.core_status = core_status
+    if core_error is not None:
+        server.last_error = core_error
+
+    server.last_sync = datetime.now(timezone.utc)
+    if core_status in ("exited", "dead") or (core_error and "error" in core_error.lower()):
+        server.last_sync_status = "core_error"
+    else:
+        server.last_sync_status = "ok"
+
     keys = db.query(VPNKey).filter(VPNKey.is_active == True).order_by(VPNKey.id).all()
     node_config = _build_singbox_remote_config(server, keys)
 
     cfg_raw = json.dumps(node_config, sort_keys=True)
     cfg_hash = hashlib.sha256(cfg_raw.encode("utf-8")).hexdigest()[:16]
 
-    server.last_sync = datetime.now(timezone.utc)
-    server.last_sync_status = "ok"
     db.commit()
 
     return JSONResponse({

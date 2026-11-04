@@ -3823,14 +3823,22 @@
               agentStatus = '<span class="text-gray-500 font-medium text-xs">⚪ Не установлен</span>';
             }
 
-            // Живая проверка порта 443 (REALITY для клиентов)
+            // Живая проверка порта REALITY
+            var rPort = s.reality_port || 443;
             var realityPortStatus = '';
             if (s.role === 'cascade' || s.role === 'ru') {
               realityPortStatus = '<span class="text-amber-300/80 text-[11px] block mt-0.5">🔀 Транзитный узел (Каскад)</span>';
             } else if (s.reality_live) {
-              realityPortStatus = '<span class="text-emerald-400 font-mono text-[11px] block mt-0.5">🟢 Порт 443 доступен (' + s.reality_ms + 'ms)</span>';
+              realityPortStatus = '<span class="text-emerald-400 font-mono text-[11px] block mt-0.5">🟢 Порт ' + rPort + ' доступен (' + s.reality_ms + 'ms)</span>';
             } else {
-              realityPortStatus = '<span class="text-red-400 font-semibold text-[11px] block mt-0.5" title="' + escapeHtml(s.reality_err || 'Таймаут') + '">🔴 443: ТАЙМАУТ У КЛИЕНТОВ</span>';
+              realityPortStatus = '<span class="text-red-400 font-semibold text-[11px] block mt-0.5" title="' + escapeHtml(s.reality_err || 'Таймаут') + '">🔴 ' + rPort + ': ТАЙМАУТ У КЛИЕНТОВ</span>';
+            }
+
+            var coreBadge = '';
+            if (s.core_status === 'running') {
+              coreBadge = '<span class="text-[10px] text-emerald-300 font-mono bg-emerald-950/60 px-1 py-0.2 rounded border border-emerald-500/20">sing-box: ok</span>';
+            } else if (s.core_status === 'exited' || s.last_sync_status === 'core_error') {
+              coreBadge = '<span class="text-[10px] text-red-300 font-mono bg-red-950/80 px-1 py-0.2 rounded border border-red-500/30 font-bold" title="' + escapeHtml(s.last_error || 'ошибка') + '">sing-box: упал ⚠️</span>';
             }
 
             var tspuBadge = s.is_blocked_ru
@@ -3858,7 +3866,7 @@
               '<td class="px-4 py-3 text-xs text-gray-400 font-mono">' + escapeHtml(s.host) + '</td>' +
               '<td class="px-4 py-3">' + protocols + '</td>' +
               '<td class="px-4 py-3">' + tspuBadge + '</td>' +
-              '<td class="px-4 py-3 text-xs">' + agentStatus + realityPortStatus + '</td>' +
+              '<td class="px-4 py-3 text-xs"><div class="flex items-center gap-1.5 flex-wrap">' + agentStatus + coreBadge + '</div>' + realityPortStatus + '</td>' +
               '<td class="px-4 py-3 text-right">' +
                 installCmdBtn +
                 '<button onclick="syncServer(' + s.id + ')" class="p-1 rounded bg-white/5 text-gray-500 hover:text-emerald-400 transition text-xs ml-1" title="Синхронизировать">🔄</button>' +
@@ -3869,15 +3877,23 @@
 
             // Если обнаружена проблема — выводим строку с подсказкой и быстрой кнопкой решения
             if (s.issue) {
-              var fixAction = s.role === 'direct'
-                ? '<button onclick="setServerRole(' + s.id + ', \'cascade\')" class="px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/30 text-xs font-medium transition shadow">🔀 Сделать каскадом (исправит таймаут)</button>'
-                : '';
+              var errDetail = s.last_error ? '<div class="text-[11px] font-mono text-red-400/90 mt-1 bg-black/40 p-1.5 rounded border border-red-500/20 select-all max-w-xl truncate" title="' + escapeHtml(s.last_error) + '">Ошибка Sing-box: ' + escapeHtml(s.last_error) + '</div>' : '';
+              var fixAction = '<div class="flex items-center gap-2">';
+              if (s.role === 'direct' || s.role === 'remote') {
+                fixAction += '<button onclick="setServerRole(' + s.id + ', \'cascade\')" class="px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/30 text-xs font-medium transition shadow">🔀 Сделать каскадом (исправит таймаут)</button>';
+              }
+              fixAction += '<button onclick="editServer(' + JSON.stringify(s).replace(/"/g, '&quot;') + ')" class="px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-gray-200 text-xs transition">⚙️ Сменить порт</button>';
+              fixAction += '</div>';
+
               html += '<tr class="bg-red-950/25 border-b border-red-500/20">' +
                 '<td colspan="7" class="px-4 py-2.5">' +
                   '<div class="flex items-center justify-between gap-3 text-xs">' +
-                    '<div class="flex items-center gap-2 text-red-300 font-medium">' +
-                      '<span class="text-sm">⚠️</span>' +
-                      '<span>' + escapeHtml(s.issue) + '</span>' +
+                    '<div>' +
+                      '<div class="flex items-center gap-2 text-red-300 font-medium">' +
+                        '<span class="text-sm">⚠️</span>' +
+                        '<span>' + escapeHtml(s.issue) + '</span>' +
+                      '</div>' +
+                      errDetail +
                     '</div>' +
                     '<div class="shrink-0">' + fixAction + '</div>' +
                   '</div>' +
@@ -3979,7 +3995,9 @@
         document.getElementById('srv-region').value = s.region || 'eu';
         document.getElementById('srv-role').value = s.role || 'remote';
         document.getElementById('srv-ws').value = s.ws_port || 443;
-        document.getElementById('srv-reality').value = s.reality_port || 2053;
+        document.getElementById('srv-reality').value = s.reality_port || 443;
+        var hyInp = document.getElementById('srv-hysteria'); if (hyInp) hyInp.value = s.hysteria_port || 8443;
+        var tuicInp = document.getElementById('srv-tuic'); if (tuicInp) tuicInp.value = s.tuic_port || 8444;
         document.getElementById('srv-grpc').value = s.grpc_port || 8445;
         document.getElementById('srv-xhttp').value = s.xhttp_port || 8444;
         document.getElementById('srv-priority').value = s.priority || 100;
@@ -4002,7 +4020,9 @@
           region: document.getElementById('srv-region').value,
           role: document.getElementById('srv-role').value,
           ws_port: parseInt(document.getElementById('srv-ws').value) || 443,
-          reality_port: parseInt(document.getElementById('srv-reality').value) || 2053,
+          reality_port: parseInt(document.getElementById('srv-reality').value) || 443,
+          hysteria_port: parseInt(document.getElementById('srv-hysteria') ? document.getElementById('srv-hysteria').value : 8443) || 8443,
+          tuic_port: parseInt(document.getElementById('srv-tuic') ? document.getElementById('srv-tuic').value : 8444) || 8444,
           grpc_port: parseInt(document.getElementById('srv-grpc').value) || 8445,
           xhttp_port: parseInt(document.getElementById('srv-xhttp').value) || 8444,
           priority: parseInt(document.getElementById('srv-priority').value) || 100,
@@ -4400,9 +4420,10 @@
               <div>
                 <label class="block text-xs text-gray-500 mb-1">Роль</label>
                 <select id="srv-role" class="input-field">
-                  <option value="remote">remote</option>
-                  <option value="transit">transit</option>
-                  <option value="local">local</option>
+                  <option value="direct">🚀 Прямой вход (direct)</option>
+                  <option value="cascade">🔀 Транзитный каскад (cascade)</option>
+                  <option value="remote">remote (вход)</option>
+                  <option value="transit">transit (каскад)</option>
                 </select>
               </div>
             </div>
@@ -4482,6 +4503,16 @@
                   value="100"
                   class="input-field"
                 />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Hysteria 2 порт (UDP)</label>
+                <input type="number" id="srv-hysteria" value="8443" class="input-field" />
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">TUIC v5 порт (UDP)</label>
+                <input type="number" id="srv-tuic" value="8444" class="input-field" />
               </div>
             </div>
             <div class="grid grid-cols-2 gap-3">

@@ -34,7 +34,7 @@ GEO_TRANSIT_UUID = os.getenv("GEO_TRANSIT_UUID", "")
 
 def _build_singbox_remote_config(server: Server, keys: list[VPNKey]) -> dict[str, Any]:
     """Собрать Sing-box конфиг для ноды: VLESS-REALITY + Hysteria2 + TUIC v5."""
-    valid_keys = [k for k in keys if k.status == "active" and k.protocol == "vless"]
+    valid_keys = [k for k in keys if k.status == "active"]
 
     vless_users = [
         {"uuid": k.uuid, "flow": "xtls-rprx-vision", "name": k.name or k.uuid}
@@ -54,17 +54,25 @@ def _build_singbox_remote_config(server: Server, keys: list[VPNKey]) -> dict[str
 
     inbounds: list[dict[str, Any]] = []
 
-    # 1. REALITY Inbound (TCP 443)
+    # Sing-box требует хотя бы одного пользователя во входящих подключениях
+    if not vless_users:
+        vless_users = [{"uuid": "00000000-0000-0000-0000-000000000000", "flow": "xtls-rprx-vision", "name": "bootstrap"}]
+    if not hy2_users:
+        hy2_users = [{"password": "bootstrap-password", "name": "bootstrap"}]
+    if not tuic_users:
+        tuic_users = [{"uuid": "00000000-0000-0000-0000-000000000000", "password": "bootstrap-password", "name": "bootstrap"}]
+
+    # 1. REALITY Inbound (TCP 443 или кастомный порт)
     if server.reality_private_key and server.reality_short_id:
         sn = (server.reality_server_names or "github.com").split(",")[0].strip()
-        short_ids = [s.strip() for s in server.reality_short_id.split(",") if s.strip()]
+        short_ids = [s.strip() for s in (server.reality_short_id or "").split(",") if s.strip()]
+        if not short_ids:
+            short_ids = ["0123456789abcdef"]
         inbounds.append({
             "type": "vless",
             "tag": "vless-reality-in",
             "listen": "0.0.0.0",
             "listen_port": server.reality_port or 443,
-            "sniff": True,
-            "sniff_override_destination": True,
             "users": vless_users,
             "tls": {
                 "enabled": True,
