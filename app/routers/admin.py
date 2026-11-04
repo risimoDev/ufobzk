@@ -1081,7 +1081,7 @@ async def admin_list_servers(
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """Список удалённых серверов (xray-nodes)."""
+    """Список удалённых серверов (xray/singbox nodes)."""
     servers = db.query(Server).order_by(Server.priority.asc()).all()
     return JSONResponse([{
         "id": s.id,
@@ -1095,12 +1095,118 @@ async def admin_list_servers(
         "xhttp_port": s.xhttp_port,
         "priority": s.priority,
         "role": s.role,
+        "is_active": s.is_active,
         "reality_public_key": s.reality_public_key,
         "reality_short_id": s.reality_short_id,
+        "hysteria_port": s.hysteria_port,
+        "tuic_port": s.tuic_port,
+        "hysteria_sni": s.hysteria_sni,
+        "tuic_sni": s.tuic_sni,
+        "cascade_domains": s.cascade_domains,
+        "is_blocked_ru": s.is_blocked_ru,
+        "install_token": s.install_token,
+        "core_type": s.core_type or "sing-box",
         "last_sync": s.last_sync.isoformat() if s.last_sync else None,
         "last_sync_status": s.last_sync_status,
         "created_at": s.created_at.isoformat() if s.created_at else None,
     } for s in servers])
+
+
+@router.post("/admin/api/servers/create-install")
+async def admin_create_server_install(
+    request: Request,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Сгенерировать 1-click команду установки нового узла."""
+    import secrets
+    import os
+    from app.models import Server
+
+    body = await request.json()
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Имя сервера обязательно")
+
+    raw_host = (body.get("host") or "").strip()
+    host = raw_host if raw_host else "pending"
+    role = body.get("role", "direct")
+    region = (body.get("region") or "eu").lower()
+    cascade_domains = (body.get("cascade_domains") or "").strip() or None
+    reality_port = int(body.get("reality_port") or 443)
+    hysteria_port = int(body.get("hysteria_port") or 8443)
+    tuic_port = int(body.get("tuic_port") or 8444)
+    reality_sni = (body.get("reality_sni") or "github.com").strip()
+    quic_sni = (body.get("quic_sni") or "bing.com").strip()
+
+    # Если указан конкретный host, проверим не существует ли он уже
+    server = None
+    if host != "pending":
+        server = db.query(Server).filter(Server.host == host).first()
+
+    install_token = secrets.token_urlsafe(24)
+    api_token = secrets.token_hex(24)
+
+    if server:
+        # Обновляем токен установки существующего сервера
+        server.name = name
+        server.role = role
+        server.region = region
+        server.install_token = install_token
+        server.api_token = api_token
+        server.reality_port = reality_port
+        server.hysteria_port = hysteria_port
+        server.tuic_port = tuic_port
+        server.reality_server_names = f"{reality_sni},www.{reality_sni.lstrip('www.')}"
+        server.reality_dest = f"{reality_sni}:443"
+        server.hysteria_sni = quic_sni
+        server.tuic_sni = quic_sni
+        server.cascade_domains = cascade_domains
+        server.core_type = "sing-box"
+    else:
+        server = Server(
+            name=name,
+            host=host,
+            api_url=f"http://{host}:9090",
+            api_token=api_token,
+            install_token=install_token,
+            region=region,
+            role=role,
+            is_active=False,
+            reality_port=reality_port,
+            hysteria_port=hysteria_port,
+            tuic_port=tuic_port,
+            reality_server_names=f"{reality_sni},www.{reality_sni.lstrip('www.')}",
+            reality_dest=f"{reality_sni}:443",
+            hysteria_sni=quic_sni,
+            tuic_sni=quic_sni,
+            cascade_domains=cascade_domains,
+            core_type="sing-box",
+        )
+        db.add(server)
+
+    db.commit()
+    _log_action(db, admin.id, "create_server_install", str(server.id), server.name)
+
+    # Формируем команду curl
+    env_domain = os.getenv("DOMAIN", "")
+    if env_domain:
+        proto = "http" if env_domain.startswith("http://") else ("https" if not env_domain.startswith("https://") else "")
+        base_url = f"{proto}://{env_domain}" if proto else f"https://{env_domain}"
+    else:
+        host_hdr = request.headers.get("host", "127.0.0.1:8000")
+        scheme = request.url.scheme or "https"
+        base_url = f"{scheme}://{host_hdr}"
+
+    install_cmd = f"curl -fsSL {base_url}/api/nodes/install/{install_token} | bash"
+
+    return JSONResponse({
+        "ok": True,
+        "id": server.id,
+        "name": server.name,
+        "install_token": install_token,
+        "command": install_cmd,
+    })
 
 
 @router.post("/admin/api/servers")
@@ -1189,8 +1295,31 @@ async def admin_edit_server(
         server.reality_dest = body["reality_dest"] or None
     if "reality_server_names" in body:
         server.reality_server_names = body["reality_server_names"] or None
+    if "is_active" in body:
+        server.is_active = bool(body["is_active"])
+    if "hysteria_port" in body:
+        server.hysteria_port = int(body["hysteria_port"]) if body["hysteria_port"] else 8443
+    if "tuic_port" in body:
+        server.tuic_port = int(body["tuic_port"]) if body["tuic_port"] else 8444
+    if "hysteria_sni" in body:
+        server.hysteria_sni = body["hysteria_sni"] or "bing.com"
+    if "tuic_sni" in body:
+        server.tuic_sni = body["tuic_sni"] or "bing.com"
+    if "cascade_domains" in body:
+        server.cascade_domains = body["cascade_domains"] or None
+    if "core_type" in body:
+        server.core_type = body["core_type"] or "sing-box"
 
     db.commit()
+
+    # Если изменена каскадная конфигурация — перезагрузим мастер Xray
+    if server.role in ("cascade", "ru"):
+        try:
+            from app.xray import sync_and_reload
+            sync_and_reload(db)
+        except Exception as e:
+            logger.warning("Не удалось перезагрузить Xray после изменения сервера %s: %s", server.name, e)
+
     _log_action(db, admin.id, "edit_server", str(server_id), server.name)
     return JSONResponse({"ok": True})
 

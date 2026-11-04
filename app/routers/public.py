@@ -282,3 +282,122 @@ async def api_guides(db: Session = Depends(get_db)):
         "platform": g.platform,
         "content": g.content,
     } for g in guides])
+
+
+# ── 1-Click Node Installation & Auto-Registration ──
+
+@router.get("/api/nodes/install/{install_token}", response_class=PlainTextResponse)
+async def api_get_node_install_script(
+    install_token: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Выдать автономный bash-скрипт установки ноды по токену."""
+    from app.models import Server
+    from app.node_installer import generate_install_script
+    import os
+
+    server = db.query(Server).filter(Server.install_token == install_token).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Скрипт установки не найден или токен недействителен")
+
+    # Определяем базовый URL мастер-сервера для обратной регистрации
+    env_domain = os.getenv("DOMAIN", "")
+    if env_domain:
+        proto = "http" if env_domain.startswith("http://") else ("https" if not env_domain.startswith("https://") else "")
+        if proto:
+            master_base_url = f"{proto}://{env_domain}"
+        else:
+            master_base_url = f"https://{env_domain}"
+    else:
+        host_header = request.headers.get("host", "127.0.0.1:8000")
+        scheme = request.url.scheme or "https"
+        master_base_url = f"{scheme}://{host_header}"
+
+    script = generate_install_script(server, master_base_url)
+    return PlainTextResponse(script, media_type="text/x-shellscript; charset=utf-8")
+
+
+@router.post("/api/nodes/register")
+async def api_register_node(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Обратный вызов от установщика ноды: регистрация ключей и мгновенный запуск."""
+    import asyncio
+    from app.models import Server
+    from app.remote_xray import sync_server
+    from app.cheburcheck import check_target
+    from app.backup import SUPERADMIN_CHAT_ID, TELEGRAM_TOKEN
+    import httpx
+
+    body = await request.json()
+    install_token = body.get("install_token")
+    if not install_token:
+        raise HTTPException(status_code=400, detail="install_token обязателен")
+
+    server = db.query(Server).filter(Server.install_token == install_token).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Сервер с таким install_token не найден")
+
+    # Обновляем данные сервера
+    server.host = body.get("host") or server.host
+    api_port = body.get("api_port", 9090)
+    server.api_url = f"http://{server.host}:{api_port}"
+    if body.get("reality_public_key"):
+        server.reality_public_key = body["reality_public_key"]
+    if body.get("reality_private_key"):
+        server.reality_private_key = body["reality_private_key"]
+    if body.get("reality_short_id"):
+        server.reality_short_id = body["reality_short_id"]
+
+    server.is_active = True
+    server.last_sync_status = "syncing"
+    db.commit()
+
+    # 1. Синхронизируем пользователей на новую ноду в фоне
+    asyncio.create_task(sync_server(db, server))
+
+    # 2. Если роль каскад — перезапускаем мастер-Xray для создания маршрутов
+    if server.role in ("cascade", "ru"):
+        from app.xray import sync_and_reload
+        try:
+            sync_and_reload(db)
+        except Exception as e:
+            logger.warning("Не удалось перезагрузить мастер Xray для каскада %s: %s", server.name, e)
+
+    # 3. Запускаем Cheburcheck проверку нового IP
+    if server.host and server.host != "pending":
+        asyncio.create_task(check_target(server.host))
+
+    # 4. Telegram оповещение суперадмину
+    if TELEGRAM_TOKEN and SUPERADMIN_CHAT_ID:
+        async def _notify():
+            try:
+                async with httpx.AsyncClient(timeout=10.0, trust_env=False) as cl:
+                    msg = (
+                        f"🚀 <b>Новый узел успешно подключен!</b>\n\n"
+                        f"• <b>Имя:</b> {server.name} ({server.region.upper()})\n"
+                        f"• <b>Хост (IP):</b> <code>{server.host}</code>\n"
+                        f"• <b>Роль:</b> {server.role}\n"
+                        f"• <b>Протоколы:</b> REALITY ({server.reality_port or 443}), "
+                        f"Hysteria 2 ({server.hysteria_port or 8443}), "
+                        f"TUIC ({server.tuic_port or 8444})\n"
+                        f"• <b>Статус:</b> Активен, ключи синхронизируются, добавлен в клиентские подписки."
+                    )
+                    await cl.post(
+                        f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+                        json={"chat_id": SUPERADMIN_CHAT_ID, "text": msg, "parse_mode": "HTML"}
+                    )
+            except Exception as notify_err:
+                logger.warning("Ошибка отправки Telegram оповещения о новом сервере: %s", notify_err)
+
+        asyncio.create_task(_notify())
+
+    return JSONResponse({
+        "ok": True,
+        "status": "registered",
+        "id": server.id,
+        "name": server.name,
+        "host": server.host,
+    })

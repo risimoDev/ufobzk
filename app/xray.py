@@ -703,6 +703,62 @@ def build_xray_config(db: Session) -> dict[str, Any]:
             }
         ])
 
+    # Динамические каскадные ноды из БД (роль cascade / ru) для целевой маршрутизации
+    try:
+        from app.models import Server as _ServerModel
+        cascade_servers = db.query(_ServerModel).filter(
+            _ServerModel.is_active == True,
+            _ServerModel.role.in_(["cascade", "ru"]),
+            _ServerModel.reality_public_key != None,
+        ).all()
+        for c_srv in cascade_servers:
+            if RU_SERVER_IP and c_srv.host == RU_SERVER_IP:
+                continue
+            c_tag = f"CASCADE-{c_srv.id}"
+            c_sn = (c_srv.reality_server_names or "github.com").split(",")[0].strip()
+            transit_id = GEO_TRANSIT_UUID or (valid_keys[0].uuid if valid_keys else "00000000-0000-0000-0000-000000000000")
+            config["outbounds"].append({
+                "tag": c_tag,
+                "protocol": "vless",
+                "settings": {
+                    "vnext": [{
+                        "address": c_srv.host,
+                        "port": c_srv.reality_port or 443,
+                        "users": [{
+                            "id": transit_id,
+                            "encryption": "none",
+                            "flow": "xtls-rprx-vision"
+                        }]
+                    }]
+                },
+                "streamSettings": {
+                    "network": "tcp",
+                    "security": "reality",
+                    "realitySettings": {
+                        "show": False,
+                        "fingerprint": "chrome",
+                        "serverName": c_sn,
+                        "publicKey": c_srv.reality_public_key,
+                        "shortId": (c_srv.reality_short_id or "").split(",")[0].strip()
+                    }
+                },
+                "mux": {"enabled": False}
+            })
+            domains = []
+            if c_srv.cascade_domains:
+                for line in c_srv.cascade_domains.splitlines():
+                    d = line.strip()
+                    if d:
+                        domains.append(d)
+            if domains:
+                rules.append({
+                    "type": "field",
+                    "outboundTag": c_tag,
+                    "domain": domains
+                })
+    except Exception as e:
+        logger.warning("Ошибка генерации динамических каскадных аутбаундов: %s", e)
+
     return config
 
 

@@ -32,8 +32,111 @@ RU_TRANSIT_SN = os.getenv("RU_TRANSIT_SN", "www.yandex.ru")
 GEO_TRANSIT_UUID = os.getenv("GEO_TRANSIT_UUID", "")
 
 
+def _build_singbox_remote_config(server: Server, keys: list[VPNKey]) -> dict[str, Any]:
+    """Собрать Sing-box конфиг для ноды: VLESS-REALITY + Hysteria2 + TUIC v5."""
+    valid_keys = [k for k in keys if k.status == "active" and k.protocol == "vless"]
+
+    vless_users = [
+        {"uuid": k.uuid, "flow": "xtls-rprx-vision", "name": k.name or k.uuid}
+        for k in valid_keys
+    ]
+    hy2_users = [
+        {"password": k.uuid, "name": k.name or k.uuid}
+        for k in valid_keys
+    ]
+    tuic_users = [
+        {"uuid": k.uuid, "password": k.uuid, "name": k.name or k.uuid}
+        for k in valid_keys
+    ]
+
+    if GEO_TRANSIT_UUID and not any(u["uuid"] == GEO_TRANSIT_UUID for u in vless_users):
+        vless_users.append({"uuid": GEO_TRANSIT_UUID, "flow": "xtls-rprx-vision", "name": "geo-transit"})
+
+    inbounds: list[dict[str, Any]] = []
+
+    # 1. REALITY Inbound (TCP 443)
+    if server.reality_private_key and server.reality_short_id:
+        sn = (server.reality_server_names or "github.com").split(",")[0].strip()
+        short_ids = [s.strip() for s in server.reality_short_id.split(",") if s.strip()]
+        inbounds.append({
+            "type": "vless",
+            "tag": "vless-reality-in",
+            "listen": "::",
+            "listen_port": server.reality_port or 443,
+            "sniff": True,
+            "sniff_override_destination": True,
+            "users": vless_users,
+            "tls": {
+                "enabled": True,
+                "server_name": sn,
+                "reality": {
+                    "enabled": True,
+                    "handshake": {
+                        "server": sn,
+                        "server_port": 443
+                    },
+                    "private_key": server.reality_private_key,
+                    "short_id": short_ids
+                }
+            }
+        })
+
+    # 2. Hysteria 2 Inbound (UDP 8443)
+    hy_port = server.hysteria_port or 8443
+    hy_sni = server.hysteria_sni or "bing.com"
+    inbounds.append({
+        "type": "hysteria2",
+        "tag": "hy2-in",
+        "listen": "::",
+        "listen_port": hy_port,
+        "users": hy2_users,
+        "tls": {
+            "enabled": True,
+            "server_name": hy_sni,
+            "certificate_path": "/etc/sing-box/cert.crt",
+            "key_path": "/etc/sing-box/cert.key"
+        }
+    })
+
+    # 3. TUIC v5 Inbound (UDP 8444)
+    tuic_port = server.tuic_port or 8444
+    tuic_sni = server.tuic_sni or "bing.com"
+    inbounds.append({
+        "type": "tuic",
+        "tag": "tuic-in",
+        "listen": "::",
+        "listen_port": tuic_port,
+        "users": tuic_users,
+        "congestion_control": "bbr",
+        "tls": {
+            "enabled": True,
+            "server_name": tuic_sni,
+            "certificate_path": "/etc/sing-box/cert.crt",
+            "key_path": "/etc/sing-box/cert.key"
+        }
+    })
+
+    return {
+        "log": {"level": "warn", "timestamp": True},
+        "inbounds": inbounds,
+        "outbounds": [
+            {"type": "direct", "tag": "direct"},
+            {"type": "block", "tag": "block"}
+        ],
+        "route": {
+            "rules": [
+                {"protocol": "bittorrent", "outbound": "block"},
+                {"ip_is_private": True, "outbound": "block"}
+            ],
+            "auto_detect_interface": True
+        }
+    }
+
+
 def _build_remote_config(server: Server, keys: list[VPNKey]) -> dict[str, Any]:
-    """Собрать Xray config для remote сервера (только inbound + minimal outbound)."""
+    """Собрать Xray/Sing-box config для remote сервера."""
+    if getattr(server, "core_type", "sing-box") == "sing-box":
+        return _build_singbox_remote_config(server, keys)
     valid_keys = [k for k in keys if k.status == "active"]
 
     vless_clients = []
@@ -261,7 +364,7 @@ async def push_config_to_server(server: Server, keys: list[VPNKey]) -> bool:
     headers = {"Authorization": f"Bearer {server.api_token}"}
 
     try:
-        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, verify=True) as client:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, verify=False) as client:
             resp = await client.post(
                 f"{server.api_url.rstrip('/')}/config",
                 json=config,

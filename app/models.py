@@ -110,6 +110,8 @@ class Server(Base):
     tuic_sni = Column(String(128), nullable=True, default="bing.com")
     cascade_domains = Column(Text, nullable=True)
     is_blocked_ru = Column(Boolean, default=False)
+    install_token = Column(String(64), nullable=True, unique=True, index=True)
+    core_type = Column(String(32), default="sing-box")
 
 
 class InviteKey(Base):
@@ -626,6 +628,8 @@ def _safe_migrate_sqlite():
                 ("tuic_sni", "VARCHAR(128) DEFAULT 'bing.com'"),
                 ("cascade_domains", "TEXT"),
                 ("is_blocked_ru", "BOOLEAN DEFAULT 0"),
+                ("install_token", "VARCHAR(64)"),
+                ("core_type", "VARCHAR(32) DEFAULT 'sing-box'"),
             ]
             for col_name, col_type in new_cols:
                 if col_name not in existing_cols:
