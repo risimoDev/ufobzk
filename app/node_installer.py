@@ -359,21 +359,17 @@ if [ "$API_READY" -eq 0 ]; then
     $DC logs --tail 20 node-api || true
 fi
 
-# 11. Firewall
-if command -v ufw &>/dev/null && ufw status | grep -qw "active"; then
-    ufw allow 22/tcp comment 'SSH' >/dev/null 2>&1 || true
-    ufw allow $REALITY_PORT/tcp comment 'REALITY' >/dev/null 2>&1 || true
-    ufw allow $HYSTERIA_PORT/udp comment 'Hysteria2' >/dev/null 2>&1 || true
-    ufw allow $TUIC_PORT/udp comment 'TUIC' >/dev/null 2>&1 || true
-    ufw allow $API_PORT/tcp comment 'Node-API' >/dev/null 2>&1 || true
-    ok "UFW rules added (ports 22, $REALITY_PORT, $HYSTERIA_PORT, $TUIC_PORT, $API_PORT)"
-elif command -v iptables &>/dev/null; then
-    iptables -I INPUT -p tcp --dport "$REALITY_PORT" -j ACCEPT 2>/dev/null || true
-    iptables -I INPUT -p udp --dport "$HYSTERIA_PORT" -j ACCEPT 2>/dev/null || true
-    iptables -I INPUT -p udp --dport "$TUIC_PORT" -j ACCEPT 2>/dev/null || true
-    iptables -I INPUT -p tcp --dport "$API_PORT" -j ACCEPT 2>/dev/null || true
-    ok "iptables rules added (ports $REALITY_PORT, $HYSTERIA_PORT, $TUIC_PORT, $API_PORT)"
+# 11. Firewall — disable UFW to avoid QUIC/UDP packet drops and API timeouts
+if command -v ufw &>/dev/null; then
+    ufw disable >/dev/null 2>&1 || true
+    ok "UFW disabled (ensures direct low-latency QUIC and TCP routing)"
 fi
+iptables -P INPUT ACCEPT 2>/dev/null || true
+iptables -P FORWARD ACCEPT 2>/dev/null || true
+iptables -I INPUT -p tcp --dport "$REALITY_PORT" -j ACCEPT 2>/dev/null || true
+iptables -I INPUT -p udp --dport "$HYSTERIA_PORT" -j ACCEPT 2>/dev/null || true
+iptables -I INPUT -p udp --dport "$TUIC_PORT" -j ACCEPT 2>/dev/null || true
+iptables -I INPUT -p tcp --dport "$API_PORT" -j ACCEPT 2>/dev/null || true
 
 # 12. Register back with Master Control Plane
 log "Registering node with Master Server ($MASTER_URL)..."
