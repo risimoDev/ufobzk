@@ -96,7 +96,7 @@ _GEO_BYPASS_DOMAINS = [
     "domain:dns.google",
 ]
 
-# Домены Meta (Instagram, Facebook, Threads, CDN), Cloudflare и NVIDIA для защиты от попадания в RU-каскад
+# Домены Meta (Instagram, Facebook, Threads, CDN), Cloudflare, NVIDIA и TikTok для защиты от попадания в RU-каскад
 _META_DOMAINS = [
     "geosite:instagram",
     "geosite:facebook",
@@ -109,6 +109,15 @@ _META_DOMAINS = [
     "domain:nvidia.com",
     "domain:ngc.nvidia.com",
     "domain:nvcr.io",
+    # TikTok и CDN ByteDance (защита от Anycast geoip:ru)
+    "geosite:tiktok",
+    "domain:tiktok.com",
+    "domain:tiktokv.com",
+    "domain:tiktokcdn.com",
+    "domain:tiktokcdn-eu.com",
+    "domain:byteoversea.com",
+    "domain:ibytedtos.com",
+    "domain:musical.ly",
 ]
 
 # Отдельного списка для IPv6-выхода больше нет: GEO-V6 работает в режиме
@@ -1477,6 +1486,11 @@ def get_subscription_json(keys: list[VPNKey], db: Session | None = None) -> dict
             "geosite:instagram",
             "geosite:facebook",
             "geosite:meta",
+            "geosite:tiktok",
+            "domain:tiktok.com",
+            "domain:tiktokcdn.com",
+            "domain:byteoversea.com",
+            "domain:ibytedtos.com",
             "domain:googlevideo.com",
             "domain:ytimg.com",
             "domain:youtube.com",
