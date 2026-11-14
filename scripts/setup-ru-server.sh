@@ -174,7 +174,10 @@ cat > /etc/xray/config.json <<XRAYEOF
           "xver": 0,
           "serverNames": ["www.samsung.com", "samsung.com"],
           "privateKey": "${RU_PRIVATE_KEY}",
-          "shortIds": ["${RU_SHORT_ID}"]
+          "minClientVer": "1.0.0",
+          "maxClientVer": "",
+          "maxTimeDiff": 0,
+          "shortIds": ["${RU_SHORT_ID}", ""]
         }
       },
       "sniffing": {

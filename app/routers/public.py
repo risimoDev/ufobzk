@@ -426,7 +426,7 @@ async def api_nodes_poll(
     import hashlib
     import json
     from app.remote_xray import _build_singbox_remote_config
-    from app.models import VPNKey
+    from app.models import Server, VPNKey
 
     server = db.query(Server).filter(Server.api_token == api_token).first()
     if not server:
