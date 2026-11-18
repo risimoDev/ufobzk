@@ -94,9 +94,9 @@ cd "$WORK_DIR"
 # 5. Generate Reality Keys
 log "Generating REALITY x25519 keypair..."
 KEY_OUT="$(docker run --rm ghcr.io/sagernet/sing-box:latest generate reality-keypair 2>/dev/null || docker run --rm teddysun/xray:latest xray x25519 2>/dev/null || echo "")"
-PRIVATE_KEY="$(echo "$KEY_OUT" | grep -i 'private' | awk '{{print $NF}}' | tr -d '", \r\n')"
-PUBLIC_KEY="$(echo "$KEY_OUT" | grep -iE '(public|password)' | awk '{{print $NF}}' | tr -d '", \r\n')"
-SHORT_ID="$(openssl rand -hex 8 | tr -d '", \r\n')"
+PRIVATE_KEY="$(echo "$KEY_OUT" | grep -i 'private' | awk '{{print $NF}}' | tr -d '", \\r\\n')"
+PUBLIC_KEY="$(echo "$KEY_OUT" | grep -iE '(public|password)' | awk '{{print $NF}}' | tr -d '", \\r\\n')"
+SHORT_ID="$(openssl rand -hex 8 | tr -d '", \\r\\n')"
 
 if [ -z "$PRIVATE_KEY" ] || [ -z "$PUBLIC_KEY" ]; then
     err "Failed to generate REALITY keypair automatically."
@@ -180,8 +180,8 @@ def get_container_status(name: str) -> tuple[str, str]:
             resp2 = conn2.getresponse()
             raw_logs = resp2.read().decode("utf-8", errors="replace")
             conn2.close()
-            lines = [l[8:] if len(l) > 8 and l[0] in ('\x01', '\x02') else l for l in raw_logs.splitlines()]
-            err_clean = "\n".join(lines).strip()
+            lines = [l[8:] if len(l) > 8 and l[0] in ('\\x01', '\\x02') else l for l in raw_logs.splitlines()]
+            err_clean = "\\n".join(lines).strip()
             return status, (err or err_clean or "Container exited")
         return "running", ""
     except Exception as e:

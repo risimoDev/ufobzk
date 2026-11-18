@@ -1,4 +1,5 @@
 from app.remote_xray import _build_singbox_remote_config, _build_remote_config
+from app.node_installer import generate_install_script
 
 
 def test_build_singbox_remote_config(sample_user, sample_server):
@@ -36,3 +37,28 @@ def test_build_remote_config_xray_fallback(sample_user, sample_server):
     assert "inbounds" in cfg
     tags = [i.get("tag") for i in cfg["inbounds"]]
     assert "VLESS-REALITY" in tags
+
+
+def test_generate_install_script_syntax(sample_server):
+    script = generate_install_script(sample_server, "https://ufolabs.online")
+    assert script.startswith("#!/usr/bin/env bash")
+    assert "AGENT_EOF" in script
+
+    # Check tr -d is not broken across lines
+    assert 'tr -d \'", \\r\\n\')"' in script
+
+    # Extract the embedded Python agent script
+    marker_start = 'cat << \'AGENT_EOF\' > "$WORK_DIR/api/main.py"\n'
+    marker_end = "\nAGENT_EOF"
+    start_idx = script.find(marker_start) + len(marker_start)
+    end_idx = script.find(marker_end, start_idx)
+    assert start_idx > len(marker_start)
+    assert end_idx > start_idx
+
+    agent_py = script[start_idx:end_idx]
+
+    # Must compile without SyntaxError (unterminated string literal on err_clean)
+    compiled = compile(agent_py, "main.py", "exec")
+    assert compiled is not None
+    assert 'err_clean = "\\n".join(lines).strip()' in agent_py
+
