@@ -1,4 +1,4 @@
-FROM teddysun/xray:latest AS xray-source
+FROM teddysun/xray:26.5.9 AS xray-source
 
 FROM python:3.12-slim
 

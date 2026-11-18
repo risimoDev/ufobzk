@@ -21,10 +21,10 @@ from sqlalchemy.orm import Session
 
 from app.auth import generate_csrf_token, generate_invite_key, hash_password, list_invite_keys, delete_invite_key
 from app.bruteforce import admin_guard, api_guard, login_guard
-from app.dependencies import _format_bytes, require_admin, templates, verify_csrf, _client_ip
+from app.dependencies import require_admin, templates, verify_csrf
 from app.models import (
     AppSetting, AuditLog, DEFAULT_SETTINGS, Guide, Payment, Server,
-    SUPERADMIN_TELEGRAM_ID, TrafficSnapshot, User, VPNKey, engine, get_db,
+    SUPERADMIN_TELEGRAM_ID, TrafficSnapshot, User, VPNKey, clean_key, engine, get_db,
     get_setting, set_setting,
 )
 from app.xray import (
@@ -112,9 +112,9 @@ async def admin_dashboard(request: Request, admin: User = Depends(require_admin)
     from app.models import SUPERADMIN_TELEGRAM_ID
 
     return templates.TemplateResponse(
-        "admin.html",
-        {
-            "request": request,
+        request=request,
+        name="admin.html",
+        context={
             "user": admin,
             "enriched_users": enriched_users,
             "total_users": total_users,
@@ -886,7 +886,7 @@ async def admin_quick_month_payment(
     if not target:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
 
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
     # Вычисляем начало месяца с учётом offset
     import calendar
@@ -1338,9 +1338,9 @@ async def admin_add_server(
         xhttp_port=body.get("xhttp_port", 8444),
         priority=body.get("priority", 100),
         role=body.get("role", "remote"),
-        reality_public_key=body.get("reality_public_key") or None,
-        reality_private_key=body.get("reality_private_key") or None,
-        reality_short_id=body.get("reality_short_id") or None,
+        reality_public_key=clean_key(body.get("reality_public_key")),
+        reality_private_key=clean_key(body.get("reality_private_key")),
+        reality_short_id=clean_key(body.get("reality_short_id")),
         reality_dest=body.get("reality_dest") or None,
         reality_server_names=body.get("reality_server_names") or None,
     )
@@ -1386,11 +1386,11 @@ async def admin_edit_server(
     if "priority" in body:
         server.priority = int(body["priority"])
     if "reality_public_key" in body:
-        server.reality_public_key = body["reality_public_key"] or None
+        server.reality_public_key = clean_key(body["reality_public_key"])
     if "reality_private_key" in body:
-        server.reality_private_key = body["reality_private_key"] or None
+        server.reality_private_key = clean_key(body["reality_private_key"])
     if "reality_short_id" in body:
-        server.reality_short_id = body["reality_short_id"] or None
+        server.reality_short_id = clean_key(body["reality_short_id"])
     if "reality_dest" in body:
         server.reality_dest = body["reality_dest"] or None
     if "reality_server_names" in body:
@@ -1542,7 +1542,6 @@ async def admin_sync_all_servers(
     """Синхронизировать все сервера."""
     from datetime import datetime, timezone
     from app.remote_xray import sync_server as remote_sync
-    import asyncio
 
     servers = db.query(Server).filter(Server.is_active == True).all()  # noqa: E712
     results = {}

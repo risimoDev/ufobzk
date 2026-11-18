@@ -7,6 +7,10 @@ __pycache__/
 .warp-test/
 data/
 *.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
 .idea/
 .vscode/
 *.egg-info/

@@ -19,9 +19,9 @@ from app.auth import (
 )
 from app.bot import TELEGRAM_BOT_USERNAME
 from app.dependencies import _get_current_user, templates, verify_csrf
-from app.models import DEFAULT_SETTINGS, User, get_db, get_setting
+from app.models import DEFAULT_SETTINGS, get_db, get_setting
 from app.mtproto import get_mtproto_config
-from app.xray import DOMAIN, get_all_links
+from app.xray import get_all_links
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -88,9 +88,9 @@ async def cabinet(request: Request, db: Session = Depends(get_db)):
         tg_link_code = generate_tg_link_code(user.id)
 
     return templates.TemplateResponse(
-        "cabinet.html",
-        {
-            "request": request,
+        request=request,
+        name="cabinet.html",
+        context={
             "user": user,
             "keys_data": keys_data,
             "subscription_url": subscription_url,
@@ -114,6 +114,7 @@ async def cabinet_change_password(
     if not user:
         raise HTTPException(status_code=302, headers={"Location": "/login"})
     body = await request.json()
+    verify_csrf(request, body.get("csrf_token"))
     old_pw = str(body.get("old_password", "")).strip()
     new_pw = str(body.get("new_password", "")).strip()
 

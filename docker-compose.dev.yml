@@ -27,7 +27,7 @@ services:
       - xray
 
   xray:
-    image: teddysun/xray:latest
+    image: teddysun/xray:26.5.9
     container_name: ufobzk-xray
     restart: unless-stopped
     ports:

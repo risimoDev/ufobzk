@@ -1,6 +1,5 @@
 """Удалённое управление Xray nodes — пуш конфига на remote серверы."""
 
-import json
 import logging
 import os
 from datetime import datetime, timezone
@@ -9,7 +8,7 @@ from typing import Any
 import httpx
 from sqlalchemy.orm import Session
 
-from app.models import Server, VPNKey
+from app.models import Server, VPNKey, clean_key
 from app.xray import XHTTP_MODE, _host_is_ip
 
 logger = logging.getLogger(__name__)
@@ -23,7 +22,9 @@ RU_TRANSIT_UUID = os.getenv("RU_TRANSIT_UUID", "")
 RU_TRANSIT_PORT = int(os.getenv("RU_TRANSIT_PORT", "443"))
 RU_TRANSIT_PUBLIC_KEY = os.getenv("RU_TRANSIT_PUBLIC_KEY", "")
 RU_TRANSIT_SHORT_ID = os.getenv("RU_TRANSIT_SHORT_ID", "aabbccdd")
-RU_TRANSIT_SN = os.getenv("RU_TRANSIT_SN", "www.yandex.ru")
+# Дефолт ДОЛЖЕН совпадать с app/xray.py (реальность-инбаунд RU-сервера
+# принимает конкретный SNI; рассинхрон дефолтов ломал каскад при пустом .env).
+RU_TRANSIT_SN = os.getenv("RU_TRANSIT_SN", "www.google.com")
 
 # Транзит главный → нода для гео-чувствительных доменов (GEO-EXIT в app/xray.py).
 # Этот UUID добавляется в клиенты REALITY-инбаунда КАЖДОЙ ноды: какая из них
@@ -230,7 +231,9 @@ def _build_remote_config(server: Server, keys: list[VPNKey]) -> dict[str, Any]:
         ])
 
     # REALITY inbound если настроен
-    if server.reality_private_key and server.reality_short_id:
+    raw_priv = clean_key(server.reality_private_key)
+    raw_sids = clean_key(server.reality_short_id)
+    if raw_priv and raw_sids:
         inbounds.append({
             "tag": "VLESS-REALITY",
             "listen": "0.0.0.0",
@@ -245,11 +248,11 @@ def _build_remote_config(server: Server, keys: list[VPNKey]) -> dict[str, Any]:
                     "dest": server.reality_dest or "www.samsung.com:443",
                     "xver": 0,
                     "serverNames": [s.strip() for s in (server.reality_server_names or "www.samsung.com").split(",")],
-                    "privateKey": server.reality_private_key,
+                    "privateKey": raw_priv,
                     "minClientVer": "1.0.0",
                     "maxClientVer": "",
                     "maxTimeDiff": 0,
-                    "shortIds": [s.strip() for s in server.reality_short_id.split(",") if s.strip()] + [""] if server.reality_short_id else [""]
+                    "shortIds": [clean_key(s) for s in raw_sids.split(",") if clean_key(s)] + [""]
                 }
             },
             "sniffing": {"enabled": True, "destOverride": ["http", "tls", "quic"]}

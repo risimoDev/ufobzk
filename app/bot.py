@@ -403,7 +403,7 @@ async def cb_status(callback: types.CallbackQuery) -> None:
             return
 
         now = datetime.now(timezone.utc)
-        lines = [f"📊 <b>Статус учетной записи:</b>\n"]
+        lines = ["📊 <b>Статус учетной записи:</b>\n"]
         lines.append(f"Пользователь: <b>{_name(user, 'Пользователь')}</b>")
 
         active_keys = [k for k in user.vpn_keys if k.status == "active"]

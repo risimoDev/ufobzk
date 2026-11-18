@@ -21,7 +21,7 @@ from app.auth import (
 )
 from app.bot import TELEGRAM_BOT_USERNAME
 from app.bruteforce import login_guard
-from app.dependencies import _client_ip, _get_current_user, templates, verify_csrf
+from app.dependencies import _client_ip, templates, verify_csrf
 from app.models import Guide, SUPERADMIN_TELEGRAM_ID, User, get_db
 from app.xray import get_subscription_content, get_subscription_json
 
@@ -79,15 +79,15 @@ async def login_magic(token: str, db: Session = Depends(get_db)):
 
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="index.html")
 
 
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     return templates.TemplateResponse(
-        "login.html",
-        {
-            "request": request,
+        request=request,
+        name="login.html",
+        context={
             "error": None,
             "bot_username": TELEGRAM_BOT_USERNAME,
             "csrf_token": generate_csrf_token(),
@@ -109,9 +109,9 @@ async def login_submit(
     if login_guard.is_blocked(ip):
         remaining = login_guard.get_ban_remaining(ip)
         return templates.TemplateResponse(
-            "login.html",
-            {
-                "request": request,
+            request=request,
+            name="login.html",
+            context={
                 "error": f"Слишком много попыток. Повторите через {remaining // 60 + 1} мин.",
                 "bot_username": TELEGRAM_BOT_USERNAME,
                 "csrf_token": generate_csrf_token(),
@@ -149,9 +149,9 @@ async def login_submit(
         login_guard.record_failure(ip)
         logger.warning("Неудачный вход: IP=%s", ip)
         return templates.TemplateResponse(
-            "login.html",
-            {
-                "request": request,
+            request=request,
+            name="login.html",
+            context={
                 "error": "Неверный логин/пароль или код.",
                 "bot_username": TELEGRAM_BOT_USERNAME,
                 "csrf_token": generate_csrf_token(),
@@ -175,7 +175,7 @@ async def login_submit(
 @router.get("/logout")
 async def logout():
     response = RedirectResponse(url="/", status_code=303)
-    response.delete_cookie(SESSION_COOKIE)
+    response.delete_cookie(SESSION_COOKIE, path="/", httponly=True, samesite="lax")
     return response
 
 

@@ -20,12 +20,15 @@ templates.env.globals["format_bytes"] = lambda b: _format_bytes(b)
 templates.env.globals["csrf_token"] = generate_csrf_token
 
 
-def _format_bytes(b: int) -> str:
+def _format_bytes(b: int | float | None) -> str:
+    if b is None or b < 0:
+        b = 0
+    val = float(b)
     for unit in ("Б", "КБ", "МБ", "ГБ", "ТБ"):
-        if b < 1024:
-            return f"{b:.1f} {unit}"
-        b /= 1024
-    return f"{b:.1f} ПБ"
+        if val < 1024:
+            return f"{val:.1f} {unit}"
+        val /= 1024
+    return f"{val:.1f} ПБ"
 
 
 def _client_ip(request: Request) -> str:

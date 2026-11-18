@@ -58,17 +58,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             except Exception as _be:
                 logger.warning("Pre-migration backup failed: %s", _be)
 
-        # Ensure DB schema is current before querying
-        try:
-            from alembic.config import Config
-            from alembic import command
-            alembic_cfg = Config("alembic.ini")
-            command.upgrade(alembic_cfg, "head")
-        except Exception as e:
-            logger.warning("Alembic upgrade skipped: %s", e)
-        init_db()
-        # If alembic_version is missing (tables created via create_all without tracking),
-        # stamp to head via raw SQLite so future alembic calls don't re-create existing tables.
+        # If alembic_version is missing but tables exist (created via create_all without tracking),
+        # stamp to head via raw SQLite first so alembic doesn't fail trying to re-create existing tables.
         try:
             import sqlite3 as _sqlite3
             _db_path = os.path.join("data", "vpnbzk.db")
@@ -80,7 +71,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                         _av_rows = _sc.execute("SELECT COUNT(*) FROM alembic_version").fetchone()[0]
                 # Stamp needed if: tables exist but alembic_version missing or empty
                 if "users" in _tables and ("alembic_version" not in _tables or _av_rows == 0):
-                    # Get head revision ID from migration scripts (no DB connection needed)
                     from alembic.config import Config as _ACfg
                     from alembic.script import ScriptDirectory as _SD
                     _head_rev = _SD.from_config(_ACfg("alembic.ini")).get_current_head()
@@ -96,7 +86,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                             _sc.commit()
                         logger.info("Alembic stamped to head (%s) via raw SQLite.", _head_rev)
         except Exception as e:
-            logger.warning("Alembic stamp failed: %s", e)
+            logger.warning("Alembic pre-stamp check failed: %s", e)
+
+        # Ensure DB schema is current before querying
+        try:
+            from alembic.config import Config
+            from alembic import command
+            alembic_cfg = Config("alembic.ini")
+            command.upgrade(alembic_cfg, "head")
+        except Exception as e:
+            logger.warning("Alembic upgrade skipped: %s", e)
+        init_db()
         from app.models import SessionLocal
         _db = SessionLocal()
         try:
