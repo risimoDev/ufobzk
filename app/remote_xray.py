@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 from sqlalchemy.orm import Session
 
-from app.models import Server, VPNKey, clean_key
+from app.models import Server, VPNKey, clean_key, DEFAULT_QUIC_SNI, DEFAULT_REALITY_SNI
 from app.xray import XHTTP_MODE, _host_is_ip
 
 logger = logging.getLogger(__name__)
@@ -69,7 +69,7 @@ def _build_singbox_remote_config(server: Server, keys: list[VPNKey]) -> dict[str
 
     # 1. REALITY Inbound (TCP 443 или кастомный порт)
     if priv_key and sid_raw:
-        sn = (server.reality_server_names or "github.com").split(",")[0].strip()
+        sn = (server.reality_server_names or DEFAULT_REALITY_SNI).split(",")[0].strip()
         short_ids = [clean_key(s) for s in sid_raw.split(",") if clean_key(s)]
         if not short_ids:
             short_ids = ["0123456789abcdef"]
@@ -96,7 +96,7 @@ def _build_singbox_remote_config(server: Server, keys: list[VPNKey]) -> dict[str
 
     # 2. Hysteria 2 Inbound (UDP 8443)
     hy_port = server.hysteria_port or 8443
-    hy_sni = server.hysteria_sni or "bing.com"
+    hy_sni = server.hysteria_sni or DEFAULT_QUIC_SNI
     inbounds.append({
         "type": "hysteria2",
         "tag": "hy2-in",
@@ -114,7 +114,7 @@ def _build_singbox_remote_config(server: Server, keys: list[VPNKey]) -> dict[str
 
     # 3. TUIC v5 Inbound (UDP 8444)
     tuic_port = server.tuic_port or 8444
-    tuic_sni = server.tuic_sni or "bing.com"
+    tuic_sni = server.tuic_sni or DEFAULT_QUIC_SNI
     inbounds.append({
         "type": "tuic",
         "tag": "tuic-in",

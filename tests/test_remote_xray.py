@@ -19,12 +19,14 @@ def test_build_singbox_remote_config(sample_user, sample_server):
     hy = next(i for i in cfg["inbounds"] if i["type"] == "hysteria2")
     assert hy["listen_port"] == 8443
     assert hy["tls"]["alpn"] == ["h3"]
+    assert hy["tls"]["server_name"] == "gateway.icloud.com"
     assert hy["users"][0]["password"] == keys[0].uuid
 
     # TUIC inbound checks
     tuic = next(i for i in cfg["inbounds"] if i["type"] == "tuic")
     assert tuic["listen_port"] == 8444
     assert tuic["tls"]["alpn"] == ["h3"]
+    assert tuic["tls"]["server_name"] == "gateway.icloud.com"
     assert tuic["congestion_control"] == "bbr"
     assert tuic["users"][0]["uuid"] == keys[0].uuid
 

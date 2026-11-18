@@ -86,14 +86,19 @@ def test_link_generators(sample_user):
     assert "type=grpc" in grpc_link
 
     # Hysteria 2 link
-    hy_link = build_hysteria2_link(key, "95.217.100.100", 8443, "bing.com", "FI-Hy2")
+    hy_link = build_hysteria2_link(key, "95.217.100.100", 8443, "gateway.icloud.com", "FI-Hy2")
     assert hy_link.startswith(f"hysteria2://{key.uuid}@95.217.100.100:8443")
-    assert "sni=bing.com" in hy_link
+    assert "sni=gateway.icloud.com" in hy_link
 
     # TUIC link
-    tuic_link = build_tuic_link(key, "95.217.100.100", 8444, "bing.com", "FI-TUIC")
+    tuic_link = build_tuic_link(key, "95.217.100.100", 8444, "gateway.icloud.com", "FI-TUIC")
     assert tuic_link.startswith(f"tuic://{key.uuid}:{key.uuid}@95.217.100.100:8444")
     assert "alpn=h3" in tuic_link
+    assert "sni=gateway.icloud.com" in tuic_link
+
+    # Default fallback link generators
+    assert "sni=gateway.icloud.com" in build_hysteria2_link(key, "95.217.100.100")
+    assert "sni=gateway.icloud.com" in build_tuic_link(key, "95.217.100.100")
 
 
 def test_get_user_and_server_links(sample_user, sample_server, db_session):
@@ -108,6 +113,10 @@ def test_get_user_and_server_links(sample_user, sample_server, db_session):
     assert "vless-reality" in types
     assert "hysteria2" in types
     assert "tuic" in types
+
+    hy_link_info = next(l for l in srv_links if l["type"] == "hysteria2")
+    assert "sni=gateway.icloud.com" in hy_link_info["link"]
+    assert "sni=bing.com" not in hy_link_info["link"]
 
     all_links = get_all_links(db_session, key)
     assert len(all_links) == len(user_links) + len(srv_links)

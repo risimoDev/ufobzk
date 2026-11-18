@@ -14,7 +14,7 @@ from urllib.parse import quote
 import httpx
 from sqlalchemy.orm import Session
 
-from app.models import Server, VPNKey
+from app.models import Server, VPNKey, DEFAULT_QUIC_SNI, DEFAULT_REALITY_SNI
 
 logger = logging.getLogger(__name__)
 
@@ -735,7 +735,7 @@ def build_xray_config(db: Session) -> dict[str, Any]:
             if RU_SERVER_IP and c_srv.host == RU_SERVER_IP:
                 continue
             c_tag = f"CASCADE-{c_srv.id}"
-            c_sn = (c_srv.reality_server_names or "github.com").split(",")[0].strip()
+            c_sn = (c_srv.reality_server_names or DEFAULT_REALITY_SNI).split(",")[0].strip()
             transit_id = GEO_TRANSIT_UUID or (valid_keys[0].uuid if valid_keys else "00000000-0000-0000-0000-000000000000")
             config["outbounds"].append({
                 "tag": c_tag,
@@ -1172,14 +1172,14 @@ def build_vless_grpc_link(key: VPNKey, server_domain: str, port: int = 443, rema
     return f"vless://{key.uuid}@{server_domain}:{port}?{params}#{quote(remark)}"
 
 
-def build_hysteria2_link(key: VPNKey, host: str, port: int = 8443, sni: str = "bing.com", remark: str = "") -> str:
+def build_hysteria2_link(key: VPNKey, host: str, port: int = 8443, sni: str = DEFAULT_QUIC_SNI, remark: str = "") -> str:
     """Hysteria 2 (QUIC / UDP) ссылка подключения — устойчива к потерям пакетов и LTE-джиттеру."""
     if not remark:
         remark = f"{key.name}@hy2"
     return f"hysteria2://{key.uuid}@{host}:{port}/?insecure=1&allow_insecure=1&sni={sni}#{quote(remark)}"
 
 
-def build_tuic_link(key: VPNKey, host: str, port: int = 8444, sni: str = "bing.com", remark: str = "") -> str:
+def build_tuic_link(key: VPNKey, host: str, port: int = 8444, sni: str = DEFAULT_QUIC_SNI, remark: str = "") -> str:
     """TUIC v5 (QUIC / UDP) ссылка подключения — высокоскоростной 0-RTT прокси."""
     if not remark:
         remark = f"{key.name}@tuic"
@@ -1247,7 +1247,7 @@ def get_server_links(key: VPNKey, server: Server) -> list[dict[str, str]]:
     pub_key = clean_key(server.reality_public_key)
     sid = clean_key(server.reality_short_id)
     if pub_key and sid:
-        sn = (server.reality_server_names or "github.com").split(",")[0].strip()
+        sn = (server.reality_server_names or DEFAULT_REALITY_SNI).split(",")[0].strip()
         remark = f"{suffix}-Reality-{key.name}"
         params = (
             f"type=tcp&security=reality&sni={sn}"
@@ -1265,7 +1265,7 @@ def get_server_links(key: VPNKey, server: Server) -> list[dict[str, str]]:
 
     # 2. Hysteria 2 — высокоскоростной UDP / QUIC (пробивает LTE и подавляет дропы)
     hy_port = getattr(server, "hysteria_port", None) or 8443
-    hy_sni = getattr(server, "hysteria_sni", None) or "bing.com"
+    hy_sni = getattr(server, "hysteria_sni", None) or DEFAULT_QUIC_SNI
     links.append({
         "name": f"{region_prefix}-{suffix} (Hysteria2)",
         "link": build_hysteria2_link(key, host, hy_port, hy_sni, f"{suffix}-Hysteria2-{key.name}"),
@@ -1276,7 +1276,7 @@ def get_server_links(key: VPNKey, server: Server) -> list[dict[str, str]]:
 
     # 3. TUIC v5 — ультрабыстрый 0-RTT QUIC
     tuic_port = getattr(server, "tuic_port", None) or 8444
-    tuic_sni = getattr(server, "tuic_sni", None) or "bing.com"
+    tuic_sni = getattr(server, "tuic_sni", None) or DEFAULT_QUIC_SNI
     links.append({
         "name": f"{region_prefix}-{suffix} (TUIC)",
         "link": build_tuic_link(key, host, tuic_port, tuic_sni, f"{suffix}-TUIC-{key.name}"),

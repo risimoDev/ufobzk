@@ -52,6 +52,9 @@ try:
 except ValueError:
     SUPERADMIN_TELEGRAM_ID = 0
 
+DEFAULT_QUIC_SNI = os.getenv("DEFAULT_QUIC_SNI", "gateway.icloud.com")
+DEFAULT_REALITY_SNI = os.getenv("DEFAULT_REALITY_SNI", "www.samsung.com")
+
 
 class Base(DeclarativeBase):
     pass
@@ -93,8 +96,8 @@ class Server(Base):
     is_active = Column(Boolean, default=True)
     reality_public_key = Column(String(128), nullable=True)
     reality_private_key = Column(String(128), nullable=True)
-    reality_dest = Column(String(128), nullable=True)
-    reality_server_names = Column(String(255), nullable=True)
+    reality_dest = Column(String(128), nullable=True, default=f"{DEFAULT_REALITY_SNI}:443")
+    reality_server_names = Column(String(255), nullable=True, default=f"{DEFAULT_REALITY_SNI},samsung.com")
     reality_short_id = Column(String(32), nullable=True)
     ws_port = Column(Integer, nullable=False, default=443)
     reality_port = Column(Integer, nullable=False, default=2053)
@@ -106,8 +109,8 @@ class Server(Base):
     last_sync_status = Column(String(16), nullable=True)
     hysteria_port = Column(Integer, nullable=True, default=8443)
     tuic_port = Column(Integer, nullable=True, default=8444)
-    hysteria_sni = Column(String(128), nullable=True, default="bing.com")
-    tuic_sni = Column(String(128), nullable=True, default="bing.com")
+    hysteria_sni = Column(String(128), nullable=True, default=DEFAULT_QUIC_SNI)
+    tuic_sni = Column(String(128), nullable=True, default=DEFAULT_QUIC_SNI)
     cascade_domains = Column(Text, nullable=True)
     is_blocked_ru = Column(Boolean, default=False)
     install_token = Column(String(64), nullable=True, unique=True, index=True)
@@ -636,8 +639,8 @@ def _safe_migrate_sqlite():
             new_cols = [
                 ("hysteria_port", "INTEGER DEFAULT 8443"),
                 ("tuic_port", "INTEGER DEFAULT 8444"),
-                ("hysteria_sni", "VARCHAR(128) DEFAULT 'bing.com'"),
-                ("tuic_sni", "VARCHAR(128) DEFAULT 'bing.com'"),
+                ("hysteria_sni", f"VARCHAR(128) DEFAULT '{DEFAULT_QUIC_SNI}'"),
+                ("tuic_sni", f"VARCHAR(128) DEFAULT '{DEFAULT_QUIC_SNI}'"),
                 ("cascade_domains", "TEXT"),
                 ("is_blocked_ru", "BOOLEAN DEFAULT 0"),
                 ("install_token", "VARCHAR(64)"),
@@ -656,6 +659,25 @@ def _safe_migrate_sqlite():
                     reality_private_key = TRIM(REPLACE(REPLACE(REPLACE(reality_private_key, '"', ''), '''', ''), ',', '')),
                     reality_short_id = TRIM(REPLACE(REPLACE(REPLACE(reality_short_id, '"', ''), '''', ''), ',', ''))
                 WHERE reality_public_key IS NOT NULL
+            """)
+
+            # Автоматическая замена уязвимых/заблокированных ТСПУ доменов (bing.com / github.com)
+            # на защищенные устойчивые к DPI домены (gateway.icloud.com / www.samsung.com)
+            conn.exec_driver_sql(f"""
+                UPDATE servers
+                SET hysteria_sni = '{DEFAULT_QUIC_SNI}'
+                WHERE hysteria_sni = 'bing.com' OR hysteria_sni IS NULL OR hysteria_sni = ''
+            """)
+            conn.exec_driver_sql(f"""
+                UPDATE servers
+                SET tuic_sni = '{DEFAULT_QUIC_SNI}'
+                WHERE tuic_sni = 'bing.com' OR tuic_sni IS NULL OR tuic_sni = ''
+            """)
+            conn.exec_driver_sql(f"""
+                UPDATE servers
+                SET reality_server_names = '{DEFAULT_REALITY_SNI},samsung.com',
+                    reality_dest = '{DEFAULT_REALITY_SNI}:443'
+                WHERE reality_server_names = 'github.com' OR reality_server_names IS NULL OR reality_server_names = ''
             """)
     except Exception as e:
         import logging as _logging

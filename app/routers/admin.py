@@ -25,7 +25,7 @@ from app.dependencies import require_admin, templates, verify_csrf
 from app.models import (
     AppSetting, AuditLog, DEFAULT_SETTINGS, Guide, Payment, Server,
     SUPERADMIN_TELEGRAM_ID, TrafficSnapshot, User, VPNKey, clean_key, engine, get_db,
-    get_setting, set_setting,
+    get_setting, set_setting, DEFAULT_QUIC_SNI, DEFAULT_REALITY_SNI,
 )
 from app.xray import (
     DOMAIN, GB, NL_SERVER_IP, REALITY_PORT, REALITY_PUBLIC_KEY,
@@ -1236,8 +1236,8 @@ async def admin_create_server_install(
     reality_port = int(body.get("reality_port") or 443)
     hysteria_port = int(body.get("hysteria_port") or 8443)
     tuic_port = int(body.get("tuic_port") or 8444)
-    reality_sni = (body.get("reality_sni") or "github.com").strip()
-    quic_sni = (body.get("quic_sni") or "bing.com").strip()
+    reality_sni = (body.get("reality_sni") or DEFAULT_REALITY_SNI).strip()
+    quic_sni = (body.get("quic_sni") or DEFAULT_QUIC_SNI).strip()
 
     # Если указан конкретный host, проверим не существует ли он уже
     server = None
@@ -1341,8 +1341,12 @@ async def admin_add_server(
         reality_public_key=clean_key(body.get("reality_public_key")),
         reality_private_key=clean_key(body.get("reality_private_key")),
         reality_short_id=clean_key(body.get("reality_short_id")),
-        reality_dest=body.get("reality_dest") or None,
-        reality_server_names=body.get("reality_server_names") or None,
+        reality_dest=body.get("reality_dest") or f"{DEFAULT_REALITY_SNI}:443",
+        reality_server_names=body.get("reality_server_names") or f"{DEFAULT_REALITY_SNI},samsung.com",
+        hysteria_port=int(body.get("hysteria_port") or 8443),
+        tuic_port=int(body.get("tuic_port") or 8444),
+        hysteria_sni=(body.get("hysteria_sni") or DEFAULT_QUIC_SNI).strip(),
+        tuic_sni=(body.get("tuic_sni") or DEFAULT_QUIC_SNI).strip(),
     )
     db.add(server)
     db.commit()
@@ -1402,9 +1406,9 @@ async def admin_edit_server(
     if "tuic_port" in body:
         server.tuic_port = int(body["tuic_port"]) if body["tuic_port"] else 8444
     if "hysteria_sni" in body:
-        server.hysteria_sni = body["hysteria_sni"] or "bing.com"
+        server.hysteria_sni = (body["hysteria_sni"] or DEFAULT_QUIC_SNI).strip()
     if "tuic_sni" in body:
-        server.tuic_sni = body["tuic_sni"] or "bing.com"
+        server.tuic_sni = (body["tuic_sni"] or DEFAULT_QUIC_SNI).strip()
     if "cascade_domains" in body:
         server.cascade_domains = body["cascade_domains"] or None
     if "core_type" in body:

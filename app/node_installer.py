@@ -2,15 +2,15 @@
 
 import logging
 
-from app.models import Server
+from app.models import Server, DEFAULT_QUIC_SNI, DEFAULT_REALITY_SNI
 
 logger = logging.getLogger(__name__)
 
 
 def generate_install_script(server: Server, master_base_url: str) -> str:
     """Сгенерировать автономный bash-скрипт для установки ноды в одну команду."""
-    reality_sn = (server.reality_server_names or "github.com").split(",")[0].strip()
-    quic_sn = server.hysteria_sni or "bing.com"
+    reality_sn = (server.reality_server_names or DEFAULT_REALITY_SNI).split(",")[0].strip()
+    quic_sn = server.hysteria_sni or DEFAULT_QUIC_SNI
 
     reality_p = server.reality_port or 443
     hy_p = server.hysteria_port or 8443
