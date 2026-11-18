@@ -23,7 +23,9 @@ RU_TRANSIT_UUID = os.getenv("RU_TRANSIT_UUID", "")
 RU_TRANSIT_PORT = int(os.getenv("RU_TRANSIT_PORT", "443"))
 RU_TRANSIT_PUBLIC_KEY = os.getenv("RU_TRANSIT_PUBLIC_KEY", "")
 RU_TRANSIT_SHORT_ID = os.getenv("RU_TRANSIT_SHORT_ID", "aabbccdd")
-RU_TRANSIT_SN = os.getenv("RU_TRANSIT_SN", "www.yandex.ru")
+# Дефолт ДОЛЖЕН совпадать с app/xray.py (реальность-инбаунд RU-сервера
+# принимает конкретный SNI; рассинхрон дефолтов ломал каскад при пустом .env).
+RU_TRANSIT_SN = os.getenv("RU_TRANSIT_SN", "www.google.com")
 
 # Транзит главный → нода для гео-чувствительных доменов (GEO-EXIT в app/xray.py).
 # Этот UUID добавляется в клиенты REALITY-инбаунда КАЖДОЙ ноды: какая из них

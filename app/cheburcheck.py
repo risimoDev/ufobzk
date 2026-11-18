@@ -15,12 +15,68 @@ from app.models import AppSetting, Server, get_setting, set_setting
 logger = logging.getLogger(__name__)
 
 CHEBURCHECK_API_URL = "https://cheburcheck.ru/api/v1/check"
-# По умолчанию проверка 4 раза в сутки (каждые 6 часов = 21600 сек)
+# Проверка раз в час (3600 сек). Раньше была 21600 (4 раза в сутки) — при
+# активных блокировках ТСПУ узел оставался «мёртвым» в подписках до 6 часов.
 try:
-    CHEBURCHECK_INTERVAL = int(os.getenv("CHEBURCHECK_INTERVAL", "21600"))
+    CHEBURCHECK_INTERVAL = int(os.getenv("CHEBURCHECK_INTERVAL", "3600"))
 except Exception:
-    CHEBURCHECK_INTERVAL = 21600
+    CHEBURCHECK_INTERVAL = 3600
 MONITOR_EXTERNAL_TARGETS = os.getenv("MONITOR_EXTERNAL_TARGETS", "")
+
+# TCP-проба портов ноды: кроме списка блокировок РКН делаем живой коннект
+# к REALITY-порту ноды. Таймаут подобран так, чтобы весь параллельный аудит
+# укладывался в ~15-20 секунд (как требует операционная процедура).
+NODE_PROBE_TIMEOUT = float(os.getenv("CHEBURCHECK_PROBE_TIMEOUT", "12.0"))
+
+
+async def probe_tcp(host: str, port: int, timeout: float = NODE_PROBE_TIMEOUT) -> tuple[bool, str]:
+    """Живая TCP-проверка порта ноды (независимо от списков РКН).
+
+    Ловит случаи, когда IP ещё не в списках, но порт уже дропается ТСПУ/DPI
+    (RST или тишина на SYN): список чистый, а клиенты подключиться не могут.
+    """
+    import socket
+
+    def _connect() -> tuple[bool, str]:
+        try:
+            with socket.create_connection((host, port), timeout=timeout):
+                return True, ""
+        except OSError as e:
+            return False, str(e) or type(e).__name__
+
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(_connect), timeout=timeout + 2.0)
+    except asyncio.TimeoutError:
+        return False, f"probe timeout >{timeout:.0f}s"
+
+
+async def probe_server_ports(db: Session) -> dict[str, dict[int, dict[str, Any]]]:
+    """TCP-проба всех портов нод из БД. Возвращает {host: {port: {ok, error}}}."""
+    servers = db.query(Server).filter(Server.is_active == True).all()  # noqa: E712
+    jobs: list[tuple[str, int, Any]] = []
+    loop = asyncio.get_running_loop()
+    for s in servers:
+        for attr in ("reality_port", "hysteria_port", "tuic_port"):
+            port = getattr(s, attr, None)
+            if port:
+                jobs.append((s.host, int(port), loop.create_future()))
+    if not jobs:
+        return {}
+
+    async def _run(host: str, port: int, fut: Any) -> None:
+        ok, err = await probe_tcp(host, port)
+        if not fut.done():
+            fut.set_result({"ok": ok, "error": err})
+
+    await asyncio.gather(*[_run(h, p, f) for h, p, f in jobs], return_exceptions=True)
+
+    result: dict[str, dict[int, dict[str, Any]]] = {}
+    for host, port, fut in jobs:
+        try:
+            result.setdefault(host, {})[port] = fut.result()
+        except Exception:
+            continue
+    return result
 
 
 async def check_target(target_or_client: Any, target: str | None = None) -> dict[str, Any]:
@@ -127,37 +183,63 @@ def get_monitored_targets(db: Session) -> list[dict[str, str]]:
 
 
 async def run_cheburcheck_audit(db: Session, notify: bool = True) -> dict[str, Any]:
-    """Выполнить полный аудит всех целей инфраструктуры и сохранить результат."""
+    """Выполнить полный аудит всех целей инфраструктуры и сохранить результат.
+
+    Состав проверки (весь аудит идёт параллельно и укладывается в ~15-20 сек):
+    1. Cheburcheck API — есть ли IP/домен в списках блокировок РКН.
+    2. Живая TCP-проба портов нод из БД — ловит DPI-дропы, которых ещё
+       нет в списках.
+    Результаты со статусом error (API недоступен) НЕ считаются «чистыми» —
+    они попадают в алерт, иначе отказ cheburcheck.ru выглядит как «всё чисто».
+    """
     targets = get_monitored_targets(db)
-    results = []
+    started = datetime.now(timezone.utc)
 
     async with httpx.AsyncClient(timeout=15.0, trust_env=False, headers={"User-Agent": "VPNBZK-Monitor/1.0"}) as client:
-        # Проверяем цели параллельно
         tasks = [check_target(client, item["target"]) for item in targets]
         checked = await asyncio.gather(*tasks, return_exceptions=True)
+        port_probes = await probe_server_ports(db)
 
-        for item, res in zip(targets, checked):
-            if isinstance(res, Exception):
-                entry = {
-                    "target": item["target"],
-                    "name": item["name"],
-                    "role": item["role"],
-                    "blocked": False,
-                    "status": "error",
-                    "error": str(res),
-                    "checked_at": datetime.now(timezone.utc).isoformat(),
-                }
-            else:
-                entry = {**item, **res}
-            results.append(entry)
+    results = []
+    for item, res in zip(targets, checked):
+        if isinstance(res, Exception):
+            entry = {
+                "target": item["target"],
+                "name": item["name"],
+                "role": item["role"],
+                "blocked": False,
+                "status": "error",
+                "error": str(res),
+                "checked_at": datetime.now(timezone.utc).isoformat(),
+            }
+        else:
+            assert isinstance(res, dict)
+            entry = {**item, **res}
+
+        # Прицепляем живую пробу портов для нод из БД
+        if item["role"].startswith("node_"):
+            probes = port_probes.get(item["target"], {})
+            dead_ports = [p for p, r in probes.items() if not r.get("ok")]
+            entry["dead_ports"] = dead_ports
+            if dead_ports:
+                entry["port_unreachable"] = True
+                if entry.get("status") == "clean":
+                    entry["status"] = "port_down"
+                    # IP не в списках, но порты молчат — фактически нода недоступна
+                    entry["blocked"] = True
+                    entry["blocked_reason"] = f"TCP-порты недоступны: {dead_ports}"
+        results.append(entry)
 
     blocked_count = sum(1 for r in results if r.get("blocked"))
+    error_count = sum(1 for r in results if r.get("status") == "error")
     now_iso = datetime.now(timezone.utc).isoformat()
 
     summary = {
         "checked_at": now_iso,
+        "duration_sec": round((datetime.now(timezone.utc) - started).total_seconds(), 1),
         "total": len(results),
         "blocked_count": blocked_count,
+        "error_count": error_count,
         "has_blocked": blocked_count > 0,
         "results": results,
     }
@@ -169,11 +251,52 @@ async def run_cheburcheck_audit(db: Session, notify: bool = True) -> dict[str, A
     except Exception as e:
         logger.error("Не удалось сохранить результат Cheburcheck в AppSetting: %s", e)
 
-    # Оповещение в Telegram при наличии блокировок или если включен notify
-    if notify and blocked_count > 0:
-        await notify_telegram_alert(summary)
+    # Автопометка нод: is_blocked_ru ставится/снимается по результату аудита,
+    # чтобы подписки клиентов перестали выдавать заблокированную ноду.
+    try:
+        _update_blocked_flags(db, summary)
+    except Exception as e:
+        logger.error("Не удалось обновить is_blocked_ru по аудиту: %s", e)
+
+    # Оповещение: блокировки, ошибки API и смена состояния (без ежедневного
+    # повторения одного и того же алерта).
+    if notify:
+        prev_raw = None
+        try:
+            prev_raw = get_setting(db, "cheburcheck_last_audit")
+        except Exception:
+            pass
+        prev_blocked: set[str] = set()
+        if prev_raw:
+            try:
+                prev = json.loads(prev_raw) if isinstance(prev_raw, str) else prev_raw
+                prev_blocked = {r.get("target") for r in prev.get("results", []) if r.get("blocked")}
+            except Exception:
+                prev_blocked = set()
+        cur_blocked = {r["target"] for r in results if r.get("blocked")}
+        if blocked_count > 0 and (cur_blocked != prev_blocked or error_count > 0):
+            await notify_telegram_alert(summary)
+        elif error_count > 0:
+            logger.warning("Cheburcheck: %d целей не удалось проверить (API недоступен?)", error_count)
+        elif cur_blocked != prev_blocked:
+            await notify_telegram_alert(summary, always=True)
 
     return summary
+
+
+def _update_blocked_flags(db: Session, summary: dict[str, Any]) -> None:
+    """Синхронизировать Server.is_blocked_ru с результатом аудита."""
+    blocked_hosts = {r["target"] for r in summary.get("results", []) if r.get("blocked")}
+    servers = db.query(Server).all()
+    changed = False
+    for s in servers:
+        should = s.host in blocked_hosts
+        if bool(s.is_blocked_ru) != should:
+            s.is_blocked_ru = should
+            changed = True
+            logger.warning("Нода %s (%s): is_blocked_ru → %s", s.name, s.host, should)
+    if changed:
+        db.commit()
 
 
 async def notify_telegram_alert(summary: dict[str, Any], always: bool = False) -> None:
