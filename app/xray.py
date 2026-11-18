@@ -1197,8 +1197,6 @@ def get_user_links(key: VPNKey) -> list[dict[str, str]]:
     links = []
 
     # 1. Основной сервер через REALITY (наивысшая надежность против ТСПУ)
-    # Примечание: на основном VPS два IP (веб и REALITY); historically ссылка
-    # строится от NL_SERVER_IP — поведение не меняем без подтверждения владельца.
     if NL_SERVER_IP and REALITY_PUBLIC_KEY:
         links.append({
             "name": "🇪🇺 Европа (REALITY)",

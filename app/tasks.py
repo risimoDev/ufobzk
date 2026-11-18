@@ -32,9 +32,7 @@ SNAPSHOT_RETENTION_DAYS = 30     # хранить снимки трафика 30
 SNAPSHOT_CLEANUP_INTERVAL = 86400  # чистка раз в сутки
 GEO_AUTO_INTERVAL = 1800         # проверка страны Google — 30 минут
 GEO_AUTO_RECHECK = 300           # повторная проверка перед переключением — 5 минут
-# Импортируется из app.cheburcheck — единый источник правды (раньше
-# дублировался здесь со старым значением 21600 и расходился при правках).
-from app.cheburcheck import CHEBURCHECK_INTERVAL  # проверка Cheburcheck — раз в час
+CHEBURCHECK_INTERVAL = int(os.getenv("CHEBURCHECK_INTERVAL", "21600"))  # проверка Cheburcheck — 6 часов (4 раза в сутки)
 
 # Последнее «сырое» значение счётчика Xray по UUID (в памяти процесса).
 # Нужно для корректного подсчёта дельт: счётчики Xray обнуляются при рестарте
