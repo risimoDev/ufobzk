@@ -9,7 +9,6 @@ REQUIRED_VARS = [
     "SECRET_KEY",
     "DOMAIN",
     "NL_SERVER_IP",
-    "RU_SERVER_IP",
 ]
 
 RECOMMENDED_VARS = [
