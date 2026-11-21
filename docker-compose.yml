@@ -31,7 +31,13 @@ services:
     # Nginx кеширует сертификат в памяти при старте — после certbot renew он
     # продолжает отдавать СТАРЫЙ (просроченный) cert до перезагрузки конфига.
     # Фоновый цикл перечитывает сертификаты каждые 6ч.
-    entrypoint: "/bin/sh -c 'envsubst \"\\$$DOMAIN\" < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        envsubst '$$DOMAIN' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
+        while sleep 6h; do nginx -s reload; done &
+        exec nginx -g 'daemon off;'
     depends_on:
       ufo-app:
         condition: service_healthy
@@ -75,11 +81,9 @@ services:
 
   # ── Xray — VPN ядро ──
   xray:
-    # Версия закреплена: начиная с 26.7.28 REALITY-сервер отвергает клиентов
-    # sing-box (Karing/Hiddify) — "reality verification failed" при любых
-    # realitySettings. 26.5.9 — последняя проверенная совместимая
-    # (scripts/20-reality-versions.sh). Перед обновлением прогнать скрипт 20.
-    image: teddysun/xray:26.5.9
+    # 26.5.9 совместима с sing-box. На 26.11.9 REALITY с sing-box 1.14.4
+    # возвращает "reality verification failed". XRAY_IMAGE задаёт образ для проверки.
+    image: ${XRAY_IMAGE:-teddysun/xray:26.5.9}
     container_name: ufobzk-xray
     environment:
       - GODEBUG=tlsmlkem=0

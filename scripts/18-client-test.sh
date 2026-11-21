@@ -8,15 +8,23 @@
 #  что в боевом config.json. Ничего в стеке не меняет.
 #
 #  Запуск:  cd /opt/ufobzk && bash scripts/18-client-test.sh
+#  До переключения DNS: XRAY_TEST_WEB_IP=<новый IP> bash scripts/18-client-test.sh
 # ═══════════════════════════════════════════════════════════════════════════
-set +e
+set -e
 cd "${PROJECT_DIR:-/opt/ufobzk}" || exit 1
-W=/tmp/ufobzk-ct
-rm -rf "$W"; mkdir -p "$W"
+umask 077
+W=$(mktemp -d /tmp/ufobzk-ct.XXXXXX)
+client_xray="ufobzk-ct-xray-${W##*.}"
+client_sing="ufobzk-ct-sb-${W##*.}"
+cleanup() {
+  docker rm -f "$client_xray" "$client_sing" >/dev/null 2>&1 || true
+  rm -rf -- "$W"
+}
+trap cleanup EXIT
 docker exec ufobzk-xray cat /etc/xray/config.json > "$W/server.json" || { echo "нет config.json"; exit 1; }
 
 python3 - "$W" <<'EOF'
-import json, sys
+import json, os, sys
 w = sys.argv[1]
 c = json.load(open(f'{w}/server.json'))
 env = {}
@@ -24,29 +32,41 @@ for l in open('.env', encoding='utf-8'):
     l = l.strip()
     if '=' in l and not l.startswith('#'):
         k, v = l.split('=', 1); env[k] = v.strip('"\'')
-uid = next(i for i in c['inbounds'] if i['tag'] == 'VLESS-REALITY')['settings']['clients'][0]['id']
+reality = next((i for i in c['inbounds'] if i['tag'] == 'VLESS-REALITY'), None)
+if not reality:
+    sys.exit('В конфигурации Xray отсутствует VLESS-REALITY.')
+uid = next((client['id'] for client in reality['settings']['clients']
+            if client.get('flow') == 'xtls-rprx-vision' and client.get('email') == client['id']), None)
+if not uid:
+    sys.exit('Для теста нужен хотя бы один активный ключ VLESS.')
 dom = env['DOMAIN']
 ip = env.get('NL_SERVER_IP') or env.get('REALITY_BIND_IP')
-sni = env['REALITY_SERVER_NAMES'].split(',')[0].strip()
-pbk, sid = env['REALITY_PUBLIC_KEY'], env['REALITY_SHORT_ID'].split(',')[0].strip()
-print(f'uuid={uid[:8]}…  reality={ip}:443 sni={sni} sid={sid}')
+if not ip or ip == '0.0.0.0':
+    sys.exit('Укажите публичный адрес нового сервера в NL_SERVER_IP')
+web_host = os.environ.get('XRAY_TEST_WEB_IP') or dom
+web_port = int(env.get('VLESS_WS_PORT') or 443)
+reality_port = int(env.get('REALITY_PORT') or 2053)
+reality_settings = reality['streamSettings']['realitySettings']
+sni, sid = reality_settings['serverNames'][0], reality_settings['shortIds'][0]
+pbk = env['REALITY_PUBLIC_KEY']
+print(f'REALITY={ip}:{reality_port}, HTTPS={web_host}:{web_port}, TLS={dom}')
 
 def xc(port, outbound):
     return {"log": {"loglevel": "info"},
             "inbounds": [{"listen": "127.0.0.1", "port": port, "protocol": "socks", "settings": {"udp": False}}],
             "outbounds": [outbound]}
-def vless(addr, stream, flow=''):
+def vless(addr, port, stream, flow=''):
     u = {"id": uid, "encryption": "none"}
     if flow: u["flow"] = flow
-    return {"protocol": "vless", "settings": {"vnext": [{"address": addr, "port": 443, "users": [u]}]}, "streamSettings": stream}
+    return {"protocol": "vless", "settings": {"vnext": [{"address": addr, "port": port, "users": [u]}]}, "streamSettings": stream}
 tls = lambda alpn: {"serverName": dom, "fingerprint": "chrome", "alpn": alpn}
 
 x = {
-  'x-reality': xc(21001, vless(ip, {"network": "tcp", "security": "reality",
+  'x-reality': xc(21001, vless(ip, reality_port, {"network": "tcp", "security": "reality",
         "realitySettings": {"serverName": sni, "fingerprint": "chrome", "publicKey": pbk, "shortId": sid}}, 'xtls-rprx-vision')),
-  'x-ws':    xc(21002, vless(dom, {"network": "ws", "security": "tls", "tlsSettings": tls(["http/1.1"]), "wsSettings": {"path": "/vless-ws", "host": dom}})),
-  'x-xhttp': xc(21003, vless(dom, {"network": "xhttp", "security": "tls", "tlsSettings": tls(["h2", "http/1.1"]), "xhttpSettings": {"path": "/xhttp", "host": dom, "mode": env.get('XHTTP_MODE') or 'auto'}})),
-  'x-grpc':  xc(21004, vless(dom, {"network": "grpc", "security": "tls", "tlsSettings": tls(["h2"]), "grpcSettings": {"serviceName": "VpnService"}})),
+  'x-ws':    xc(21002, vless(web_host, web_port, {"network": "ws", "security": "tls", "tlsSettings": tls(["http/1.1"]), "wsSettings": {"path": "/vless-ws", "host": dom}})),
+  'x-xhttp': xc(21003, vless(web_host, web_port, {"network": "xhttp", "security": "tls", "tlsSettings": tls(["h2", "http/1.1"]), "xhttpSettings": {"path": "/xhttp", "host": dom, "mode": env.get('XHTTP_MODE') or 'auto'}})),
+  'x-grpc':  xc(21004, vless(web_host, web_port, {"network": "grpc", "security": "tls", "tlsSettings": tls(["h2"]), "grpcSettings": {"serviceName": "VpnService", "authority": dom}})),
 }
 ru = next((o for o in c['outbounds'] if o.get('tag') == 'RU-PROXY'), None)
 if ru:
@@ -57,7 +77,7 @@ for k, v in x.items():
 # sing-box = ядро Karing/Hiddify
 sb = {"log": {"level": "info"},
       "inbounds": [{"type": "socks", "listen": "127.0.0.1", "listen_port": 21005}],
-      "outbounds": [{"type": "vless", "tag": "out", "server": ip, "server_port": 443, "uuid": uid,
+      "outbounds": [{"type": "vless", "tag": "out", "server": ip, "server_port": reality_port, "uuid": uid,
                      "flow": "xtls-rprx-vision",
                      "tls": {"enabled": True, "server_name": sni,
                              "utls": {"enabled": True, "fingerprint": "chrome"},
@@ -65,12 +85,18 @@ sb = {"log": {"level": "info"},
 json.dump(sb, open(f'{w}/sb-reality.json', 'w'), indent=1)
 EOF
 
-docker rm -f ufobzk-ct-xray ufobzk-ct-sb >/dev/null 2>&1
-docker run -d --name ufobzk-ct-xray --network host -v "$W":/ct --entrypoint sh teddysun/xray \
+docker run -d --name "$client_xray" --network host -v "$W":/ct --entrypoint sh "${XRAY_TEST_CLIENT_IMAGE:-teddysun/xray:26.11.9}" \
   -c 'for f in /ct/x-*.json; do n=$(basename $f .json); xray run -c $f > /ct/$n.log 2>&1 & done; wait' >/dev/null
-docker run -d --name ufobzk-ct-sb --network host -v "$W":/ct ghcr.io/sagernet/sing-box:latest \
-  run -c /ct/sb-reality.json >/dev/null 2>"$W/sb-pull.err" || echo "sing-box не запустился: $(tail -n2 $W/sb-pull.err)"
+docker run -d --name "$client_sing" --network host -v "$W":/ct "${XRAY_TEST_SING_BOX_IMAGE:-ghcr.io/sagernet/sing-box:v1.14.4}" \
+  run -c /ct/sb-reality.json >/dev/null
 sleep 5
+
+failed=0
+for p in x-reality:21001 sb-reality:21005 x-xhttp:21003; do
+  code=$(curl -sS -o /dev/null -m 10 --noproxy '' -x "socks5h://127.0.0.1:${p#*:}" -w '%{http_code}' https://example.com/) || true
+  printf '  %-12s example.com -> %s\n' "${p%:*}" "${code:-FAIL}"
+  [[ "$code" == 200 ]] || failed=1
+done
 
 t() { printf '  %-12s %-26s ' "$1" "$3"; curl -s -o /dev/null -m 12 -x "socks5h://127.0.0.1:$2" -w '%{http_code} %{time_total}s\n' "$3" || echo FAIL; }
 echo; echo "=== РЕЗУЛЬТАТ (200/301/302 = работает, 000/FAIL = нет) ==="
@@ -85,7 +111,7 @@ printf '  NL-выход IP (через REALITY): '; curl -s -m 12 -x socks5h://1
 printf '  страна для Google (через WS): '; curl -s -m 12 -x socks5h://127.0.0.1:21002 -o /dev/null -w '%{redirect_url}\n' https://www.google.com/ncr
 
 echo; echo "=== ЛОГИ КЛИЕНТОВ (ошибки) ==="
-docker logs ufobzk-ct-sb > "$W/sb-reality.log" 2>&1
+docker logs "$client_sing" > "$W/sb-reality.log" 2>&1
 for f in "$W"/*.log; do
   echo "--- $(basename $f)"; grep -viE 'accepted|^Xray|anti-censorship|Reading config|deprecated' "$f" | tail -n 6
 done
@@ -93,5 +119,5 @@ echo; echo "=== СЕРВЕРНЫЙ XRAY: REALITY / ошибки за после�
 docker logs --since 1m ufobzk-xray 2>&1 | grep -iE 'reality|fail|error|reject' | grep -v X-Forwarded-For | tail -n 15
 docker exec ufobzk-xray sh -c 'tail -n 400 /var/log/xray/error.log' | grep -iE 'RU-PROXY|reality|194\.226' | tail -n 10
 
-docker rm -f ufobzk-ct-xray ufobzk-ct-sb >/dev/null 2>&1
 echo "=== КОНЕЦ ==="
+exit "$failed"
